@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>SIKMUBYNCH - 식무변처</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #0a0a1a; font-family: 'Segoe UI', sans-serif; }
+canvas { display: block; }
+
+#ui-top {
+  position: fixed; top: 0; left: 0; right: 0; height: 36px;
+  background: linear-gradient(180deg, #1a2a44 0%, #0d1b2e 100%);
+  border-bottom: 1px solid #2a4a6a;
+  display: flex; align-items: center; padding: 0 20px; gap: 30px;
+  font-size: 14px; color: #aaccff; z-index: 10;
+  user-select: none;
+}
+#ui-top .res { display: flex; align-items: center; gap: 6px; }
+#ui-top .res .val { color: #ffffff; font-weight: bold; }
+#ui-top .wave-info { color: #ffcc44; font-weight: bold; }
+
+#build-panel {
+  position: fixed; bottom: 20px; right: 20px;
+  background: linear-gradient(180deg, #1a2a44 0%, #0d1b2e 100%);
+  border: 1px solid #2a4a6a; border-radius: 8px;
+  padding: 12px; width: 180px; z-index: 10;
+  user-select: none;
+}
+#build-panel .title { color: #6688aa; font-size: 11px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 2px; }
+.build-btn {
+  display: flex; justify-content: space-between; align-items: center;
+  width: 100%; padding: 8px 10px; margin-bottom: 4px;
+  background: #0d1b2e; border: 1px solid #2a4a6a; border-radius: 4px;
+  color: #aaccff; font-size: 13px; cursor: pointer;
+  transition: all 0.15s;
+}
+.build-btn:hover { background: #1a3050; border-color: #4a7aaa; }
+.build-btn.active { background: #1a4060; border-color: #44aaff; color: #ffffff; }
+.build-btn.disabled { opacity: 0.4; cursor: not-allowed; }
+.build-btn .cost { color: #44ddff; font-size: 11px; }
+.build-btn .key { color: #556677; font-size: 10px; margin-right: 6px; }
+
+#help-panel {
+  position: fixed; bottom: 20px; left: 20px;
+  background: rgba(13, 27, 46, 0.85);
+  border: 1px solid #2a4a6a; border-radius: 8px;
+  padding: 10px 14px; z-index: 10; color: #6688aa; font-size: 11px;
+  line-height: 1.6; user-select: none;
+}
+#help-panel kbd { background: #1a3050; padding: 1px 5px; border-radius: 3px; color: #aaccff; }
+
+#message {
+  position: fixed; top: 50px; left: 50%; transform: translateX(-50%);
+  color: #ffcc44; font-size: 18px; font-weight: bold;
+  text-shadow: 0 0 10px rgba(255, 200, 0, 0.5);
+  opacity: 0; transition: opacity 0.3s; z-index: 10;
+  pointer-events: none; user-select: none;
+}
+#message.show { opacity: 1; }
+
+#game-over {
+  display: none; position: fixed; inset: 0;
+  background: rgba(0,0,0,0.8); z-index: 100;
+  flex-direction: column; align-items: center; justify-content: center;
+  color: #ff4444;
+}
+#game-over h1 { font-size: 48px; margin-bottom: 10px; text-shadow: 0 0 20px rgba(255,0,0,0.5); }
+#game-over p { color: #aaccff; font-size: 20px; margin-bottom: 30px; }
+#game-over button {
+  padding: 12px 30px; font-size: 16px; cursor: pointer;
+  background: #1a3050; border: 1px solid #44aaff; color: #44aaff;
+  border-radius: 6px; transition: all 0.2s;
+}
+#game-over button:hover { background: #2a4a70; }
+</style>
+</head>
+<body>
+
+<div id="ui-top">
+  <div class="res">💎 <span class="val" id="mineral-val">200</span></div>
+  <div class="res">🏠 <span class="val" id="supply-val">0</span> / <span id="max-supply-val">10</span></div>
+  <div class="wave-info" id="wave-val">준비중</div>
+  <div class="res" style="margin-left:auto">🏗️ 건물: <span class="val" id="building-count">1</span></div>
+  <div class="res">💀 처치: <span class="val" id="kill-count">0</span></div>
+</div>
+
+<div id="build-panel">
+  <div class="title">건설 [1-3]</div>
+  <button class="build-btn" data-type="bunker" data-cost="100">
+    <span><kbd class="key">1</kbd>벙커</span><span class="cost">💎100</span>
+  </button>
+  <button class="build-btn" data-type="barracks" data-cost="150">
+    <span><kbd class="key">2</kbd>배럭</span><span class="cost">💎150</span>
+  </button>
+  <button class="build-btn" data-type="supply" data-cost="75">
+    <span><kbd class="key">3</kbd>서플라이</span><span class="cost">💎75</span>
+  </button>
+</div>
+
+<div id="help-panel">
+  <kbd>1-3</kbd> 건물 선택 &nbsp; <kbd>ESC</kbd> 취소<br>
+  <kbd>WASD</kbd> 카메라 이동 &nbsp; <kbd>Q/E</kbd> 회전<br>
+  <kbd>마우스휠</kbd> 줌 &nbsp; <kbd>클릭</kbd> 건설
+</div>
+
+<div id="message"></div>
+
+<div id="game-over">
+  <h1>GAME OVER</h1>
+  <p>Wave <span id="final-wave">0</span> 까지 생존</p>
+  <button onclick="location.reload()">다시 시작</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ==================== CONFIG ====================
+const GRID = 24;
+const TILE = 2;
+const HALF = GRID * TILE / 2;
+
+const BTYPE = {
+  commandCenter: { name: '커맨드센터', cost: 0, hp: 800, w: 2.8, d: 2.8, h: 2.2, color: 0x3388cc, range: 0, dmg: 0, atkSpd: 0 },
+  bunker: { name: '벙커', cost: 100, hp: 250, w: 1.6, d: 1.6, h: 1.3, color: 0x5599dd, range: 10, dmg: 20, atkSpd: 1.2 },
+  barracks: { name: '배럭', cost: 150, hp: 180, w: 1.8, d: 1.8, h: 1.6, color: 0x4477bb, range: 0, dmg: 0, atkSpd: 0, spawnRate: 6 },
+  supply: { name: '서플라이', cost: 75, hp: 120, w: 1.4, d: 1.0, h: 0.7, color: 0x336699, range: 0, dmg: 0, atkSpd: 0, supplyAdd: 8 }
+};
+
+const ETYPE = {
+  zergling: { hp: 50, speed: 3.5, dmg: 10, atkSpd: 0.4, color: 0xcc4422, w: 0.5, d: 0.7, h: 0.4, reward: 12 },
+  hydralisk: { hp: 100, speed: 2.2, dmg: 15, atkSpd: 0.8, color: 0xdd6633, w: 0.5, d: 0.5, h: 1.1, reward: 25, range: 6 },
+  ultralisk: { hp: 400, speed: 1.5, dmg: 40, atkSpd: 1.5, color: 0x993311, w: 1.4, d: 1.8, h: 1.3, reward: 60 }
+};
+
+const WAVES = [];
+for (let i = 1; i <= 200; i++) {
+  const w = { enemies: [] };
+  const zCount = Math.floor(4 + i * 2.5);
+  for (let j = 0; j < zCount; j++) w.enemies.push('zergling');
+  if (i >= 3) { const hCount = Math.floor(i * 0.8); for (let j = 0; j < hCount; j++) w.enemies.push('hydralisk'); }
+  if (i >= 6) { const uCount = Math.floor((i - 5) * 0.4); for (let j = 0; j < uCount; j++) w.enemies.push('ultralisk'); }
+  w.hpMult = 1 + (i - 1) * 0.15;
+  WAVES.push(w);
+}
+
+// ==================== THREE.JS SETUP ====================
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0e1a0e);
+scene.fog = new THREE.FogExp2(0x0e1a0e, 0.012);
+
+const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 1, 200);
+let camTarget = new THREE.Vector3(6, 0, 0);
+let camAngle = Math.PI / 4;
+let camDist = 38;
+let camHeight = 28;
+
+function updateCamera() {
+  camera.position.set(
+    camTarget.x + Math.sin(camAngle) * camDist,
+    camHeight,
+    camTarget.z + Math.cos(camAngle) * camDist
+  );
+  camera.lookAt(camTarget.x, 0, camTarget.z);
+}
+updateCamera();
+
+// Lights
+scene.add(new THREE.AmbientLight(0x334455, 0.6));
+const sun = new THREE.DirectionalLight(0xffeedd, 0.9);
+sun.position.set(15, 30, 10);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -35; sun.shadow.camera.right = 35;
+sun.shadow.camera.top = 35; sun.shadow.camera.bottom = -35;
+sun.shadow.camera.near = 1; sun.shadow.camera.far = 80;
+scene.add(sun);
+
+const blueLight = new THREE.PointLight(0x4488ff, 0.3, 40);
+blueLight.position.set(10, 5, 0);
+scene.add(blueLight);
+
+// ==================== TERRAIN ====================
+const groundGeo = new THREE.PlaneGeometry(GRID * TILE + 4, GRID * TILE + 4);
+const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a2e1a, roughness: 0.95 });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// Grid overlay
+const gridHelper = new THREE.GridHelper(GRID * TILE, GRID, 0x1a3a1a, 0x162816);
+gridHelper.position.y = 0.01;
+scene.add(gridHelper);
+
+// Terrain decoration
+const rockGeo = new THREE.DodecahedronGeometry(1, 0);
+const rockMat = new THREE.MeshStandardMaterial({ color: 0x2a3a2a, roughness: 0.9 });
+for (let i = 0; i < 20; i++) {
+  const s = 0.2 + Math.random() * 0.4;
+  const rock = new THREE.Mesh(rockGeo, rockMat);
+  rock.scale.set(s, s * 0.6, s);
+  rock.position.set((Math.random() - 0.5) * GRID * TILE * 0.8, s * 0.2, (Math.random() - 0.5) * GRID * TILE * 0.8);
+  rock.rotation.y = Math.random() * Math.PI;
+  scene.add(rock);
+}
+
+// Spawn zone indicator (left edge)
+const spawnZoneGeo = new THREE.PlaneGeometry(4, GRID * TILE);
+const spawnZoneMat = new THREE.MeshBasicMaterial({ color: 0x441111, transparent: true, opacity: 0.15 });
+const spawnZone = new THREE.Mesh(spawnZoneGeo, spawnZoneMat);
+spawnZone.rotation.x = -Math.PI / 2;
+spawnZone.position.set(-HALF + 1, 0.02, 0);
+scene.add(spawnZone);
+
+// ==================== HOVER INDICATOR ====================
+const hoverGeo = new THREE.PlaneGeometry(TILE * 0.95, TILE * 0.95);
+const hoverMat = new THREE.MeshBasicMaterial({ color: 0x44ff44, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+const hoverMesh = new THREE.Mesh(hoverGeo, hoverMat);
+hoverMesh.rotation.x = -Math.PI / 2;
+hoverMesh.position.y = 0.03;
+hoverMesh.visible = false;
+scene.add(hoverMesh);
+
+// ==================== GAME STATE ====================
+const G = {
+  minerals: 200, supply: 0, maxSupply: 10,
+  wave: 0, waveActive: false, prepTimer: 15, spawnQueue: [], spawnTimer: 0,
+  buildings: [], enemies: [], marines: [], projectiles: [], particles: [],
+  selectedType: null, occupied: new Set(), kills: 0, gameOver: false,
+  clock: new THREE.Clock()
+};
+
+function gridKey(gx, gz) { return `${gx},${gz}`; }
+function gridToWorld(gx, gz) {
+  return new THREE.Vector3((gx - GRID / 2) * TILE + TILE / 2, 0, (gz - GRID / 2) * TILE + TILE / 2);
+}
+function worldToGrid(wx, wz) {
+  return { gx: Math.floor((wx + HALF) / TILE), gz: Math.floor((wz + HALF) / TILE) };
+}
+
+// ==================== HP BAR ====================
+function createHpBar(parent, width) {
+  const bg = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, 0.12),
+    new THREE.MeshBasicMaterial({ color: 0x222222, depthTest: false })
+  );
+  const bar = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, 0.12),
+    new THREE.MeshBasicMaterial({ color: 0x00ff44, depthTest: false })
+  );
+  bg.renderOrder = 999;
+  bar.renderOrder = 1000;
+  parent.add(bg);
+  parent.add(bar);
+  return { bg, bar, width };
+}
+
+function updateHpBar(hpBar, yPos, ratio) {
+  if (!hpBar) return;
+  hpBar.bg.position.y = yPos;
+  hpBar.bar.position.y = yPos;
+  hpBar.bg.lookAt(camera.position);
+  hpBar.bar.lookAt(camera.position);
+  const w = hpBar.width * Math.max(0, ratio);
+  hpBar.bar.scale.x = ratio;
+  hpBar.bar.position.x = hpBar.bg.position.x - (hpBar.width - w) / 2 * 0;
+  if (ratio > 0.6) hpBar.bar.material.color.setHex(0x00ff44);
+  else if (ratio > 0.3) hpBar.bar.material.color.setHex(0xffaa00);
+  else hpBar.bar.material.color.setHex(0xff2222);
+}
+
+// ==================== BUILDINGS ====================
+function createBuilding(type, gx, gz) {
+  const bt = BTYPE[type];
+  const pos = gridToWorld(gx, gz);
+  const geo = new THREE.BoxGeometry(bt.w, bt.h, bt.d);
+  const mat = new THREE.MeshStandardMaterial({ color: bt.color, roughness: 0.6, metalness: 0.3 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(pos.x, bt.h / 2, pos.z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+
+  // Roof detail
+  if (type !== 'supply') {
+    const roofGeo = new THREE.BoxGeometry(bt.w * 0.7, 0.15, bt.d * 0.7);
+    const roofMat = new THREE.MeshStandardMaterial({ color: bt.color * 0.7 | 0, roughness: 0.5 });
+    const roof = new THREE.Mesh(roofGeo, roofMat);
+    roof.position.y = bt.h / 2 + 0.08;
+    mesh.add(roof);
+  }
+
+  // Turret for bunker
+  if (type === 'bunker') {
+    const turretGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.8, 6);
+    const turretMat = new THREE.MeshStandardMaterial({ color: 0x88bbee, metalness: 0.5 });
+    const turret = new THREE.Mesh(turretGeo, turretMat);
+    turret.position.y = bt.h / 2 + 0.4;
+    turret.rotation.z = Math.PI / 2;
+    mesh.add(turret);
+  }
+
+  const hpBar = createHpBar(mesh, bt.w * 0.8);
+  const b = {
+    type, mesh, gx, gz, pos: pos.clone(),
+    hp: bt.hp, maxHp: bt.hp, hpBar,
+    atkTimer: 0, spawnTimer: 0, alive: true
+  };
+  G.buildings.push(b);
+  G.occupied.add(gridKey(gx, gz));
+
+  if (type === 'supply') G.maxSupply += bt.supplyAdd;
+  return b;
+}
+
+function removeBuilding(b) {
+  b.alive = false;
+  spawnParticles(b.pos, b.mesh.material.color, 15);
+  scene.remove(b.mesh);
+  G.occupied.delete(gridKey(b.gx, b.gz));
+  if (b.type === 'supply') G.maxSupply -= BTYPE.supply.supplyAdd;
+}
+
+// ==================== ENEMIES ====================
+function createEnemy(type, x, z, hpMult) {
+  const et = ETYPE[type];
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+
+  const bodyGeo = new THREE.BoxGeometry(et.w, et.h, et.d);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: et.color, roughness: 0.7 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = et.h / 2;
+  body.castShadow = true;
+  group.add(body);
+
+  // Eyes
+  const eyeGeo = new THREE.SphereGeometry(0.08, 4, 4);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xff4444 });
+  const eye1 = new THREE.Mesh(eyeGeo, eyeMat);
+  const eye2 = new THREE.Mesh(eyeGeo, eyeMat);
+  eye1.position.set(-et.w * 0.25, et.h * 0.7, et.d * 0.5);
+  eye2.position.set(et.w * 0.25, et.h * 0.7, et.d * 0.5);
+  group.add(eye1);
+  group.add(eye2);
+
+  scene.add(group);
+  const hpBar = createHpBar(group, et.w + 0.3);
+
+  const e = {
+    type, mesh: group, body,
+    hp: et.hp * hpMult, maxHp: et.hp * hpMult,
+    speed: et.speed, dmg: et.dmg, atkSpd: et.atkSpd,
+    range: et.range || 1.5, reward: et.reward,
+    hpBar, atkTimer: 0, alive: true, target: null
+  };
+  G.enemies.push(e);
+  return e;
+}
+
+// ==================== MARINES ====================
+function createMarine(x, z) {
+  if (G.supply >= G.maxSupply) return null;
+  const group = new THREE.Group();
+  group.position.set(x, 0, z);
+
+  const bodyGeo = new THREE.CylinderGeometry(0.2, 0.25, 0.8, 6);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x4499dd, roughness: 0.5, metalness: 0.4 });
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = 0.4;
+  body.castShadow = true;
+  group.add(body);
+
+  // Head
+  const headGeo = new THREE.SphereGeometry(0.18, 6, 6);
+  const head = new THREE.Mesh(headGeo, bodyMat);
+  head.position.y = 0.9;
+  group.add(head);
+
+  // Gun
+  const gunGeo = new THREE.BoxGeometry(0.08, 0.08, 0.5);
+  const gunMat = new THREE.MeshStandardMaterial({ color: 0x666666, metalness: 0.6 });
+  const gun = new THREE.Mesh(gunGeo, gunMat);
+  gun.position.set(0.3, 0.5, 0.15);
+  group.add(gun);
+
+  scene.add(group);
+  const hpBar = createHpBar(group, 0.6);
+
+  G.supply++;
+  const m = {
+    mesh: group, hp: 60, maxHp: 60,
+    speed: 2.5, dmg: 12, atkSpd: 0.8, range: 7,
+    hpBar, atkTimer: 0, alive: true, target: null
+  };
+  G.marines.push(m);
+  return m;
+}
+
+function removeMarine(m) {
+  m.alive = false;
+  spawnParticles(m.mesh.position, new THREE.Color(0x4499dd), 8);
+  scene.remove(m.mesh);
+  G.supply--;
+}
+
+// ==================== PROJECTILES ====================
+function fireProjectile(from, to, color, dmg, targetEntity) {
+  const geo = new THREE.SphereGeometry(0.1, 4, 4);
+  const mat = new THREE.MeshBasicMaterial({ color });
+  const mesh = new THREE.Mesh(geo, mat);
+  const start = from.clone(); start.y += 1;
+  mesh.position.copy(start);
+  scene.add(mesh);
+
+  // Trail light
+  const light = new THREE.PointLight(color, 0.5, 3);
+  mesh.add(light);
+
+  const targetPos = to.clone(); targetPos.y += 0.5;
+  G.projectiles.push({ mesh, start, target: targetPos, dmg, targetEntity, t: 0, speed: 15 });
+}
+
+// ==================== PARTICLES ====================
+function spawnParticles(pos, color, count) {
+  for (let i = 0; i < count; i++) {
+    const geo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+    const mat = new THREE.MeshBasicMaterial({ color });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos);
+    mesh.position.y += 0.5;
+    scene.add(mesh);
+    G.particles.push({
+      mesh, life: 1,
+      vel: new THREE.Vector3((Math.random() - 0.5) * 6, Math.random() * 5 + 2, (Math.random() - 0.5) * 6)
+    });
+  }
+}
+
+// ==================== WAVE SYSTEM ====================
+function startWave() {
+  G.wave++;
+  if (G.wave > WAVES.length) G.wave = WAVES.length;
+  const w = WAVES[G.wave - 1];
+  G.spawnQueue = [...w.enemies];
+  G.spawnTimer = 0;
+  G.waveActive = true;
+  showMessage(`⚔️ Wave ${G.wave} 시작!`);
+}
+
+function spawnNextEnemy(hpMult) {
+  if (G.spawnQueue.length === 0) return;
+  const type = G.spawnQueue.shift();
+  const z = (Math.random() - 0.5) * (GRID * TILE * 0.7);
+  createEnemy(type, -HALF + 1, z, hpMult);
+}
+
+// ==================== COMBAT ====================
+function findNearest(pos, list, maxRange) {
+  let best = null, bestDist = maxRange * maxRange;
+  for (const e of list) {
+    if (!e.alive) continue;
+    const p = e.mesh ? e.mesh.position : e.pos;
+    const dx = p.x - pos.x, dz = p.z - pos.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < bestDist) { bestDist = d2; best = e; }
+  }
+  return best;
+}
+
+function distXZ(a, b) {
+  const dx = a.x - b.x, dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+// ==================== UI ====================
+let msgTimer = 0;
+function showMessage(text) {
+  const el = document.getElementById('message');
+  el.textContent = text;
+  el.classList.add('show');
+  msgTimer = 3;
+}
+
+function updateUI() {
+  document.getElementById('mineral-val').textContent = G.minerals;
+  document.getElementById('supply-val').textContent = G.supply;
+  document.getElementById('max-supply-val').textContent = G.maxSupply;
+  document.getElementById('building-count').textContent = G.buildings.filter(b => b.alive).length;
+  document.getElementById('kill-count').textContent = G.kills;
+
+  if (G.waveActive) {
+    const alive = G.enemies.filter(e => e.alive).length + G.spawnQueue.length;
+    document.getElementById('wave-val').textContent = `Wave ${G.wave} | 남은 적: ${alive}`;
+  } else if (!G.gameOver) {
+    document.getElementById('wave-val').textContent = `Wave ${G.wave + 1} 까지 ${Math.ceil(G.prepTimer)}초`;
+  }
+
+  // Update build buttons
+  document.querySelectorAll('.build-btn').forEach(btn => {
+    const cost = parseInt(btn.dataset.cost);
+    btn.classList.toggle('disabled', G.minerals < cost);
+    btn.classList.toggle('active', G.selectedType === btn.dataset.type);
+  });
+}
+
+// ==================== INPUT ====================
+const keys = {};
+const mouse = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
+
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key === '1') selectBuild('bunker');
+  else if (e.key === '2') selectBuild('barracks');
+  else if (e.key === '3') selectBuild('supply');
+  else if (e.key === 'Escape') selectBuild(null);
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+window.addEventListener('mousemove', e => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+});
+
+window.addEventListener('click', e => {
+  if (G.gameOver) return;
+  if (e.target.closest('#build-panel') || e.target.closest('#ui-top') || e.target.closest('#help-panel')) return;
+  if (!G.selectedType) return;
+
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObject(ground);
+  if (hits.length === 0) return;
+
+  const p = hits[0].point;
+  const { gx, gz } = worldToGrid(p.x, p.z);
+  if (gx < 0 || gx >= GRID || gz < 0 || gz >= GRID) return;
+  if (G.occupied.has(gridKey(gx, gz))) return;
+
+  const bt = BTYPE[G.selectedType];
+  if (G.minerals < bt.cost) { showMessage('💎 미네랄 부족!'); return; }
+
+  G.minerals -= bt.cost;
+  createBuilding(G.selectedType, gx, gz);
+  showMessage(`${bt.name} 건설 완료!`);
+});
+
+window.addEventListener('wheel', e => {
+  camDist = Math.max(15, Math.min(60, camDist + e.deltaY * 0.03));
+  camHeight = camDist * 0.72;
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function selectBuild(type) {
+  G.selectedType = type;
+  hoverMesh.visible = !!type;
+}
+
+document.querySelectorAll('.build-btn').forEach(btn => {
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const type = btn.dataset.type;
+    const cost = parseInt(btn.dataset.cost);
+    if (G.minerals >= cost) selectBuild(G.selectedType === type ? null : type);
+  });
+});
+
+// ==================== GAME LOOP ====================
+function update(dt) {
+  if (G.gameOver) return;
+  dt = Math.min(dt, 0.1);
+
+  // Camera movement
+  const camSpeed = 20 * dt;
+  const forward = new THREE.Vector3(-Math.sin(camAngle), 0, -Math.cos(camAngle));
+  const right = new THREE.Vector3(Math.cos(camAngle), 0, -Math.sin(camAngle));
+  if (keys['w'] || keys['arrowup']) camTarget.add(forward.clone().multiplyScalar(camSpeed));
+  if (keys['s'] || keys['arrowdown']) camTarget.add(forward.clone().multiplyScalar(-camSpeed));
+  if (keys['a'] || keys['arrowleft']) camTarget.add(right.clone().multiplyScalar(-camSpeed));
+  if (keys['d'] || keys['arrowright']) camTarget.add(right.clone().multiplyScalar(camSpeed));
+  if (keys['q']) camAngle -= 1.5 * dt;
+  if (keys['e']) camAngle += 1.5 * dt;
+  updateCamera();
+
+  // Hover indicator
+  if (G.selectedType) {
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObject(ground);
+    if (hits.length > 0) {
+      const { gx, gz } = worldToGrid(hits[0].point.x, hits[0].point.z);
+      if (gx >= 0 && gx < GRID && gz >= 0 && gz < GRID) {
+        const wp = gridToWorld(gx, gz);
+        hoverMesh.position.set(wp.x, 0.03, wp.z);
+        hoverMesh.visible = true;
+        const canPlace = !G.occupied.has(gridKey(gx, gz)) && G.minerals >= BTYPE[G.selectedType].cost;
+        hoverMat.color.setHex(canPlace ? 0x44ff44 : 0xff4444);
+      }
+    }
+  }
+
+  // Wave management
+  if (!G.waveActive) {
+    G.prepTimer -= dt;
+    if (G.prepTimer <= 0) {
+      startWave();
+    }
+  } else {
+    // Spawn enemies from queue
+    if (G.spawnQueue.length > 0) {
+      G.spawnTimer -= dt;
+      if (G.spawnTimer <= 0) {
+        const w = WAVES[G.wave - 1];
+        spawnNextEnemy(w.hpMult);
+        G.spawnTimer = 0.4;
+      }
+    }
+    // Check wave complete
+    if (G.spawnQueue.length === 0 && G.enemies.filter(e => e.alive).length === 0) {
+      G.waveActive = false;
+      G.prepTimer = 12;
+      const bonus = 30 + G.wave * 15;
+      G.minerals += bonus;
+      showMessage(`✅ Wave ${G.wave} 클리어! +${bonus}💎`);
+    }
+  }
+
+  // Building updates
+  for (const b of G.buildings) {
+    if (!b.alive) continue;
+    updateHpBar(b.hpBar, BTYPE[b.type].h + 0.3, b.hp / b.maxHp);
+
+    const bt = BTYPE[b.type];
+    // Bunker attack
+    if (bt.range > 0) {
+      b.atkTimer -= dt;
+      if (b.atkTimer <= 0) {
+        const target = findNearest(b.mesh.position, G.enemies, bt.range);
+        if (target) {
+          fireProjectile(b.mesh.position, target.mesh.position, 0x44aaff, bt.dmg, target);
+          b.atkTimer = bt.atkSpd;
+        }
+      }
+    }
+    // Barracks spawn
+    if (bt.spawnRate) {
+      b.spawnTimer -= dt;
+      if (b.spawnTimer <= 0 && G.supply < G.maxSupply) {
+        const offset = new THREE.Vector3((Math.random() - 0.5) * 3, 0, (Math.random() - 0.5) * 3);
+        createMarine(b.mesh.position.x + offset.x, b.mesh.position.z + offset.z);
+        b.spawnTimer = bt.spawnRate;
+      }
+    }
+  }
+
+  // Enemy updates
+  for (const e of G.enemies) {
+    if (!e.alive) continue;
+    updateHpBar(e.hpBar, ETYPE[e.type].h + 0.4, e.hp / e.maxHp);
+
+    // Find target: nearest building
+    let target = findNearest(e.mesh.position, G.buildings, 100);
+    if (!target) continue;
+
+    const targetPos = target.mesh.position;
+    const dist = distXZ(e.mesh.position, targetPos);
+
+    if (dist > e.range) {
+      // Move toward target
+      const dir = new THREE.Vector3(targetPos.x - e.mesh.position.x, 0, targetPos.z - e.mesh.position.z).normalize();
+      e.mesh.position.x += dir.x * e.speed * dt;
+      e.mesh.position.z += dir.z * e.speed * dt;
+      // Face direction
+      e.mesh.lookAt(new THREE.Vector3(targetPos.x, e.mesh.position.y, targetPos.z));
+    } else {
+      // Attack
+      e.atkTimer -= dt;
+      if (e.atkTimer <= 0) {
+        target.hp -= e.dmg;
+        e.atkTimer = e.atkSpd;
+        spawnParticles(targetPos, new THREE.Color(0xffaa00), 2);
+
+        if (target.hp <= 0) {
+          removeBuilding(target);
+          showMessage(`🔥 ${BTYPE[target.type].name} 파괴됨!`);
+
+          // Check game over
+          const cc = G.buildings.find(b => b.type === 'commandCenter' && b.alive);
+          if (!cc) {
+            G.gameOver = true;
+            document.getElementById('final-wave').textContent = G.wave;
+            document.getElementById('game-over').style.display = 'flex';
+            showMessage('💀 커맨드센터 파괴! GAME OVER');
+          }
+        }
+      }
+    }
+
+    // Animate body bobbing
+    if (e.body) {
+      e.body.position.y = ETYPE[e.type].h / 2 + Math.sin(Date.now() * 0.008 + e.mesh.position.x) * 0.05;
+    }
+  }
+
+  // Marine updates
+  for (const m of G.marines) {
+    if (!m.alive) continue;
+    updateHpBar(m.hpBar, 1.2, m.hp / m.maxHp);
+
+    const target = findNearest(m.mesh.position, G.enemies, 50);
+    if (!target) continue;
+
+    const dist = distXZ(m.mesh.position, target.mesh.position);
+    if (dist > m.range) {
+      const dir = new THREE.Vector3(
+        target.mesh.position.x - m.mesh.position.x, 0,
+        target.mesh.position.z - m.mesh.position.z
+      ).normalize();
+      m.mesh.position.x += dir.x * m.speed * dt;
+      m.mesh.position.z += dir.z * m.speed * dt;
+      m.mesh.lookAt(new THREE.Vector3(target.mesh.position.x, m.mesh.position.y, target.mesh.position.z));
+    } else {
+      m.atkTimer -= dt;
+      if (m.atkTimer <= 0) {
+        fireProjectile(m.mesh.position, target.mesh.position, 0x44ddff, m.dmg, target);
+        m.atkTimer = m.atkSpd;
+      }
+      m.mesh.lookAt(new THREE.Vector3(target.mesh.position.x, m.mesh.position.y, target.mesh.position.z));
+    }
+  }
+
+  // Enemy attacks on marines
+  for (const e of G.enemies) {
+    if (!e.alive) continue;
+    const nearMarine = findNearest(e.mesh.position, G.marines, e.range + 0.5);
+    if (nearMarine && distXZ(e.mesh.position, nearMarine.mesh.position) <= e.range + 0.5) {
+      // Also damage nearby marines
+      if (e.atkTimer <= 0) {
+        nearMarine.hp -= e.dmg * 0.5;
+        if (nearMarine.hp <= 0) removeMarine(nearMarine);
+      }
+    }
+  }
+
+  // Projectile updates
+  for (let i = G.projectiles.length - 1; i >= 0; i--) {
+    const p = G.projectiles[i];
+    p.t += dt * p.speed;
+    if (p.t >= 1) {
+      // Hit
+      if (p.targetEntity && p.targetEntity.alive) {
+        p.targetEntity.hp -= p.dmg;
+        spawnParticles(p.mesh.position, p.mesh.material.color, 3);
+        if (p.targetEntity.hp <= 0 && p.targetEntity.alive) {
+          // Enemy killed
+          if (G.enemies.includes(p.targetEntity)) {
+            p.targetEntity.alive = false;
+            G.minerals += p.targetEntity.reward;
+            G.kills++;
+            spawnParticles(p.targetEntity.mesh.position, new THREE.Color(ETYPE[p.targetEntity.type].color), 10);
+            scene.remove(p.targetEntity.mesh);
+          }
+        }
+      }
+      scene.remove(p.mesh);
+      G.projectiles.splice(i, 1);
+    } else {
+      p.mesh.position.lerpVectors(p.start, p.target, p.t);
+      p.mesh.position.y += Math.sin(p.t * Math.PI) * 1.5;
+    }
+  }
+
+  // Particle updates
+  for (let i = G.particles.length - 1; i >= 0; i--) {
+    const p = G.particles[i];
+    p.life -= dt * 2;
+    if (p.life <= 0) {
+      scene.remove(p.mesh);
+      G.particles.splice(i, 1);
+    } else {
+      p.vel.y -= 12 * dt;
+      p.mesh.position.add(p.vel.clone().multiplyScalar(dt));
+      p.mesh.material.opacity = p.life;
+      p.mesh.material.transparent = true;
+      p.mesh.scale.setScalar(p.life);
+    }
+  }
+
+  // Message timer
+  if (msgTimer > 0) {
+    msgTimer -= dt;
+    if (msgTimer <= 0) document.getElementById('message').classList.remove('show');
+  }
+
+  updateUI();
+}
+
+// ==================== INIT ====================
+function init() {
+  // Place Command Center at right-center
+  createBuilding('commandCenter', Math.floor(GRID * 0.75), Math.floor(GRID / 2));
+  showMessage('🏗️ 방어 건물을 배치하세요! [1] 벙커 [2] 배럭 [3] 서플라이');
+  G.prepTimer = 20;
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = G.clock.getDelta();
+  update(dt);
+  renderer.render(scene, camera);
+}
+
+init();
+animate();
+</script>
+</body>
+</html>
