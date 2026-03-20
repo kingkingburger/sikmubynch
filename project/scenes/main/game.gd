@@ -33,7 +33,6 @@ var _slot_buttons: Array = []
 
 # Ghost
 var _mouse_grid_pos: Vector2i = Vector2i(-1, -1)
-var _can_place: bool = false
 var _ghost_mesh: MeshInstance3D
 var _ghost_mat: StandardMaterial3D
 
@@ -193,7 +192,6 @@ func _setup_hq() -> void:
 	var hq_scene := load("res://scenes/buildings/hq.tscn") as PackedScene
 	_hq = hq_scene.instantiate() as BaseBuilding
 	_hq.position = Vector3(32.5, 0.0, 32.5)
-	_hq.destroyed.connect(_on_hq_destroyed)
 	add_child(_hq)
 
 	for dx in 3:
@@ -372,8 +370,6 @@ func _spawn_wave() -> void:
 	enemy_data.speed = 3.5 * speed_scale
 	enemy_data.mineral_reward = 3
 	enemy_data.color = Color(0.85, 0.2, 0.15)
-	enemy_data.radius = 0.25
-
 	var hq_pos := Vector3(32.5, 0.0, 32.5)
 	for i in enemy_count:
 		var enemy: Node3D = enemy_scene.instantiate()
@@ -507,7 +503,6 @@ func _update_ghost(screen_pos: Vector2) -> void:
 		ghost_box.size = Vector3(1.0, h, 1.0)
 	_ghost_mesh.position = Vector3(float(gx) + 0.5, h / 2.0, float(gz) + 0.5)
 
-	_can_place = true
 	if GameManager.minerals >= bd.cost:
 		_ghost_mat.albedo_color = Color(0.4, 0.85, 0.4, 0.38)
 	else:
@@ -531,9 +526,6 @@ func _screen_to_ground(screen_pos: Vector2) -> Vector3:
 
 func _on_building_destroyed(grid_pos: Vector2i) -> void:
 	building_grid.erase(grid_pos)
-
-func _on_hq_destroyed() -> void:
-	pass
 
 func _on_enemy_died() -> void:
 	enemies_alive -= 1

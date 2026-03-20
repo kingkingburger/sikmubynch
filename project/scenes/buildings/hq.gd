@@ -42,8 +42,5 @@ func _process(delta: float) -> void:
 		var energy := 0.4 + pulse * 0.5
 		_emission_mat.emission_energy_multiplier = energy
 
-func take_damage(amount: float) -> void:
-	super.take_damage(amount)
-
 func die() -> void:
 	GameManager.trigger_game_over()
