@@ -292,14 +292,13 @@ body { background: #000; color: #fff; font-family: 'Courier New', monospace; ove
   height: 100px;
   background: linear-gradient(0deg, rgba(10,8,6,0.97) 0%, rgba(10,8,6,0.92) 70%, rgba(10,8,6,0) 100%);
   border-top: 1px solid rgba(120,85,60,0.3);
-  display: flex; align-items: flex-end; justify-content: center;
+  display: flex; align-items: flex-end; justify-content: center; gap: 12px;
   padding-bottom: 8px;
 }
 
 /* 좌측 — 오브 (디아블로의 체력/마나 오브 느낌) */
 .orb-left {
-  position: absolute; left: 16px; bottom: 10px;
-  width: 72px; height: 72px;
+  width: 72px; height: 72px; flex-shrink: 0;
   border-radius: 50%;
   background: radial-gradient(circle at 40% 35%, #1565c0 0%, #0d47a1 50%, #0a2472 100%);
   border: 3px solid #37474f;
@@ -312,8 +311,7 @@ body { background: #000; color: #fff; font-family: 'Courier New', monospace; ove
 
 /* 우측 — 미네랄 오브 */
 .orb-right {
-  position: absolute; right: 16px; bottom: 10px;
-  width: 72px; height: 72px;
+  width: 72px; height: 72px; flex-shrink: 0;
   border-radius: 50%;
   background: radial-gradient(circle at 40% 35%, #00838f 0%, #006064 50%, #004d40 100%);
   border: 3px solid #37474f;

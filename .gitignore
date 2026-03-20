@@ -5,3 +5,8 @@ dist/
 .DS_Store
 Thumbs.db
 .omc/
+
+# Godot
+.godot/
+*.import
+export_presets.cfg
