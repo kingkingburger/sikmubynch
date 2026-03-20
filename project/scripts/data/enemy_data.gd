@@ -7,4 +7,3 @@ extends Resource
 @export var speed: float = 3.5
 @export var mineral_reward: int = 3
 @export var color: Color = Color.RED
-@export var radius: float = 0.25
