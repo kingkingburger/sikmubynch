@@ -6,6 +6,7 @@ var data: EnemyData
 var current_hp: float
 var target_position: Vector3
 
+var _dead: bool = false
 var _attack_target: BaseBuilding = null
 var _attack_timer: float = 0.0
 var _mesh_instance: MeshInstance3D
@@ -14,6 +15,7 @@ var _hp_bar_fill: MeshInstance3D
 var _attack_flash: float = 0.0
 
 func _ready() -> void:
+	add_to_group("enemies")
 	if data:
 		current_hp = data.max_hp
 	_build_mesh()
@@ -66,7 +68,7 @@ func _build_mesh() -> void:
 	add_child(_hp_bar_fill)
 
 func _physics_process(delta: float) -> void:
-	if GameManager.is_game_over:
+	if GameManager.is_game_over or _dead:
 		return
 
 	if _attack_flash > 0.0:
@@ -125,12 +127,17 @@ func _update_hp_bar() -> void:
 		fill_mat.albedo_color = Color(0.15, 0.85, 0.2) if hp_ratio > 0.5 else Color(0.9, 0.3, 0.1)
 
 func take_damage(amount: float) -> void:
+	if _dead:
+		return
 	current_hp -= amount
 	_update_hp_bar()
 	if current_hp <= 0.0:
 		_die()
 
 func _die() -> void:
+	if _dead:
+		return
+	_dead = true
 	GameManager.add_minerals(data.mineral_reward)
 	GameManager.add_kill()
 	died.emit()
