@@ -2,13 +2,19 @@
 
 ## 프로젝트 개요
 
-무한 웨이브 하이브리드 디펜스 게임. 건물 배치 + 유닛 생산 복합 방어.
+대규모 웨이브 디펜스 + 오토배틀 + 로그라이크. They Are Billions 스타일 실시간 건설+전투 + 롤토체스 시너지 시스템.
 
 ## 기술 스택
 
-- HTML + Three.js (CDN), 싱글 HTML 파일 프로토타입
-- 빌드 도구 없음. `index.html`을 브라우저에서 직접 열어 실행
-- 개발 시 `bunx live-server --open` 권장
+- Godot 4 + GDScript
+- 2D 탑다운, 픽셀아트
+- PC 전용 (키보드 + 마우스)
+
+## 핵심 가치
+
+1. **타격감** — 화면 흔들림, 히트스톱, 파티클. 대량 적 처치 시 쾌감
+2. **대규모 전투** — 첫 웨이브부터 압도적 물량. 500+ 동시 적
+3. **"한 판 더"** — 시너지 조합 + 랜덤 맵/보상으로 매 런이 다름
 
 ## 개발 방식
 
@@ -19,13 +25,24 @@
 ## 프로젝트 구조
 
 ```
-index.html                          # 게임 본체 (Three.js 싱글 파일)
-docs/ouroboros/{date}-{slug}/       # Ouroboros 프로세스 문서
-  01-requirements.md                # Phase 1: 요구사항
-  02-design.md                      # Phase 2: 설계 (미완)
-  03-verification.md                # Phase 3: 검증 (미완)
+project/                                # Godot 4 프로젝트 (예정)
+  autoloads/                            # 싱글톤 매니저
+  scenes/                               # 씬 파일 (.tscn)
+  scripts/                              # 로직 스크립트
+  resources/                            # 데이터 정의 (.tres)
+  assets/                               # 스프라이트, 사운드
+docs/ouroboros/{date}-{slug}/           # Ouroboros 프로세스 문서
+  01-requirements.md                    # Phase 1: 요구사항
+  02-design.md                          # Phase 2: 설계
+  03-verification.md                    # Phase 3: 검증
+mockup.html                             # UI/레이아웃 목업 (디아블로 스타일 이소메트릭)
+index.html                              # (레거시) 웹 프로토타입
 ```
 
 ## 현재 상태
 
-초기 프로토타입 단계. Ouroboros Phase 1 진행 중 (모호성 63%).
+Ouroboros 3Phase 완료 (94개 결정 확정). Godot 4 프로젝트 생성 대기 중.
+- 요구사항 94개 결정 확정 (Clarify 4차)
+- 설계/검증 문서 완성 (Round 13-20 반영 필요)
+- HTML 목업 완성 (디아블로 스타일 이소메트릭)
+- 이전 웹 프로토타입(index.html)은 레거시 — 컨셉 참고용
