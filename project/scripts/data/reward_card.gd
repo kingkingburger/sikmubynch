@@ -1,6 +1,8 @@
 class_name RewardCard
 extends RefCounted
 
+const TraitData := preload("res://scripts/data/trait_data.gd")
+
 enum Rarity { COMMON, RARE, LEGENDARY }
 enum EffectType { TRAIT_GRANT, STAT_BUFF, MINERAL_BONUS, UNIT_BUFF, BUILDING_HEAL }
 
@@ -37,10 +39,10 @@ static func generate_pool(wave: int) -> Array:
 	# Trait cards (common)
 	for t in [TraitData.TraitType.FIRE, TraitData.TraitType.ICE, TraitData.TraitType.POISON,
 			TraitData.TraitType.ELECTRIC, TraitData.TraitType.FORTIFY]:
-		var name := TraitData.get_trait_name(t)
+		var tname: String = TraitData.get_trait_name(t)
 		var card := RewardCard.new()
-		card.card_name = name + " Essence"
-		card.description = "Grant " + name + " trait to a random tower"
+		card.card_name = tname + " Essence"
+		card.description = "Grant " + tname + " trait to a random tower"
 		card.rarity = Rarity.COMMON
 		card.effect_type = EffectType.TRAIT_GRANT
 		card.trait_type = t

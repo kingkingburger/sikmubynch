@@ -5,20 +5,40 @@ var damage: float = 0.0
 var speed: float = 25.0
 var trait_effects: Dictionary = {}
 
+var _trail_mesh: MeshInstance3D
+
 func _ready() -> void:
+	# Main projectile — larger and brighter
 	var mesh := MeshInstance3D.new()
 	var sphere := SphereMesh.new()
-	sphere.radius = 0.12
-	sphere.height = 0.24
+	sphere.radius = 0.25
+	sphere.height = 0.5
 	mesh.mesh = sphere
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(1.0, 0.9, 0.3)
 	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.75, 0.15)
-	mat.emission_energy_multiplier = 2.0
+	mat.emission = Color(1.0, 0.8, 0.2)
+	mat.emission_energy_multiplier = 4.0
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mesh.material_override = mat
 	add_child(mesh)
+
+	# Trail — stretched cylinder behind projectile
+	_trail_mesh = MeshInstance3D.new()
+	var trail := CylinderMesh.new()
+	trail.top_radius = 0.04
+	trail.bottom_radius = 0.15
+	trail.height = 0.6
+	_trail_mesh.mesh = trail
+	var trail_mat := StandardMaterial3D.new()
+	trail_mat.albedo_color = Color(1.0, 0.7, 0.1, 0.6)
+	trail_mat.emission_enabled = true
+	trail_mat.emission = Color(1.0, 0.6, 0.1)
+	trail_mat.emission_energy_multiplier = 2.0
+	trail_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	trail_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_trail_mesh.material_override = trail_mat
+	add_child(_trail_mesh)
 
 func _process(delta: float) -> void:
 	if not is_instance_valid(target):
@@ -35,7 +55,13 @@ func _process(delta: float) -> void:
 		queue_free()
 		return
 
-	global_position += to_target.normalized() * move_dist
+	var direction := to_target.normalized()
+	global_position += direction * move_dist
+
+	# Orient trail opposite to movement direction
+	if _trail_mesh and direction.length() > 0.01:
+		_trail_mesh.look_at(global_position - direction, Vector3.UP)
+		_trail_mesh.rotation.x += PI / 2.0
 
 func _on_hit() -> void:
 	if not is_instance_valid(target):

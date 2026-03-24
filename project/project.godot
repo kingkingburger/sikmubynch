@@ -17,6 +17,7 @@ config/features=PackedStringArray("4.6")
 
 [autoload]
 
+Locale="*res://autoloads/locale.gd"
 GameManager="*res://autoloads/game_manager.gd"
 FlowField="*res://autoloads/flow_field.gd"
 SynergyManager="*res://autoloads/synergy_manager.gd"

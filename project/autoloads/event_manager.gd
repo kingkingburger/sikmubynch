@@ -1,5 +1,7 @@
 extends Node
 
+const TraitData := preload("res://scripts/data/trait_data.gd")
+
 signal combat_event_triggered(event_name: String, description: String)
 signal choice_event_triggered(event_name: String, description: String, choices: Array)
 

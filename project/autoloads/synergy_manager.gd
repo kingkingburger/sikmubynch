@@ -1,5 +1,7 @@
 extends Node
 
+const TraitData := preload("res://scripts/data/trait_data.gd")
+
 signal synergy_changed()
 
 # Track trait counts across all buildings

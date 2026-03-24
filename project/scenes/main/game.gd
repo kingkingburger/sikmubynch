@@ -1,5 +1,8 @@
 extends Node3D
 
+const RewardCard := preload("res://scripts/data/reward_card.gd")
+const TraitData := preload("res://scripts/data/trait_data.gd")
+
 const MAP_SIZE := 64
 const WAVE_INTERVAL := 10.0
 
@@ -34,6 +37,8 @@ var _hotbar_label: Label
 var _game_over_panel: PanelContainer
 var _result_label: Label
 var _slot_buttons: Array = []
+var _hp_orb_val: Label
+var _mineral_orb_val: Label
 
 # Reward card UI
 var _card_panel: PanelContainer
@@ -241,10 +246,10 @@ func _setup_lighting() -> void:
 
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.05, 0.06, 0.08)
+	env.background_color = Color(0.02, 0.02, 0.03)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.35, 0.38, 0.42)
-	env.ambient_light_energy = 0.6
+	env.ambient_light_color = Color(0.25, 0.27, 0.32)
+	env.ambient_light_energy = 0.5
 
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
@@ -258,33 +263,54 @@ func _setup_ground() -> void:
 	var shader := Shader.new()
 	shader.code = """
 shader_type spatial;
-render_mode unshaded;
 
-uniform vec3 ground_color : source_color = vec3(0.12, 0.18, 0.10);
-uniform vec3 grid_color : source_color = vec3(0.18, 0.24, 0.16);
-uniform vec3 chunk_color : source_color = vec3(0.22, 0.30, 0.20);
+uniform vec3 ground_dark : source_color = vec3(0.06, 0.07, 0.05);
+uniform vec3 ground_mid : source_color = vec3(0.10, 0.11, 0.08);
+uniform vec3 grid_color : source_color = vec3(0.14, 0.16, 0.10);
+uniform vec3 chunk_color : source_color = vec3(0.18, 0.14, 0.08);
 uniform float map_size = 64.0;
+
+float hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
 
 void fragment() {
 	vec2 uv = UV * map_size;
+	vec2 cell = floor(uv);
+
+	// Per-tile color variation (dirt/stone patches)
+	float h = hash(cell);
+	vec3 base = mix(ground_dark, ground_mid, h * 0.6 + 0.2);
+
+	// Grid lines
 	vec2 grid_uv = fract(uv);
-	float line_w = 0.04;
+	float line_w = 0.03;
 	float is_line = 0.0;
 	if (grid_uv.x < line_w || grid_uv.x > 1.0 - line_w ||
 		grid_uv.y < line_w || grid_uv.y > 1.0 - line_w) {
-		is_line = 0.55;
+		is_line = 0.4;
 	}
+
+	// 4x4 chunk borders (thicker, brighter)
 	vec2 chunk_uv = fract(uv / 4.0);
-	float chunk_w = 0.025;
+	float chunk_w = 0.02;
 	float is_chunk = 0.0;
 	if (chunk_uv.x < chunk_w || chunk_uv.x > 1.0 - chunk_w ||
 		chunk_uv.y < chunk_w || chunk_uv.y > 1.0 - chunk_w) {
-		is_chunk = 0.7;
+		is_chunk = 0.6;
 	}
-	vec3 col = ground_color;
+
+	// Vignette — darken edges
+	vec2 center_uv = UV - 0.5;
+	float vignette = 1.0 - dot(center_uv, center_uv) * 0.8;
+	vignette = clamp(vignette, 0.3, 1.0);
+
+	vec3 col = base;
 	col = mix(col, grid_color, is_line);
 	col = mix(col, chunk_color, is_chunk);
+	col *= vignette;
 	ALBEDO = col;
+	ROUGHNESS = 0.95;
 }
 """
 	shader_mat.shader = shader
@@ -295,7 +321,7 @@ void fragment() {
 	_add_border()
 
 func _add_border() -> void:
-	var border_color := Color(0.3, 0.55, 0.3, 1.0)
+	var border_color := Color(0.15, 0.12, 0.08, 1.0)
 	var thickness := 0.15
 	var height := 0.05
 	var s := float(MAP_SIZE)
@@ -365,43 +391,78 @@ func _setup_ui() -> void:
 	_top_bar_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
 	top_panel.add_child(_top_bar_label)
 
-	# --- Bottom hotbar ---
+	# --- Bottom bar (Diablo-style: HP orb + build slots + mineral orb) ---
 	var bottom_panel := PanelContainer.new()
 	bottom_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom_panel.custom_minimum_size = Vector2(0, 80)
-	bottom_panel.offset_top = -80.0
+	bottom_panel.custom_minimum_size = Vector2(0, 100)
+	bottom_panel.offset_top = -100.0
 	bottom_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.04, 0.04, 0.07, 0.90), Color(0.6, 0.5, 0.2), 2))
+		Color(0.04, 0.03, 0.02, 0.97), Color(0.47, 0.33, 0.23, 0.3), 1))
 	_canvas.add_child(bottom_panel)
 
 	var hbox := HBoxContainer.new()
 	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_theme_constant_override("separation", 8)
+	hbox.add_theme_constant_override("separation", 12)
+	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bottom_panel.add_child(hbox)
 
-	# Building slot buttons
+	# --- HP Orb (left) ---
+	var hp_orb := _create_orb(Color(0.08, 0.27, 0.63), Color(0.05, 0.17, 0.45), Color(0.22, 0.37, 0.56))
+	hbox.add_child(hp_orb)
+	var hp_vbox: VBoxContainer = hp_orb.get_child(0)
+	var hp_label: Label = hp_vbox.get_child(0)
+	hp_label.text = Locale.t("hp")
+	hp_label.add_theme_color_override("font_color", Color(0.56, 0.79, 0.98))
+	_hp_orb_val = hp_vbox.get_child(1)
+	_hp_orb_val.add_theme_color_override("font_color", Color(0.89, 0.95, 0.99))
+
+	# --- Build slots (center) ---
+	var build_hbox := HBoxContainer.new()
+	build_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	build_hbox.add_theme_constant_override("separation", 6)
+	hbox.add_child(build_hbox)
+
 	for i in _building_datas.size():
 		var bd := _building_datas[i] as BuildingData
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(160, 56)
-		btn.text = "[%d] %s\nCost: %d" % [i + 1, bd.building_name.to_upper(), bd.cost]
-		btn.add_theme_font_size_override("font_size", 13)
+		btn.custom_minimum_size = Vector2(72, 72)
+		var localized_name := Locale.get_building_name(bd.building_name)
+		btn.text = "%d\n%s\n%d" % [i + 1, localized_name.substr(0, 5).to_upper(), bd.cost]
+		btn.add_theme_font_size_override("font_size", 10)
 		btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
+		var normal_style := _create_panel_style(
+			Color(0.23, 0.18, 0.12, 0.6), Color(0.47, 0.33, 0.23, 0.4), 2)
+		normal_style.corner_radius_top_left = 4
+		normal_style.corner_radius_top_right = 4
+		normal_style.corner_radius_bottom_left = 4
+		normal_style.corner_radius_bottom_right = 4
+		btn.add_theme_stylebox_override("normal", normal_style)
 		var hover_style := _create_panel_style(
-			Color(0.14, 0.11, 0.06, 0.95), Color(0.85, 0.72, 0.3), 2)
+			Color(0.39, 0.31, 0.16, 0.4), Color(1.0, 0.84, 0.2), 2)
+		hover_style.corner_radius_top_left = 4
+		hover_style.corner_radius_top_right = 4
+		hover_style.corner_radius_bottom_left = 4
+		hover_style.corner_radius_bottom_right = 4
 		btn.add_theme_stylebox_override("hover", hover_style)
 		btn.add_theme_stylebox_override("pressed", hover_style)
-		btn.add_theme_stylebox_override("focus", _create_panel_style(
-			Color(0.08, 0.06, 0.04, 0.95), Color(0.4, 0.35, 0.2), 1))
+		btn.add_theme_stylebox_override("focus", normal_style)
 		btn.pressed.connect(_on_slot_pressed.bind(i))
-		hbox.add_child(btn)
+		build_hbox.add_child(btn)
 		_slot_buttons.append(btn)
 
+	# --- Mineral Orb (right) ---
+	var min_orb := _create_orb(Color(0.0, 0.32, 0.35), Color(0.0, 0.24, 0.25), Color(0.0, 0.42, 0.47))
+	hbox.add_child(min_orb)
+	var min_vbox: VBoxContainer = min_orb.get_child(0)
+	var min_label: Label = min_vbox.get_child(0)
+	min_label.text = Locale.t("mineral")
+	min_label.add_theme_color_override("font_color", Color(0.5, 0.87, 0.92))
+	_mineral_orb_val = min_vbox.get_child(1)
+	_mineral_orb_val.add_theme_color_override("font_color", Color(0.88, 0.97, 0.98))
+
 	_hotbar_label = Label.new()
-	_hotbar_label.add_theme_font_size_override("font_size", 12)
-	_hotbar_label.add_theme_color_override("font_color", Color(0.7, 0.65, 0.5))
-	_hotbar_label.text = "LClick: Build/Upgrade  RClick: Demolish"
-	hbox.add_child(_hotbar_label)
+	_hotbar_label.visible = false
+	_canvas.add_child(_hotbar_label)
 
 	_update_slot_highlight()
 
@@ -424,7 +485,7 @@ func _setup_ui() -> void:
 	_game_over_panel.add_child(vbox)
 
 	var go_title := Label.new()
-	go_title.text = "GAME OVER"
+	go_title.text = Locale.t("game_over")
 	go_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	go_title.add_theme_font_size_override("font_size", 40)
 	go_title.add_theme_color_override("font_color", Color(0.95, 0.75, 0.2))
@@ -437,7 +498,7 @@ func _setup_ui() -> void:
 	vbox.add_child(_result_label)
 
 	var restart_btn := Button.new()
-	restart_btn.text = "RESTART"
+	restart_btn.text = Locale.t("restart")
 	restart_btn.custom_minimum_size = Vector2(150, 46)
 	var rb_style := _create_panel_style(
 		Color(0.08, 0.06, 0.04, 0.95), Color(0.7, 0.55, 0.2), 2)
@@ -481,7 +542,7 @@ func _setup_card_ui() -> void:
 	_card_panel.add_child(vbox)
 
 	var title := Label.new()
-	title.text = "CHOOSE A REWARD"
+	title.text = Locale.t("choose_reward")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color(0.95, 0.85, 0.3))
@@ -506,7 +567,7 @@ func _setup_card_ui() -> void:
 		_card_buttons.append(btn)
 
 	_card_skip_btn = Button.new()
-	_card_skip_btn.text = "SKIP"
+	_card_skip_btn.text = Locale.t("skip")
 	_card_skip_btn.custom_minimum_size = Vector2(100, 36)
 	_card_skip_btn.add_theme_font_size_override("font_size", 14)
 	_card_skip_btn.add_theme_color_override("font_color", Color(0.7, 0.65, 0.5))
@@ -613,7 +674,7 @@ func _setup_esc_menu() -> void:
 	_esc_panel.add_child(vbox)
 
 	var title := Label.new()
-	title.text = "PAUSED"
+	title.text = Locale.t("paused")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 30)
 	title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.2))
@@ -625,7 +686,7 @@ func _setup_esc_menu() -> void:
 		Color(0.14, 0.11, 0.06, 0.95), Color(0.85, 0.72, 0.3), 2)
 
 	var resume_btn := Button.new()
-	resume_btn.text = "RESUME"
+	resume_btn.text = Locale.t("resume")
 	resume_btn.custom_minimum_size = Vector2(200, 40)
 	resume_btn.add_theme_font_size_override("font_size", 16)
 	resume_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
@@ -637,7 +698,7 @@ func _setup_esc_menu() -> void:
 	vbox.add_child(c1)
 
 	var restart_btn := Button.new()
-	restart_btn.text = "RESTART"
+	restart_btn.text = Locale.t("restart")
 	restart_btn.custom_minimum_size = Vector2(200, 40)
 	restart_btn.add_theme_font_size_override("font_size", 16)
 	restart_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
@@ -649,7 +710,7 @@ func _setup_esc_menu() -> void:
 	vbox.add_child(c2)
 
 	var title_btn := Button.new()
-	title_btn.text = "TITLE SCREEN"
+	title_btn.text = Locale.t("title_screen")
 	title_btn.custom_minimum_size = Vector2(200, 40)
 	title_btn.add_theme_font_size_override("font_size", 16)
 	title_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
@@ -679,6 +740,39 @@ func _update_slot_highlight() -> void:
 		else:
 			btn.add_theme_stylebox_override("normal", _create_panel_style(
 				Color(0.08, 0.06, 0.04, 0.95), Color(0.4, 0.35, 0.2), 1))
+
+func _create_orb(bg_center: Color, bg_edge: Color, border_color: Color) -> PanelContainer:
+	var orb := PanelContainer.new()
+	orb.custom_minimum_size = Vector2(76, 76)
+	var style := StyleBoxFlat.new()
+	style.bg_color = bg_center
+	style.corner_radius_top_left = 38
+	style.corner_radius_top_right = 38
+	style.corner_radius_bottom_left = 38
+	style.corner_radius_bottom_right = 38
+	style.border_color = border_color
+	style.border_width_top = 3
+	style.border_width_bottom = 3
+	style.border_width_left = 3
+	style.border_width_right = 3
+	style.content_margin_left = 4
+	style.content_margin_right = 4
+	style.content_margin_top = 4
+	style.content_margin_bottom = 4
+	orb.add_theme_stylebox_override("panel", style)
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 0)
+	orb.add_child(vbox)
+	var lbl := Label.new()
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", 9)
+	vbox.add_child(lbl)
+	var val := Label.new()
+	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	val.add_theme_font_size_override("font_size", 16)
+	vbox.add_child(val)
+	return orb
 
 func _create_panel_style(bg_color: Color, border_color: Color = Color.TRANSPARENT, border_width: int = 0) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -792,7 +886,7 @@ func _spawn_wave() -> void:
 	# Tidal pattern: calm → storm cycle every 3 waves
 	var cycle_pos := (wave_num - 1) % 3  # 0=calm, 1=rising, 2=storm
 	var base_count := 30 + (wave_num - 1) * 8
-	var count_multiplier := [0.7, 1.0, 1.4][cycle_pos]
+	var count_multiplier: float = [0.7, 1.0, 1.4][cycle_pos]
 	var enemy_count := int(base_count * count_multiplier * EventManager.get_challenge_enemy_mult())
 
 	var templates := _create_enemy_templates(wave_num)
@@ -1122,21 +1216,24 @@ func _update_hud() -> void:
 	if _top_bar_label:
 		var wave_text := ""
 		if _between_waves:
-			wave_text = "  |  NEXT WAVE: %ds" % [int(ceil(_wave_countdown))]
-		var unit_count := get_tree().get_nodes_in_group("units").size()
-		var pause_text := "  ||  PAUSED" if GameFeel.paused else ""
-		_top_bar_label.text = "WAVE: %d  |  MINERALS: %d  |  KILLS: %d  |  ENEMIES: %d  |  UNITS: %d%s%s" % [
-			GameManager.wave_number, GameManager.minerals, GameManager.kill_count,
-			enemies_alive, unit_count, wave_text, pause_text
-		]
+			wave_text = "  |  " + Locale.t_fmt("next_wave", [int(ceil(_wave_countdown))])
+		var pause_text := "  ||  " + Locale.t("paused") if GameFeel.paused else ""
+		_top_bar_label.text = Locale.t_fmt("hud_format", [
+			GameManager.wave_number, GameManager.kill_count, enemies_alive
+		]) + wave_text + pause_text
+	if _hp_orb_val and _hq:
+		var hp := int(_hq.current_hp) if is_instance_valid(_hq) else 0
+		_hp_orb_val.text = "%d" % hp
+	if _mineral_orb_val:
+		_mineral_orb_val.text = "%d" % GameManager.minerals
 
 func _on_game_over() -> void:
 	_game_over_panel.visible = true
 	_ghost_mesh.visible = false
 	var secs := int(GameManager.game_time)
-	_result_label.text = "Wave: %d  |  Kills: %d  |  Time: %d:%02d" % [
+	_result_label.text = Locale.t_fmt("result_format", [
 		GameManager.wave_number, GameManager.kill_count, secs / 60, secs % 60
-	]
+	])
 
 # ---------------------------------------------------------------------------
 # Reward cards
@@ -1151,7 +1248,7 @@ func _show_reward_cards() -> void:
 			var card: RewardCard = _pending_cards[i]
 			_card_buttons[i].text = "[%s]\n%s\n%s" % [card.get_rarity_name(), card.card_name, card.description]
 			_card_buttons[i].visible = true
-			var rcolor := card.get_rarity_color()
+			var rcolor: Color = card.get_rarity_color()
 			_card_buttons[i].add_theme_stylebox_override("normal", _create_panel_style(
 				Color(0.08, 0.06, 0.04, 0.95), rcolor * 0.6, 2))
 			_card_buttons[i].add_theme_stylebox_override("hover", _create_panel_style(
@@ -1220,7 +1317,7 @@ func _update_synergy_bar() -> void:
 
 func _on_combat_event(event_name: String, description: String) -> void:
 	if _event_label:
-		_event_label.text = "%s: %s" % [event_name, description]
+		_event_label.text = "%s: %s" % [Locale.t(event_name), Locale.t(description)]
 		_event_label.visible = true
 		_event_timer = 4.0
 
@@ -1229,10 +1326,10 @@ var _pending_choices: Array = []
 func _on_choice_event(event_name: String, description: String, choices: Array) -> void:
 	_pending_choices = choices
 	if _choice_label:
-		_choice_label.text = "%s\n%s" % [event_name, description]
+		_choice_label.text = "%s\n%s" % [Locale.t(event_name), Locale.t(description)]
 	for i in _choice_buttons.size():
 		if i < choices.size():
-			_choice_buttons[i].text = choices[i]["label"]
+			_choice_buttons[i].text = Locale.t(choices[i]["label"])
 			_choice_buttons[i].visible = true
 		else:
 			_choice_buttons[i].visible = false
