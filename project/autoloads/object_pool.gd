@@ -14,7 +14,7 @@ func preload_pool(scene_path: String, count: int) -> void:
 		node.set_physics_process(false)
 		_pools[scene_path].append(node)
 
-func get_node(scene_path: String) -> Node:
+func acquire(scene_path: String) -> Node:
 	if not _pools.has(scene_path):
 		_pools[scene_path] = []
 		_active[scene_path] = []

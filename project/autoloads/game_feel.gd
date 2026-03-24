@@ -67,13 +67,10 @@ func hitstop(duration: float = 0.04) -> void:
 	_hitstop_timer = duration
 
 func flash_white() -> void:
-	_flash_timer = 1.0
-	if _flash_overlay:
-		_flash_overlay.color = Color(1.0, 1.0, 1.0, 0.3)
+	pass  # Disabled: full-screen flash causes eye strain
 
 func roll_critical(base_damage: float) -> float:
 	if randf() < CRIT_CHANCE:
-		flash_white()
 		shake(0.15)
 		return base_damage * CRIT_MULT
 	return base_damage

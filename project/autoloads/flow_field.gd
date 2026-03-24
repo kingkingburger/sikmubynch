@@ -41,7 +41,7 @@ func recalculate(targets: Array) -> void:
 		var current_cost: int = _cost_field[current]
 
 		for dir in DIRECTIONS:
-			var neighbor := current + dir
+			var neighbor: Vector2i = current + dir
 			if neighbor.x < 0 or neighbor.x >= MAP_SIZE or neighbor.y < 0 or neighbor.y >= MAP_SIZE:
 				continue
 			if _obstacles.has(neighbor):
@@ -61,7 +61,7 @@ func recalculate(targets: Array) -> void:
 		var best_dir := Vector2.ZERO
 		var best_cost: int = _cost_field[cell]
 		for dir in DIRECTIONS:
-			var neighbor := cell + dir
+			var neighbor: Vector2i = cell + dir
 			if _cost_field.has(neighbor) and _cost_field[neighbor] < best_cost:
 				best_cost = _cost_field[neighbor]
 				best_dir = Vector2(float(dir.x), float(dir.y)).normalized()

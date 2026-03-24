@@ -30,7 +30,7 @@ func _build_ui() -> void:
 
 	# Subtitle
 	var subtitle := Label.new()
-	subtitle.text = "Wave Defense + Auto Battle + Roguelike"
+	subtitle.text = Locale.t("subtitle")
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_font_size_override("font_size", 18)
 	subtitle.add_theme_color_override("font_color", Color(0.6, 0.55, 0.4))
@@ -38,7 +38,7 @@ func _build_ui() -> void:
 
 	# Start button
 	var start_btn := Button.new()
-	start_btn.text = "START GAME"
+	start_btn.text = Locale.t("start_game")
 	start_btn.custom_minimum_size = Vector2(220, 60)
 	start_btn.add_theme_font_size_override("font_size", 22)
 	start_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.3))
@@ -66,7 +66,37 @@ func _build_ui() -> void:
 
 	# Controls info
 	var info := Label.new()
-	info.text = "1-5: Build  |  WASD: Camera  |  Scroll: Zoom  |  Space: Pause  |  F: Speed"
+	info.text = Locale.t("controls_info")
+
+	# Language toggle button
+	var lang_btn := Button.new()
+	lang_btn.text = Locale.t("language")
+	lang_btn.custom_minimum_size = Vector2(100, 36)
+	lang_btn.add_theme_font_size_override("font_size", 14)
+	lang_btn.add_theme_color_override("font_color", Color(0.7, 0.65, 0.5))
+	var lang_style := StyleBoxFlat.new()
+	lang_style.bg_color = Color(0.08, 0.06, 0.04, 0.7)
+	lang_style.border_color = Color(0.4, 0.35, 0.2)
+	lang_style.border_width_bottom = 1
+	lang_style.border_width_top = 1
+	lang_style.border_width_left = 1
+	lang_style.border_width_right = 1
+	lang_style.corner_radius_top_left = 4
+	lang_style.corner_radius_top_right = 4
+	lang_style.corner_radius_bottom_left = 4
+	lang_style.corner_radius_bottom_right = 4
+	lang_btn.add_theme_stylebox_override("normal", lang_style)
+	lang_btn.pressed.connect(func():
+		Locale.toggle_lang()
+		# Refresh UI
+		subtitle.text = Locale.t("subtitle")
+		start_btn.text = Locale.t("start_game")
+		info.text = Locale.t("controls_info")
+		lang_btn.text = Locale.t("language")
+	)
+	var lang_center := CenterContainer.new()
+	lang_center.add_child(lang_btn)
+	vbox.add_child(lang_center)
 	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	info.add_theme_font_size_override("font_size", 13)
 	info.add_theme_color_override("font_color", Color(0.4, 0.38, 0.3))

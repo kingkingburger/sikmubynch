@@ -2,6 +2,8 @@ extends BaseBuilding
 
 var _attack_timer: float = 0.0
 var _turret_mesh: MeshInstance3D
+var _muzzle_flash: MeshInstance3D
+var _muzzle_timer: float = 0.0
 var projectile_scene: PackedScene
 
 func _ready() -> void:
@@ -23,13 +25,40 @@ func _setup_turret() -> void:
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.9, 0.78, 0.25)
 	mat.roughness = 0.5
+	mat.emission_enabled = true
+	mat.emission = Color(0.9, 0.78, 0.25) * 0.3
+	mat.emission_energy_multiplier = 1.0
 	_turret_mesh.material_override = mat
 	add_child(_turret_mesh)
+
+	# Muzzle flash sphere (hidden by default)
+	_muzzle_flash = MeshInstance3D.new()
+	var flash_sphere := SphereMesh.new()
+	flash_sphere.radius = 0.2
+	flash_sphere.height = 0.4
+	_muzzle_flash.mesh = flash_sphere
+	_muzzle_flash.position = Vector3(0.0, 1.45, 0.0)
+	var flash_mat := StandardMaterial3D.new()
+	flash_mat.albedo_color = Color(1.0, 0.9, 0.3)
+	flash_mat.emission_enabled = true
+	flash_mat.emission = Color(1.0, 0.85, 0.2)
+	flash_mat.emission_energy_multiplier = 6.0
+	flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_muzzle_flash.material_override = flash_mat
+	_muzzle_flash.visible = false
+	add_child(_muzzle_flash)
 
 func _process(delta: float) -> void:
 	super._process(delta)
 	if GameManager.is_game_over:
 		return
+
+	# Muzzle flash fade
+	if _muzzle_timer > 0.0:
+		_muzzle_timer -= delta * 8.0
+		if _muzzle_timer <= 0.0:
+			_muzzle_flash.visible = false
+			_muzzle_timer = 0.0
 
 	_attack_timer -= delta
 	if _attack_timer <= 0.0:
@@ -56,6 +85,11 @@ func _find_nearest_enemy() -> Node3D:
 	return nearest
 
 func _fire_at(target: Node3D) -> void:
+	# Muzzle flash
+	if _muzzle_flash:
+		_muzzle_flash.visible = true
+		_muzzle_timer = 1.0
+
 	var projectile := projectile_scene.instantiate()
 	projectile.position = Vector3(global_position.x, 1.35, global_position.z)
 	projectile.target = target

@@ -36,27 +36,76 @@ func _ready() -> void:
 		projectile_scene = load("res://scenes/projectiles/projectile.tscn")
 
 func _build_mesh() -> void:
-	# Body - capsule shape to distinguish from enemies
 	_mesh_instance = MeshInstance3D.new()
-	var capsule := CapsuleMesh.new()
-	capsule.radius = 0.18
-	capsule.height = 0.5
-	_mesh_instance.mesh = capsule
-	_mesh_instance.position = Vector3(0.0, 0.25, 0.0)
+	var unit_type: int = data.unit_type if data else UnitData.UnitType.SOLDIER
+
+	match unit_type:
+		UnitData.UnitType.SOLDIER:
+			# Upright capsule — infantry
+			var capsule := CapsuleMesh.new()
+			capsule.radius = 0.2
+			capsule.height = 0.6
+			_mesh_instance.mesh = capsule
+			_mesh_instance.position = Vector3(0.0, 0.3, 0.0)
+		UnitData.UnitType.ARCHER:
+			# Thinner, taller capsule
+			var capsule := CapsuleMesh.new()
+			capsule.radius = 0.15
+			capsule.height = 0.65
+			_mesh_instance.mesh = capsule
+			_mesh_instance.position = Vector3(0.0, 0.33, 0.0)
+		UnitData.UnitType.TANKER:
+			# Wide box — shield bearer
+			var box := BoxMesh.new()
+			box.size = Vector3(0.5, 0.55, 0.4)
+			_mesh_instance.mesh = box
+			_mesh_instance.position = Vector3(0.0, 0.28, 0.0)
+		UnitData.UnitType.BOMBER:
+			# Sphere — explosive
+			var sphere := SphereMesh.new()
+			sphere.radius = 0.25
+			sphere.height = 0.5
+			sphere.radial_segments = 8
+			_mesh_instance.mesh = sphere
+			_mesh_instance.position = Vector3(0.0, 0.25, 0.0)
+		_:
+			var capsule := CapsuleMesh.new()
+			capsule.radius = 0.2
+			capsule.height = 0.55
+			_mesh_instance.mesh = capsule
+			_mesh_instance.position = Vector3(0.0, 0.28, 0.0)
 
 	_body_mat = StandardMaterial3D.new()
-	_body_mat.albedo_color = data.color if data else Color.BLUE
-	_body_mat.roughness = 0.6
+	var c: Color = data.color if data else Color.BLUE
+	_body_mat.albedo_color = c
+	_body_mat.roughness = 0.5
+	_body_mat.emission_enabled = true
+	_body_mat.emission = c * 0.3
+	_body_mat.emission_energy_multiplier = 1.2
 	_mesh_instance.material_override = _body_mat
 	add_child(_mesh_instance)
+
+	# Ground shadow
+	var shadow := MeshInstance3D.new()
+	var shadow_quad := QuadMesh.new()
+	shadow_quad.size = Vector2(0.5, 0.5)
+	shadow.mesh = shadow_quad
+	shadow.rotation_degrees.x = -90.0
+	shadow.position = Vector3(0.0, 0.02, 0.0)
+	var shadow_mat := StandardMaterial3D.new()
+	shadow_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.35)
+	shadow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shadow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shadow.material_override = shadow_mat
+	add_child(shadow)
 
 	# Collision
 	var col := CollisionShape3D.new()
 	var shape := CapsuleShape3D.new()
-	shape.radius = 0.18
-	shape.height = 0.5
+	shape.radius = 0.2
+	shape.height = 0.55
 	col.shape = shape
-	col.position = Vector3(0.0, 0.25, 0.0)
+	col.position = Vector3(0.0, 0.28, 0.0)
 	add_child(col)
 
 	# HP bar bg

@@ -1,6 +1,8 @@
 class_name BaseBuilding
 extends StaticBody3D
 
+const TraitData := preload("res://scripts/data/trait_data.gd")
+
 signal destroyed()
 
 const MAX_LEVEL := 3
@@ -58,6 +60,20 @@ func _build_mesh() -> void:
 	_damage_mat.roughness = 0.7
 	_mesh_instance.material_override = _damage_mat
 	add_child(_mesh_instance)
+
+	# Ground shadow disc
+	var shadow := MeshInstance3D.new()
+	var shadow_quad := QuadMesh.new()
+	shadow_quad.size = Vector2(size_x * 1.2, size_z * 1.2)
+	shadow.mesh = shadow_quad
+	shadow.rotation_degrees.x = -90.0
+	shadow.position = Vector3(0.0, 0.02, 0.0)
+	var shadow_mat := StandardMaterial3D.new()
+	shadow_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.45)
+	shadow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shadow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shadow.material_override = shadow_mat
+	add_child(shadow)
 
 	# Collision
 	var col := CollisionShape3D.new()

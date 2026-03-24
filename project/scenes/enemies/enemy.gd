@@ -34,47 +34,86 @@ func _ready() -> void:
 func _build_mesh() -> void:
 	_mesh_instance = MeshInstance3D.new()
 	var sf: float = data.scale_factor if data else 1.0
+	var shadow_size := 0.6 * sf
 
 	match data.enemy_type if data else EnemyData.EnemyType.RUSHER:
+		EnemyData.EnemyType.RUSHER:
+			# Small wedge — fast-looking
+			var prism := PrismMesh.new()
+			prism.size = Vector3(0.35, 0.3, 0.5) * sf
+			_mesh_instance.mesh = prism
+			_mesh_instance.position = Vector3(0.0, 0.15 * sf, 0.0)
+			shadow_size = 0.5 * sf
 		EnemyData.EnemyType.TANK:
-			# Box shape for tank
+			# Chunky box — armored
 			var box := BoxMesh.new()
-			box.size = Vector3(0.5, 0.5, 0.5) * sf
+			box.size = Vector3(0.6, 0.55, 0.6) * sf
 			_mesh_instance.mesh = box
-			_mesh_instance.position = Vector3(0.0, 0.25 * sf, 0.0)
+			_mesh_instance.position = Vector3(0.0, 0.28 * sf, 0.0)
+			shadow_size = 0.8 * sf
+		EnemyData.EnemyType.SPLITTER:
+			# Diamond shape — splits into smaller
+			var prism := PrismMesh.new()
+			prism.size = Vector3(0.4, 0.45, 0.4) * sf
+			_mesh_instance.mesh = prism
+			_mesh_instance.position = Vector3(0.0, 0.22 * sf, 0.0)
+			shadow_size = 0.5 * sf
 		EnemyData.EnemyType.EXPLODER:
-			# Spiky sphere (prism) for exploder
+			# Spiky sphere — dangerous
+			var sphere := SphereMesh.new()
+			sphere.radius = 0.35 * sf
+			sphere.height = 0.7 * sf
+			sphere.radial_segments = 6
+			sphere.rings = 3
+			_mesh_instance.mesh = sphere
+			_mesh_instance.position = Vector3(0.0, 0.35 * sf, 0.0)
+			shadow_size = 0.6 * sf
+		EnemyData.EnemyType.DESTROYER:
+			# Large imposing box — boss
+			var box := BoxMesh.new()
+			box.size = Vector3(0.8, 0.9, 0.8) * sf
+			_mesh_instance.mesh = box
+			_mesh_instance.position = Vector3(0.0, 0.45 * sf, 0.0)
+			shadow_size = 1.1 * sf
+		_:
+			# Elite/default — sphere with glow
 			var sphere := SphereMesh.new()
 			sphere.radius = 0.3 * sf
 			sphere.height = 0.6 * sf
 			_mesh_instance.mesh = sphere
 			_mesh_instance.position = Vector3(0.0, 0.3 * sf, 0.0)
-		EnemyData.EnemyType.DESTROYER:
-			# Large box for destroyer
-			var box := BoxMesh.new()
-			box.size = Vector3(0.6, 0.7, 0.6) * sf
-			_mesh_instance.mesh = box
-			_mesh_instance.position = Vector3(0.0, 0.35 * sf, 0.0)
-		_:
-			# Sphere for rusher/splitter/elite
-			var sphere := SphereMesh.new()
-			sphere.radius = 0.25 * sf
-			sphere.height = 0.5 * sf
-			_mesh_instance.mesh = sphere
-			_mesh_instance.position = Vector3(0.0, 0.25 * sf, 0.0)
+			shadow_size = 0.55 * sf
 
 	_body_mat = StandardMaterial3D.new()
-	_body_mat.albedo_color = data.color if data else Color.RED
-	_body_mat.roughness = 0.6
+	var c: Color = data.color if data else Color.RED
+	_body_mat.albedo_color = c
+	_body_mat.roughness = 0.5
+	_body_mat.emission_enabled = true
+	_body_mat.emission = c * 0.5
+	_body_mat.emission_energy_multiplier = 1.8
 	_mesh_instance.material_override = _body_mat
 	add_child(_mesh_instance)
+
+	# Ground shadow
+	var shadow := MeshInstance3D.new()
+	var shadow_quad := QuadMesh.new()
+	shadow_quad.size = Vector2(shadow_size, shadow_size)
+	shadow.mesh = shadow_quad
+	shadow.rotation_degrees.x = -90.0
+	shadow.position = Vector3(0.0, 0.02, 0.0)
+	var shadow_mat := StandardMaterial3D.new()
+	shadow_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.4)
+	shadow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	shadow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shadow.material_override = shadow_mat
+	add_child(shadow)
 
 	# Collision
 	var col := CollisionShape3D.new()
 	var shape := SphereShape3D.new()
-	shape.radius = 0.25 * sf
+	shape.radius = 0.3 * sf
 	col.shape = shape
-	col.position = Vector3(0.0, 0.25 * sf, 0.0)
+	col.position = Vector3(0.0, 0.3 * sf, 0.0)
 	add_child(col)
 
 	# HP bar background
