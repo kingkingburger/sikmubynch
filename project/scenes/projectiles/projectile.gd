@@ -3,6 +3,7 @@ extends Node3D
 var target: Node3D
 var damage: float = 0.0
 var speed: float = 25.0
+var trait_effects: Dictionary = {}
 
 func _ready() -> void:
 	var mesh := MeshInstance3D.new()
@@ -30,9 +31,72 @@ func _process(delta: float) -> void:
 	var move_dist := speed * delta
 
 	if move_dist >= dist:
-		if target.has_method("take_damage"):
-			target.take_damage(damage)
+		_on_hit()
 		queue_free()
 		return
 
 	global_position += to_target.normalized() * move_dist
+
+func _on_hit() -> void:
+	if not is_instance_valid(target):
+		return
+
+	# Apply damage
+	if target.has_method("take_damage"):
+		target.take_damage(damage)
+
+	# Apply synergy status effects
+	if trait_effects.is_empty():
+		return
+
+	# Burn (Fire)
+	if trait_effects.has("burn_dps") and target.has_method("apply_burn"):
+		target.apply_burn(trait_effects["burn_dps"])
+
+	# Slow (Ice)
+	if trait_effects.has("slow_percent") and target.has_method("apply_slow"):
+		target.apply_slow(trait_effects["slow_percent"])
+
+	# Freeze chance (Ice T2)
+	if trait_effects.has("freeze_chance") and target.has_method("apply_stun"):
+		if randf() < trait_effects["freeze_chance"]:
+			target.apply_stun(1.0)
+
+	# Poison (Poison)
+	if trait_effects.has("poison_dps") and target.has_method("apply_poison"):
+		target.apply_poison(trait_effects["poison_dps"])
+
+	# Chain lightning (Electric)
+	if trait_effects.has("chain_count"):
+		var chain_count: int = trait_effects["chain_count"]
+		_chain_lightning(chain_count, damage * 0.5)
+
+	# Stun chance (Electric T2)
+	if trait_effects.has("stun_chance") and target.has_method("apply_stun"):
+		if randf() < trait_effects["stun_chance"]:
+			target.apply_stun(0.3)
+
+func _chain_lightning(count: int, chain_dmg: float) -> void:
+	var enemies := get_tree().get_nodes_in_group("enemies")
+	var hit_targets: Array = [target]
+	var current := target
+
+	for i in count:
+		var nearest: Node3D = null
+		var nearest_dist := INF
+		for enemy in enemies:
+			if not is_instance_valid(enemy) or enemy in hit_targets:
+				continue
+			if enemy.get("_dead"):
+				continue
+			var dist := current.global_position.distance_to(enemy.global_position)
+			if dist <= 4.0 and dist < nearest_dist:
+				nearest = enemy
+				nearest_dist = dist
+		if nearest:
+			if nearest.has_method("take_damage"):
+				nearest.take_damage(chain_dmg)
+			hit_targets.append(nearest)
+			current = nearest
+		else:
+			break

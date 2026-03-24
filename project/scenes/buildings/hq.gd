@@ -9,9 +9,8 @@ func _ready() -> void:
 	data.max_hp = 1000.0
 	data.size = Vector2i(3, 3)
 	data.color = Color(0.2, 0.4, 0.8)
-	current_hp = data.max_hp
+	super._ready()
 	add_to_group("hq")
-	_build_mesh()
 	_setup_emission()
 
 func _setup_emission() -> void:
@@ -43,4 +42,7 @@ func _process(delta: float) -> void:
 		_emission_mat.emission_energy_multiplier = energy
 
 func die() -> void:
+	if _destroyed:
+		return
+	_destroyed = true
 	GameManager.trigger_game_over()
