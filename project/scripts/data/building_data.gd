@@ -9,3 +9,7 @@ extends Resource
 @export var dps: float = 0.0
 @export var attack_range: float = 0.0
 @export var attack_speed: float = 1.0
+@export var trait_type: int = -1  # TraitData.TraitType, -1 = none
+@export var mineral_per_sec: float = 0.0  # For miner
+@export var buff_range: float = 0.0  # For buff tower
+@export var buff_dps_mult: float = 0.0  # For buff tower
