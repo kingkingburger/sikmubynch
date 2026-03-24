@@ -3,7 +3,7 @@ extends Node
 signal minerals_changed(amount: int)
 signal game_over_triggered()
 
-var minerals: int = 100
+var minerals: int = 150
 var kill_count: int = 0
 var wave_number: int = 1
 var game_time: float = 0.0
@@ -32,7 +32,7 @@ func trigger_game_over() -> void:
 	game_over_triggered.emit()
 
 func reset() -> void:
-	minerals = 100
+	minerals = 150
 	kill_count = 0
 	wave_number = 1
 	game_time = 0.0

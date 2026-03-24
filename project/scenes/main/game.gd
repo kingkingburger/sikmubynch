@@ -1,12 +1,16 @@
 extends Node3D
 
 const MAP_SIZE := 64
-const WAVE_INTERVAL := 8.0
+const WAVE_INTERVAL := 10.0
 
 # Scenes
 var barricade_scene: PackedScene
 var tower_scene: PackedScene
+var barracks_scene: PackedScene
+var miner_scene: PackedScene
+var buff_tower_scene: PackedScene
 var enemy_scene: PackedScene
+var mineral_orb_scene: PackedScene
 
 # Building data templates
 var _building_datas: Array = []
@@ -31,6 +35,49 @@ var _game_over_panel: PanelContainer
 var _result_label: Label
 var _slot_buttons: Array = []
 
+# Reward card UI
+var _card_panel: PanelContainer
+var _card_buttons: Array = []
+var _card_skip_btn: Button
+var _pending_cards: Array = []
+
+# Synergy bar UI
+var _synergy_label: Label
+
+# Event UI
+var _event_label: Label
+var _event_timer: float = 0.0
+var _choice_panel: PanelContainer
+var _choice_buttons: Array = []
+var _choice_label: Label
+
+# Pause during card/choice selection
+var _awaiting_card: bool = false
+var _awaiting_choice: bool = false
+
+# Camera control
+var _cam_center := Vector2(32.0, 32.0)
+var _cam_zoom: float = 35.0
+const CAM_SPEED := 25.0
+const CAM_ZOOM_MIN := 18.0
+const CAM_ZOOM_MAX := 70.0
+const CAM_DIST := 50.0
+
+# Drag build
+var _dragging: bool = false
+var _drag_last_grid: Vector2i = Vector2i(-999, -999)
+
+# Speed label
+var _speed_label: Label
+
+# ESC menu
+var _esc_panel: PanelContainer
+var _esc_visible: bool = false
+
+# Debug overlay
+var _debug_label: Label
+var _debug_visible: bool = false
+
 # Ghost
 var _mouse_grid_pos: Vector2i = Vector2i(-1, -1)
 var _ghost_mesh: MeshInstance3D
@@ -39,7 +86,11 @@ var _ghost_mat: StandardMaterial3D
 func _ready() -> void:
 	barricade_scene = load("res://scenes/buildings/barricade.tscn")
 	tower_scene = load("res://scenes/buildings/tower.tscn")
+	barracks_scene = load("res://scenes/buildings/barracks.tscn")
+	miner_scene = load("res://scenes/buildings/miner.tscn")
+	buff_tower_scene = load("res://scenes/buildings/buff_tower.tscn")
 	enemy_scene = load("res://scenes/enemies/enemy.tscn")
+	mineral_orb_scene = load("res://scenes/effects/mineral_orb.tscn")
 
 	_init_building_data()
 	_setup_camera()
@@ -51,30 +102,91 @@ func _ready() -> void:
 
 	GameManager.minerals_changed.connect(_on_minerals_changed)
 	GameManager.game_over_triggered.connect(_on_game_over)
+	EventManager.combat_event_triggered.connect(_on_combat_event)
+	EventManager.choice_event_triggered.connect(_on_choice_event)
+	SynergyManager.synergy_changed.connect(_update_synergy_bar)
+	GameFeel.setup(_camera, _canvas)
+	_recalculate_flow_field()
 	_spawn_wave()
 
 func _init_building_data() -> void:
 	var barr := BuildingData.new()
 	barr.building_name = "Barricade"
-	barr.cost = 15
-	barr.max_hp = 50.0
+	barr.cost = 10
+	barr.max_hp = 80.0
 	barr.size = Vector2i(1, 1)
 	barr.color = Color(0.55, 0.55, 0.58)
 	_building_datas.append(barr)
 
 	var twr := BuildingData.new()
 	twr.building_name = "Tower"
-	twr.cost = 60
-	twr.max_hp = 80.0
+	twr.cost = 50
+	twr.max_hp = 100.0
 	twr.size = Vector2i(1, 1)
 	twr.color = Color(0.35, 0.55, 0.75)
-	twr.dps = 15.0
-	twr.attack_range = 6.0
-	twr.attack_speed = 1.0
+	twr.dps = 18.0
+	twr.attack_range = 7.0
+	twr.attack_speed = 1.2
 	_building_datas.append(twr)
+
+	var brk := BuildingData.new()
+	brk.building_name = "Barracks"
+	brk.cost = 100
+	brk.max_hp = 200.0
+	brk.size = Vector2i(1, 1)
+	brk.color = Color(0.25, 0.4, 0.7)
+	_building_datas.append(brk)
+
+	var mnr := BuildingData.new()
+	mnr.building_name = "Miner"
+	mnr.cost = 80
+	mnr.max_hp = 60.0
+	mnr.size = Vector2i(1, 1)
+	mnr.color = Color(0.2, 0.7, 0.8)
+	mnr.mineral_per_sec = 2.0
+	_building_datas.append(mnr)
+
+	var buf := BuildingData.new()
+	buf.building_name = "Buff Tower"
+	buf.cost = 120
+	buf.max_hp = 100.0
+	buf.size = Vector2i(1, 1)
+	buf.color = Color(0.9, 0.8, 0.2)
+	buf.buff_range = 3.5
+	buf.buff_dps_mult = 0.2
+	_building_datas.append(buf)
 
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
+		return
+	# Camera WASD movement
+	var cam_dir := Vector2.ZERO
+	if Input.is_key_pressed(KEY_W): cam_dir.y -= 1.0
+	if Input.is_key_pressed(KEY_S): cam_dir.y += 1.0
+	if Input.is_key_pressed(KEY_A): cam_dir.x -= 1.0
+	if Input.is_key_pressed(KEY_D): cam_dir.x += 1.0
+	if cam_dir != Vector2.ZERO:
+		# Rotate by 45 degrees for isometric view
+		var rotated := cam_dir.rotated(deg_to_rad(-45.0))
+		_cam_center += rotated.normalized() * CAM_SPEED * delta
+		_cam_center.x = clampf(_cam_center.x, 0.0, float(MAP_SIZE))
+		_cam_center.y = clampf(_cam_center.y, 0.0, float(MAP_SIZE))
+		_update_camera_position()
+	# Debug overlay
+	if _debug_visible and _debug_label:
+		var enemy_count := get_tree().get_nodes_in_group("enemies").size()
+		var unit_count := get_tree().get_nodes_in_group("units").size()
+		var building_count := get_tree().get_nodes_in_group("buildings").size()
+		_debug_label.text = "FPS: %d\nEnemies: %d\nUnits: %d\nBuildings: %d\nSpeed: %.1fx" % [
+			Engine.get_frames_per_second(), enemy_count, unit_count, building_count, GameFeel.game_speed
+		]
+	# Fade event notification
+	if _event_timer > 0.0:
+		_event_timer -= delta
+		if _event_timer <= 0.0 and _event_label:
+			_event_label.visible = false
+	# Pause wave countdown during card/choice selection
+	if _awaiting_card or _awaiting_choice:
 		return
 	if _between_waves:
 		_wave_countdown -= delta
@@ -82,6 +194,16 @@ func _process(delta: float) -> void:
 		if _wave_countdown <= 0.0:
 			_between_waves = false
 			_spawn_wave()
+	elif _wave_active:
+		# Periodic check for split spawns that bypassed the counter
+		var actual := get_tree().get_nodes_in_group("enemies").size()
+		if actual == 0:
+			_wave_active = false
+			enemies_alive = 0
+			_on_wave_cleared()
+		elif actual != enemies_alive:
+			enemies_alive = actual
+		_update_hud()
 
 # ---------------------------------------------------------------------------
 # Scene setup
@@ -90,17 +212,24 @@ func _process(delta: float) -> void:
 func _setup_camera() -> void:
 	_camera = Camera3D.new()
 	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	_camera.size = 35.0
-	var dist := 50.0
-	var elev_rad := deg_to_rad(35.0)
-	var yaw_rad := deg_to_rad(45.0)
-	_camera.position = Vector3(
-		32.0 + dist * cos(elev_rad) * sin(yaw_rad),
-		dist * sin(elev_rad),
-		32.0 + dist * cos(elev_rad) * cos(yaw_rad)
-	)
+	_camera.size = _cam_zoom
 	_camera.rotation_degrees = Vector3(-35.0, 45.0, 0.0)
 	add_child(_camera)
+	_update_camera_position()
+
+func _update_camera_position() -> void:
+	if not _camera:
+		return
+	var elev_rad := deg_to_rad(35.0)
+	var yaw_rad := deg_to_rad(45.0)
+	var pos := Vector3(
+		_cam_center.x + CAM_DIST * cos(elev_rad) * sin(yaw_rad),
+		CAM_DIST * sin(elev_rad),
+		_cam_center.y + CAM_DIST * cos(elev_rad) * cos(yaw_rad)
+	)
+	_camera.position = pos
+	_camera.size = _cam_zoom
+	GameFeel.update_camera_base(pos)
 
 func _setup_lighting() -> void:
 	var sun := DirectionalLight3D.new()
@@ -192,11 +321,13 @@ func _setup_hq() -> void:
 	var hq_scene := load("res://scenes/buildings/hq.tscn") as PackedScene
 	_hq = hq_scene.instantiate() as BaseBuilding
 	_hq.position = Vector3(32.5, 0.0, 32.5)
+	_hq.add_to_group("buildings")
 	add_child(_hq)
 
 	for dx in 3:
 		for dz in 3:
-			building_grid[Vector2i(31 + dx, 31 + dz)] = _hq
+			var cell := Vector2i(31 + dx, 31 + dz)
+			building_grid[cell] = _hq
 
 func _setup_ghost() -> void:
 	_ghost_mesh = MeshInstance3D.new()
@@ -323,6 +454,221 @@ func _setup_ui() -> void:
 	vbox.add_child(rb_center)
 
 	_update_hud()
+	_setup_card_ui()
+	_setup_synergy_bar()
+	_setup_event_ui()
+	_setup_choice_ui()
+	_setup_speed_label()
+	_setup_esc_menu()
+	_setup_debug_overlay()
+
+func _setup_card_ui() -> void:
+	_card_panel = PanelContainer.new()
+	_card_panel.visible = false
+	_card_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_card_panel.custom_minimum_size = Vector2(620, 280)
+	_card_panel.offset_left = -310.0
+	_card_panel.offset_top = -140.0
+	_card_panel.offset_right = 310.0
+	_card_panel.offset_bottom = 140.0
+	_card_panel.add_theme_stylebox_override("panel", _create_panel_style(
+		Color(0.03, 0.03, 0.06, 0.96), Color(0.7, 0.55, 0.15), 3))
+	_canvas.add_child(_card_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 12)
+	_card_panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "CHOOSE A REWARD"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", Color(0.95, 0.85, 0.3))
+	vbox.add_child(title)
+
+	var hbox := HBoxContainer.new()
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_theme_constant_override("separation", 12)
+	vbox.add_child(hbox)
+
+	for i in 3:
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(180, 120)
+		btn.add_theme_font_size_override("font_size", 12)
+		btn.add_theme_color_override("font_color", Color(0.95, 0.9, 0.7))
+		btn.add_theme_stylebox_override("normal", _create_panel_style(
+			Color(0.08, 0.06, 0.04, 0.95), Color(0.5, 0.4, 0.2), 2))
+		btn.add_theme_stylebox_override("hover", _create_panel_style(
+			Color(0.14, 0.11, 0.06, 0.95), Color(0.85, 0.72, 0.3), 2))
+		btn.pressed.connect(_on_card_selected.bind(i))
+		hbox.add_child(btn)
+		_card_buttons.append(btn)
+
+	_card_skip_btn = Button.new()
+	_card_skip_btn.text = "SKIP"
+	_card_skip_btn.custom_minimum_size = Vector2(100, 36)
+	_card_skip_btn.add_theme_font_size_override("font_size", 14)
+	_card_skip_btn.add_theme_color_override("font_color", Color(0.7, 0.65, 0.5))
+	_card_skip_btn.add_theme_stylebox_override("normal", _create_panel_style(
+		Color(0.06, 0.05, 0.04, 0.9), Color(0.4, 0.35, 0.2), 1))
+	_card_skip_btn.pressed.connect(_on_card_skip)
+	var skip_center := CenterContainer.new()
+	skip_center.add_child(_card_skip_btn)
+	vbox.add_child(skip_center)
+
+func _setup_synergy_bar() -> void:
+	_synergy_label = Label.new()
+	_synergy_label.set_anchors_preset(Control.PRESET_LEFT_WIDE)
+	_synergy_label.offset_left = 8.0
+	_synergy_label.offset_top = 52.0
+	_synergy_label.offset_right = 200.0
+	_synergy_label.add_theme_font_size_override("font_size", 13)
+	_synergy_label.add_theme_color_override("font_color", Color(0.85, 0.8, 0.6))
+	_canvas.add_child(_synergy_label)
+	_update_synergy_bar()
+
+func _setup_event_ui() -> void:
+	_event_label = Label.new()
+	_event_label.visible = false
+	_event_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_event_label.offset_top = 50.0
+	_event_label.offset_left = -200.0
+	_event_label.offset_right = 200.0
+	_event_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_event_label.add_theme_font_size_override("font_size", 20)
+	_event_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
+	_canvas.add_child(_event_label)
+
+func _setup_choice_ui() -> void:
+	_choice_panel = PanelContainer.new()
+	_choice_panel.visible = false
+	_choice_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_choice_panel.custom_minimum_size = Vector2(440, 200)
+	_choice_panel.offset_left = -220.0
+	_choice_panel.offset_top = -100.0
+	_choice_panel.offset_right = 220.0
+	_choice_panel.offset_bottom = 100.0
+	_choice_panel.add_theme_stylebox_override("panel", _create_panel_style(
+		Color(0.04, 0.03, 0.06, 0.96), Color(0.5, 0.7, 0.3), 3))
+	_canvas.add_child(_choice_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 14)
+	_choice_panel.add_child(vbox)
+
+	_choice_label = Label.new()
+	_choice_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_choice_label.add_theme_font_size_override("font_size", 17)
+	_choice_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
+	_choice_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	vbox.add_child(_choice_label)
+
+	var hbox := HBoxContainer.new()
+	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_theme_constant_override("separation", 12)
+	vbox.add_child(hbox)
+
+	for i in 2:
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(190, 44)
+		btn.add_theme_font_size_override("font_size", 13)
+		btn.add_theme_color_override("font_color", Color(0.95, 0.9, 0.7))
+		btn.add_theme_stylebox_override("normal", _create_panel_style(
+			Color(0.08, 0.06, 0.04, 0.95), Color(0.5, 0.6, 0.3), 2))
+		btn.add_theme_stylebox_override("hover", _create_panel_style(
+			Color(0.14, 0.12, 0.06, 0.95), Color(0.7, 0.8, 0.3), 2))
+		btn.pressed.connect(_on_choice_selected.bind(i))
+		hbox.add_child(btn)
+		_choice_buttons.append(btn)
+
+func _setup_speed_label() -> void:
+	_speed_label = Label.new()
+	_speed_label.visible = false
+	_speed_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_speed_label.offset_left = -60.0
+	_speed_label.offset_top = 50.0
+	_speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_speed_label.add_theme_font_size_override("font_size", 22)
+	_speed_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.3))
+	_canvas.add_child(_speed_label)
+
+func _setup_esc_menu() -> void:
+	_esc_panel = PanelContainer.new()
+	_esc_panel.visible = false
+	_esc_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_esc_panel.custom_minimum_size = Vector2(320, 240)
+	_esc_panel.offset_left = -160.0
+	_esc_panel.offset_top = -120.0
+	_esc_panel.offset_right = 160.0
+	_esc_panel.offset_bottom = 120.0
+	_esc_panel.add_theme_stylebox_override("panel", _create_panel_style(
+		Color(0.04, 0.03, 0.06, 0.96), Color(0.6, 0.5, 0.2), 3))
+	_canvas.add_child(_esc_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_theme_constant_override("separation", 14)
+	_esc_panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "PAUSED"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.2))
+	vbox.add_child(title)
+
+	var btn_style := _create_panel_style(
+		Color(0.08, 0.06, 0.04, 0.95), Color(0.6, 0.5, 0.2), 2)
+	var btn_hover := _create_panel_style(
+		Color(0.14, 0.11, 0.06, 0.95), Color(0.85, 0.72, 0.3), 2)
+
+	var resume_btn := Button.new()
+	resume_btn.text = "RESUME"
+	resume_btn.custom_minimum_size = Vector2(200, 40)
+	resume_btn.add_theme_font_size_override("font_size", 16)
+	resume_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
+	resume_btn.add_theme_stylebox_override("normal", btn_style)
+	resume_btn.add_theme_stylebox_override("hover", btn_hover)
+	resume_btn.pressed.connect(_on_esc_resume)
+	var c1 := CenterContainer.new()
+	c1.add_child(resume_btn)
+	vbox.add_child(c1)
+
+	var restart_btn := Button.new()
+	restart_btn.text = "RESTART"
+	restart_btn.custom_minimum_size = Vector2(200, 40)
+	restart_btn.add_theme_font_size_override("font_size", 16)
+	restart_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
+	restart_btn.add_theme_stylebox_override("normal", btn_style)
+	restart_btn.add_theme_stylebox_override("hover", btn_hover)
+	restart_btn.pressed.connect(_on_restart)
+	var c2 := CenterContainer.new()
+	c2.add_child(restart_btn)
+	vbox.add_child(c2)
+
+	var title_btn := Button.new()
+	title_btn.text = "TITLE SCREEN"
+	title_btn.custom_minimum_size = Vector2(200, 40)
+	title_btn.add_theme_font_size_override("font_size", 16)
+	title_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
+	title_btn.add_theme_stylebox_override("normal", btn_style)
+	title_btn.add_theme_stylebox_override("hover", btn_hover)
+	title_btn.pressed.connect(_on_esc_title)
+	var c3 := CenterContainer.new()
+	c3.add_child(title_btn)
+	vbox.add_child(c3)
+
+func _setup_debug_overlay() -> void:
+	_debug_label = Label.new()
+	_debug_label.visible = false
+	_debug_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_debug_label.offset_left = 8.0
+	_debug_label.offset_top = 180.0
+	_debug_label.add_theme_font_size_override("font_size", 12)
+	_debug_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
+	_canvas.add_child(_debug_label)
 
 func _update_slot_highlight() -> void:
 	for i in _slot_buttons.size():
@@ -357,27 +703,113 @@ func _create_panel_style(bg_color: Color, border_color: Color = Color.TRANSPAREN
 # Wave system
 # ---------------------------------------------------------------------------
 
+func _create_enemy_templates(wave_num: int) -> Array:
+	var hp_scale := 1.0 + (wave_num - 1) * 0.15
+	var speed_scale := 1.0 + (wave_num - 1) * 0.03
+	var templates: Array = []
+
+	# Rusher — always present
+	var rusher := EnemyData.new()
+	rusher.enemy_name = "Rusher"
+	rusher.enemy_type = EnemyData.EnemyType.RUSHER
+	rusher.max_hp = 18.0 * hp_scale
+	rusher.dps = 6.0
+	rusher.speed = 3.5 * speed_scale
+	rusher.mineral_reward = 3
+	rusher.color = Color(0.85, 0.2, 0.15)
+	templates.append(rusher)
+
+	# Wave 2+: Splitter
+	if wave_num >= 2:
+		var splitter := EnemyData.new()
+		splitter.enemy_name = "Splitter"
+		splitter.enemy_type = EnemyData.EnemyType.SPLITTER
+		splitter.max_hp = 30.0 * hp_scale
+		splitter.dps = 5.0
+		splitter.speed = 3.0 * speed_scale
+		splitter.mineral_reward = 5
+		splitter.color = Color(0.6, 0.85, 0.2)
+		splitter.split_count = 2
+		templates.append(splitter)
+
+	# Wave 3+: Tank
+	if wave_num >= 3:
+		var tank := EnemyData.new()
+		tank.enemy_name = "Tank"
+		tank.enemy_type = EnemyData.EnemyType.TANK
+		tank.max_hp = 80.0 * hp_scale
+		tank.dps = 12.0
+		tank.speed = 1.8 * speed_scale
+		tank.mineral_reward = 8
+		tank.color = Color(0.5, 0.35, 0.6)
+		tank.scale_factor = 1.4
+		templates.append(tank)
+
+	# Wave 4+: Exploder
+	if wave_num >= 4:
+		var exploder := EnemyData.new()
+		exploder.enemy_name = "Exploder"
+		exploder.enemy_type = EnemyData.EnemyType.EXPLODER
+		exploder.max_hp = 15.0 * hp_scale
+		exploder.dps = 3.0
+		exploder.speed = 4.5 * speed_scale
+		exploder.mineral_reward = 4
+		exploder.color = Color(1.0, 0.6, 0.1)
+		exploder.explode_radius = 2.5
+		exploder.explode_damage = 30.0 + wave_num * 5.0
+		templates.append(exploder)
+
+	# Wave 5+: Elite Rusher
+	if wave_num >= 5:
+		var elite := EnemyData.new()
+		elite.enemy_name = "Elite Rusher"
+		elite.enemy_type = EnemyData.EnemyType.ELITE_RUSHER
+		elite.max_hp = 45.0 * hp_scale
+		elite.dps = 15.0
+		elite.speed = 4.5 * speed_scale
+		elite.mineral_reward = 6
+		elite.color = Color(0.95, 0.15, 0.3)
+		elite.scale_factor = 1.15
+		templates.append(elite)
+
+	# Wave 6+: Destroyer
+	if wave_num >= 6:
+		var destroyer := EnemyData.new()
+		destroyer.enemy_name = "Destroyer"
+		destroyer.enemy_type = EnemyData.EnemyType.DESTROYER
+		destroyer.max_hp = 120.0 * hp_scale
+		destroyer.dps = 20.0
+		destroyer.speed = 1.5 * speed_scale
+		destroyer.mineral_reward = 12
+		destroyer.color = Color(0.3, 0.1, 0.4)
+		destroyer.scale_factor = 1.6
+		templates.append(destroyer)
+
+	return templates
+
 func _spawn_wave() -> void:
 	var wave_num := GameManager.wave_number
-	var enemy_count := 45 + (wave_num - 1) * 10
-	var hp_scale := 1.0 + (wave_num - 1) * 0.2
-	var speed_scale := 1.0 + (wave_num - 1) * 0.05
+	# Tidal pattern: calm → storm cycle every 3 waves
+	var cycle_pos := (wave_num - 1) % 3  # 0=calm, 1=rising, 2=storm
+	var base_count := 30 + (wave_num - 1) * 8
+	var count_multiplier := [0.7, 1.0, 1.4][cycle_pos]
+	var enemy_count := int(base_count * count_multiplier * EventManager.get_challenge_enemy_mult())
 
-	var enemy_data := EnemyData.new()
-	enemy_data.enemy_name = "Rusher"
-	enemy_data.max_hp = 20.0 * hp_scale
-	enemy_data.dps = 8.0
-	enemy_data.speed = 3.5 * speed_scale
-	enemy_data.mineral_reward = 3
-	enemy_data.color = Color(0.85, 0.2, 0.15)
+	var templates := _create_enemy_templates(wave_num)
 	var hq_pos := Vector3(32.5, 0.0, 32.5)
+	var field := FlowField.get_field()
+
 	for i in enemy_count:
+		var template: EnemyData = templates[randi() % templates.size()]
 		var enemy: Node3D = enemy_scene.instantiate()
-		enemy.set("data", enemy_data)
+		enemy.set("data", template)
 		enemy.set("target_position", hq_pos)
+		enemy.set("flow_field", field)
 		var edge := _random_edge_position()
 		enemy.position = Vector3(edge.x, 0.0, edge.y)
 		enemy.connect("died", _on_enemy_died)
+		if enemy.has_signal("drop_mineral"):
+			enemy.connect("drop_mineral", _on_enemy_drop_mineral)
 		add_child(enemy)
 		enemies_alive += 1
 
@@ -385,11 +817,25 @@ func _spawn_wave() -> void:
 	_update_hud()
 
 func _on_wave_cleared() -> void:
-	var bonus := 25 + GameManager.wave_number * 10
-	GameManager.add_minerals(bonus)
+	var bonus := 35 + GameManager.wave_number * 12
+	var reward_mult := EventManager.get_challenge_reward_mult()
+	GameManager.add_minerals(int(bonus * reward_mult))
+	EventManager.clear_combat_effects()
+	EventManager.clear_challenge()
 	GameManager.wave_number += 1
 	_between_waves = true
 	_wave_countdown = WAVE_INTERVAL
+
+	# Trigger reward cards
+	_show_reward_cards()
+
+	# 30% chance of combat event on next wave
+	if randf() < 0.3:
+		EventManager.trigger_random_combat_event()
+
+	# 25% chance of choice event between waves (wave 3+)
+	if GameManager.wave_number >= 3 and randf() < 0.25:
+		EventManager.trigger_random_choice_event()
 
 func _random_edge_position() -> Vector2:
 	var side := randi() % 4
@@ -407,13 +853,57 @@ func _random_edge_position() -> Vector2:
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_update_ghost(event.position)
+		# Drag build for barricades
+		if _dragging and _selected_slot == 0:
+			_try_drag_build(event.position)
+
+	if event is InputEventMouseButton:
+		# Zoom
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
+			_cam_zoom = maxf(_cam_zoom - 3.0, CAM_ZOOM_MIN)
+			_update_camera_position()
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
+			_cam_zoom = minf(_cam_zoom + 3.0, CAM_ZOOM_MAX)
+			_update_camera_position()
+		# Drag start/stop
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				_dragging = true
+				_drag_last_grid = Vector2i(-999, -999)
+			else:
+				_dragging = false
+
 	if event is InputEventKey and event.pressed:
-		if event.keycode == KEY_1:
-			_selected_slot = 0
-			_update_slot_highlight()
-		elif event.keycode == KEY_2:
-			_selected_slot = 1
-			_update_slot_highlight()
+		match event.keycode:
+			KEY_1:
+				_selected_slot = 0
+				_update_slot_highlight()
+			KEY_2:
+				_selected_slot = 1
+				_update_slot_highlight()
+			KEY_3:
+				_selected_slot = 2
+				_update_slot_highlight()
+			KEY_4:
+				_selected_slot = 3
+				_update_slot_highlight()
+			KEY_5:
+				_selected_slot = 4
+				_update_slot_highlight()
+			KEY_SPACE:
+				GameFeel.toggle_pause()
+				_update_hud()
+			KEY_F:
+				var spd := GameFeel.cycle_speed()
+				if _speed_label:
+					_speed_label.text = "%dx" % [int(spd)]
+					_speed_label.visible = spd > 1.0
+			KEY_ESCAPE:
+				_toggle_esc_menu()
+			KEY_F3:
+				_debug_visible = not _debug_visible
+				if _debug_label:
+					_debug_label.visible = _debug_visible
 
 func _unhandled_input(event: InputEvent) -> void:
 	if GameManager.is_game_over:
@@ -449,17 +939,31 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 		return
 
 	var building: BaseBuilding
-	if _selected_slot == 0:
-		building = barricade_scene.instantiate() as BaseBuilding
-	else:
-		building = tower_scene.instantiate() as BaseBuilding
+	match _selected_slot:
+		0:
+			building = barricade_scene.instantiate() as BaseBuilding
+		1:
+			building = tower_scene.instantiate() as BaseBuilding
+		2:
+			building = barracks_scene.instantiate() as BaseBuilding
+		3:
+			building = miner_scene.instantiate() as BaseBuilding
+		4:
+			building = buff_tower_scene.instantiate() as BaseBuilding
+		_:
+			building = barricade_scene.instantiate() as BaseBuilding
 
 	building.data = bd
 	building.grid_position = grid_pos
 	building.position = Vector3(float(gx) + 0.5, 0.0, float(gz) + 0.5)
+	building.add_to_group("buildings")
 	building.destroyed.connect(_on_building_destroyed.bind(grid_pos))
 	add_child(building)
 	building_grid[grid_pos] = building
+	FlowField.set_obstacle(grid_pos, true)
+	_recalculate_flow_field()
+	if bd.trait_type >= 0:
+		SynergyManager.add_trait(bd.trait_type)
 
 func _handle_right_click(screen_pos: Vector2) -> void:
 	var world_pos := _screen_to_ground(screen_pos)
@@ -497,7 +1001,12 @@ func _update_ghost(screen_pos: Vector2) -> void:
 
 	_ghost_mesh.visible = true
 	var bd := _building_datas[_selected_slot] as BuildingData
-	var h := 1.0 if bd.building_name == "Tower" else 0.4
+	var h := 0.4
+	match bd.building_name:
+		"Tower": h = 1.0
+		"Barracks": h = 0.8
+		"Miner": h = 0.6
+		"Buff Tower": h = 0.9
 	var ghost_box := _ghost_mesh.mesh as BoxMesh
 	if ghost_box:
 		ghost_box.size = Vector3(1.0, h, 1.0)
@@ -524,18 +1033,86 @@ func _screen_to_ground(screen_pos: Vector2) -> Vector3:
 # Callbacks
 # ---------------------------------------------------------------------------
 
+func _try_drag_build(screen_pos: Vector2) -> void:
+	var world_pos := _screen_to_ground(screen_pos)
+	if world_pos.x < 0.0:
+		return
+	var gx := int(floor(world_pos.x))
+	var gz := int(floor(world_pos.z))
+	var grid_pos := Vector2i(gx, gz)
+
+	if grid_pos == _drag_last_grid:
+		return
+	_drag_last_grid = grid_pos
+
+	if gx < 0 or gx >= MAP_SIZE or gz < 0 or gz >= MAP_SIZE:
+		return
+	if building_grid.has(grid_pos):
+		return
+
+	var bd := _building_datas[0] as BuildingData
+	if not GameManager.spend_minerals(bd.cost):
+		return
+
+	var building: BaseBuilding = barricade_scene.instantiate() as BaseBuilding
+	building.data = bd
+	building.grid_position = grid_pos
+	building.position = Vector3(float(gx) + 0.5, 0.0, float(gz) + 0.5)
+	building.add_to_group("buildings")
+	building.destroyed.connect(_on_building_destroyed.bind(grid_pos))
+	add_child(building)
+	building_grid[grid_pos] = building
+	FlowField.set_obstacle(grid_pos, true)
+	_recalculate_flow_field()
+
 func _on_building_destroyed(grid_pos: Vector2i) -> void:
+	if building_grid.has(grid_pos):
+		var b = building_grid[grid_pos]
+		if is_instance_valid(b) and b.data and b.data.trait_type >= 0:
+			SynergyManager.remove_trait(b.data.trait_type)
 	building_grid.erase(grid_pos)
+	FlowField.set_obstacle(grid_pos, false)
+	_recalculate_flow_field()
 
 func _on_enemy_died() -> void:
 	enemies_alive -= 1
-	if enemies_alive <= 0 and _wave_active:
-		_wave_active = false
-		_on_wave_cleared()
+	GameFeel.shake(0.12)
+	# Check for split spawns — recount from group after a frame
+	_check_wave_completion.call_deferred()
 	_update_hud()
+
+func _check_wave_completion() -> void:
+	if not _wave_active:
+		return
+	var enemy_count := get_tree().get_nodes_in_group("enemies").size()
+	if enemy_count <= 0:
+		_wave_active = false
+		enemies_alive = 0
+		_on_wave_cleared()
+		_update_hud()
+
+func _on_enemy_drop_mineral(pos: Vector3, amount: int) -> void:
+	var orb: Node3D = mineral_orb_scene.instantiate()
+	orb.position = pos + Vector3(0.0, 0.3, 0.0)
+	orb.set("amount", amount)
+	orb.set("target_position", Vector3(32.5, 0.5, 32.5))
+	add_child(orb)
 
 func _on_minerals_changed(_amount: int) -> void:
 	_update_hud()
+
+func _recalculate_flow_field() -> void:
+	# HQ occupies 3x3 at (31,31)-(33,33), use center cells as targets
+	var targets: Array = []
+	for dx in 3:
+		for dz in 3:
+			targets.append(Vector2i(31 + dx, 31 + dz))
+	FlowField.recalculate(targets)
+	# Update existing enemies with new field
+	var field := FlowField.get_field()
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if is_instance_valid(enemy):
+			enemy.set("flow_field", field)
 
 func _on_slot_pressed(slot_index: int) -> void:
 	_selected_slot = slot_index
@@ -546,9 +1123,11 @@ func _update_hud() -> void:
 		var wave_text := ""
 		if _between_waves:
 			wave_text = "  |  NEXT WAVE: %ds" % [int(ceil(_wave_countdown))]
-		_top_bar_label.text = "WAVE: %d  |  MINERALS: %d  |  KILLS: %d  |  ENEMIES: %d%s" % [
+		var unit_count := get_tree().get_nodes_in_group("units").size()
+		var pause_text := "  ||  PAUSED" if GameFeel.paused else ""
+		_top_bar_label.text = "WAVE: %d  |  MINERALS: %d  |  KILLS: %d  |  ENEMIES: %d  |  UNITS: %d%s%s" % [
 			GameManager.wave_number, GameManager.minerals, GameManager.kill_count,
-			enemies_alive, wave_text
+			enemies_alive, unit_count, wave_text, pause_text
 		]
 
 func _on_game_over() -> void:
@@ -559,6 +1138,151 @@ func _on_game_over() -> void:
 		GameManager.wave_number, GameManager.kill_count, secs / 60, secs % 60
 	]
 
+# ---------------------------------------------------------------------------
+# Reward cards
+# ---------------------------------------------------------------------------
+
+func _show_reward_cards() -> void:
+	_pending_cards = RewardCard.pick_cards(GameManager.wave_number)
+	if _pending_cards.is_empty():
+		return
+	for i in 3:
+		if i < _pending_cards.size():
+			var card: RewardCard = _pending_cards[i]
+			_card_buttons[i].text = "[%s]\n%s\n%s" % [card.get_rarity_name(), card.card_name, card.description]
+			_card_buttons[i].visible = true
+			var rcolor := card.get_rarity_color()
+			_card_buttons[i].add_theme_stylebox_override("normal", _create_panel_style(
+				Color(0.08, 0.06, 0.04, 0.95), rcolor * 0.6, 2))
+			_card_buttons[i].add_theme_stylebox_override("hover", _create_panel_style(
+				Color(0.14, 0.11, 0.06, 0.95), rcolor, 3))
+		else:
+			_card_buttons[i].visible = false
+	_card_panel.visible = true
+	_awaiting_card = true
+
+func _on_card_selected(index: int) -> void:
+	if index >= _pending_cards.size():
+		return
+	var card: RewardCard = _pending_cards[index]
+	_apply_card(card)
+	_card_panel.visible = false
+	_awaiting_card = false
+
+func _on_card_skip() -> void:
+	_card_panel.visible = false
+	_awaiting_card = false
+
+func _apply_card(card: RewardCard) -> void:
+	match card.effect_type:
+		RewardCard.EffectType.MINERAL_BONUS:
+			GameManager.add_minerals(int(card.effect_value))
+		RewardCard.EffectType.TRAIT_GRANT:
+			if card.trait_type >= 0:
+				SynergyManager.add_trait(card.trait_type)
+		RewardCard.EffectType.BUILDING_HEAL:
+			var buildings := get_tree().get_nodes_in_group("buildings")
+			for b in buildings:
+				if is_instance_valid(b) and b is BaseBuilding:
+					var max_hp: float = b.get_effective_max_hp()
+					b.current_hp = minf(b.current_hp + max_hp * card.effect_value, max_hp)
+		RewardCard.EffectType.UNIT_BUFF:
+			# Store as permanent bonus in EventManager
+			EventManager.add_unit_dps_perm_bonus(card.effect_value)
+		RewardCard.EffectType.STAT_BUFF:
+			pass
+
+# ---------------------------------------------------------------------------
+# Synergy bar
+# ---------------------------------------------------------------------------
+
+func _update_synergy_bar() -> void:
+	if not _synergy_label:
+		return
+	var text := ""
+	for t in [TraitData.TraitType.FIRE, TraitData.TraitType.ICE, TraitData.TraitType.POISON,
+			TraitData.TraitType.ELECTRIC, TraitData.TraitType.FORTIFY]:
+		var count := SynergyManager.get_trait_count(t)
+		if count > 0:
+			var tier := SynergyManager.get_synergy_tier(t)
+			var tier_str := ""
+			if tier > 0:
+				tier_str = " [T%d]" % tier
+			text += "%s: %d%s\n" % [TraitData.get_trait_name(t), count, tier_str]
+	var cross := SynergyManager.get_cross_synergies()
+	for c in cross:
+		text += c.to_upper() + "\n"
+	_synergy_label.text = text
+
+# ---------------------------------------------------------------------------
+# Events
+# ---------------------------------------------------------------------------
+
+func _on_combat_event(event_name: String, description: String) -> void:
+	if _event_label:
+		_event_label.text = "%s: %s" % [event_name, description]
+		_event_label.visible = true
+		_event_timer = 4.0
+
+var _pending_choices: Array = []
+
+func _on_choice_event(event_name: String, description: String, choices: Array) -> void:
+	_pending_choices = choices
+	if _choice_label:
+		_choice_label.text = "%s\n%s" % [event_name, description]
+	for i in _choice_buttons.size():
+		if i < choices.size():
+			_choice_buttons[i].text = choices[i]["label"]
+			_choice_buttons[i].visible = true
+		else:
+			_choice_buttons[i].visible = false
+	_choice_panel.visible = true
+	_awaiting_choice = true
+
+func _on_choice_selected(index: int) -> void:
+	if index >= _pending_choices.size():
+		return
+	var choice_id: String = _pending_choices[index]["id"]
+	var result := EventManager.resolve_choice(choice_id)
+	_choice_panel.visible = false
+	_awaiting_choice = false
+	# Show result as event notification
+	if _event_label and result != "":
+		_event_label.text = result
+		_event_label.visible = true
+		_event_timer = 3.0
+
+func _toggle_esc_menu() -> void:
+	_esc_visible = not _esc_visible
+	_esc_panel.visible = _esc_visible
+	if _esc_visible:
+		GameFeel.toggle_pause()
+		if not GameFeel.paused:
+			GameFeel.toggle_pause()
+	else:
+		if GameFeel.paused:
+			GameFeel.toggle_pause()
+	_update_hud()
+
+func _on_esc_resume() -> void:
+	_esc_visible = false
+	_esc_panel.visible = false
+	if GameFeel.paused:
+		GameFeel.toggle_pause()
+	_update_hud()
+
+func _on_esc_title() -> void:
+	GameManager.reset()
+	SynergyManager.reset()
+	EventManager.reset()
+	GameFeel.reset()
+	ObjectPool.reset()
+	get_tree().change_scene_to_file("res://scenes/main/title.tscn")
+
 func _on_restart() -> void:
 	GameManager.reset()
+	SynergyManager.reset()
+	EventManager.reset()
+	GameFeel.reset()
+	ObjectPool.reset()
 	get_tree().reload_current_scene()

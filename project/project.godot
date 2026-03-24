@@ -12,12 +12,17 @@ config_version=5
 
 config/name="SIKMUBYNCH"
 config/description="대규모 웨이브 디펜스 + 오토배틀 + 로그라이크"
-run/main_scene="res://scenes/main/game.tscn"
+run/main_scene="res://scenes/main/title.tscn"
 config/features=PackedStringArray("4.6")
 
 [autoload]
 
 GameManager="*res://autoloads/game_manager.gd"
+FlowField="*res://autoloads/flow_field.gd"
+SynergyManager="*res://autoloads/synergy_manager.gd"
+EventManager="*res://autoloads/event_manager.gd"
+GameFeel="*res://autoloads/game_feel.gd"
+ObjectPool="*res://autoloads/object_pool.gd"
 
 [display]
 
