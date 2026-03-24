@@ -107,22 +107,20 @@ func _on_hit() -> void:
 			target.apply_stun(0.3)
 
 func _chain_lightning(count: int, chain_dmg: float) -> void:
-	var enemies := get_tree().get_nodes_in_group("enemies")
 	var hit_targets: Array = [target]
 	var current := target
 
 	for i in count:
+		var nearby := SpatialGrid.find_in_range(current.global_position, "enemies", 4.0)
 		var nearest: Node3D = null
-		var nearest_dist := INF
-		for enemy in enemies:
-			if not is_instance_valid(enemy) or enemy in hit_targets:
+		var nearest_dist_sq := 16.0  # 4.0^2
+		for enemy in nearby:
+			if enemy in hit_targets:
 				continue
-			if enemy.get("_dead"):
-				continue
-			var dist := current.global_position.distance_to(enemy.global_position)
-			if dist <= 4.0 and dist < nearest_dist:
+			var dist_sq := current.global_position.distance_squared_to(enemy.global_position)
+			if dist_sq < nearest_dist_sq:
 				nearest = enemy
-				nearest_dist = dist
+				nearest_dist_sq = dist_sq
 		if nearest:
 			if nearest.has_method("take_damage"):
 				nearest.take_damage(chain_dmg)
