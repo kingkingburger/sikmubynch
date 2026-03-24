@@ -25,64 +25,88 @@ var _body_mat: StandardMaterial3D
 var _hp_bar_fill: MeshInstance3D
 var _attack_flash: float = 0.0
 
+var _last_grid_pos: Vector3
+
 func _ready() -> void:
 	add_to_group("enemies")
 	if data:
 		current_hp = data.max_hp
 	_build_mesh()
+	_last_grid_pos = global_position
+	SpatialGrid.register(self, "enemies")
 
 func _build_mesh() -> void:
 	_mesh_instance = MeshInstance3D.new()
 	var sf: float = data.scale_factor if data else 1.0
 	var shadow_size := 0.6 * sf
 
-	match data.enemy_type if data else EnemyData.EnemyType.RUSHER:
-		EnemyData.EnemyType.RUSHER:
-			# Small wedge — fast-looking
-			var prism := PrismMesh.new()
-			prism.size = Vector3(0.35, 0.3, 0.5) * sf
-			_mesh_instance.mesh = prism
-			_mesh_instance.position = Vector3(0.0, 0.15 * sf, 0.0)
-			shadow_size = 0.5 * sf
-		EnemyData.EnemyType.TANK:
-			# Chunky box — armored
-			var box := BoxMesh.new()
-			box.size = Vector3(0.6, 0.55, 0.6) * sf
-			_mesh_instance.mesh = box
-			_mesh_instance.position = Vector3(0.0, 0.28 * sf, 0.0)
-			shadow_size = 0.8 * sf
-		EnemyData.EnemyType.SPLITTER:
-			# Diamond shape — splits into smaller
-			var prism := PrismMesh.new()
-			prism.size = Vector3(0.4, 0.45, 0.4) * sf
-			_mesh_instance.mesh = prism
-			_mesh_instance.position = Vector3(0.0, 0.22 * sf, 0.0)
-			shadow_size = 0.5 * sf
-		EnemyData.EnemyType.EXPLODER:
-			# Spiky sphere — dangerous
-			var sphere := SphereMesh.new()
-			sphere.radius = 0.35 * sf
-			sphere.height = 0.7 * sf
-			sphere.radial_segments = 6
-			sphere.rings = 3
-			_mesh_instance.mesh = sphere
-			_mesh_instance.position = Vector3(0.0, 0.35 * sf, 0.0)
-			shadow_size = 0.6 * sf
-		EnemyData.EnemyType.DESTROYER:
-			# Large imposing box — boss
-			var box := BoxMesh.new()
-			box.size = Vector3(0.8, 0.9, 0.8) * sf
-			_mesh_instance.mesh = box
-			_mesh_instance.position = Vector3(0.0, 0.45 * sf, 0.0)
-			shadow_size = 1.1 * sf
-		_:
-			# Elite/default — sphere with glow
-			var sphere := SphereMesh.new()
-			sphere.radius = 0.3 * sf
-			sphere.height = 0.6 * sf
-			_mesh_instance.mesh = sphere
-			_mesh_instance.position = Vector3(0.0, 0.3 * sf, 0.0)
-			shadow_size = 0.55 * sf
+	# GLB model names per enemy type
+	var _type_names := {
+		EnemyData.EnemyType.RUSHER: "rusher",
+		EnemyData.EnemyType.TANK: "tank",
+		EnemyData.EnemyType.SPLITTER: "splitter",
+		EnemyData.EnemyType.EXPLODER: "exploder",
+		EnemyData.EnemyType.ELITE_RUSHER: "elite_rusher",
+		EnemyData.EnemyType.DESTROYER: "destroyer",
+	}
+	var etype: int = data.enemy_type if data else EnemyData.EnemyType.RUSHER
+	var glb_name: String = _type_names.get(etype, "rusher")
+	var glb: Mesh = BaseBuilding._load_glb("enemies", glb_name)
+
+	if glb:
+		_mesh_instance.mesh = glb
+		_mesh_instance.scale = Vector3(sf, sf, sf)
+		# Position defaults per type
+		match etype:
+			EnemyData.EnemyType.RUSHER: _mesh_instance.position = Vector3(0.0, 0.15 * sf, 0.0); shadow_size = 0.5 * sf
+			EnemyData.EnemyType.TANK: _mesh_instance.position = Vector3(0.0, 0.28 * sf, 0.0); shadow_size = 0.8 * sf
+			EnemyData.EnemyType.SPLITTER: _mesh_instance.position = Vector3(0.0, 0.22 * sf, 0.0); shadow_size = 0.5 * sf
+			EnemyData.EnemyType.EXPLODER: _mesh_instance.position = Vector3(0.0, 0.35 * sf, 0.0); shadow_size = 0.6 * sf
+			EnemyData.EnemyType.DESTROYER: _mesh_instance.position = Vector3(0.0, 0.45 * sf, 0.0); shadow_size = 1.1 * sf
+			_: _mesh_instance.position = Vector3(0.0, 0.3 * sf, 0.0); shadow_size = 0.55 * sf
+	else:
+		# Fallback: primitive meshes
+		match etype:
+			EnemyData.EnemyType.RUSHER:
+				var prism := PrismMesh.new()
+				prism.size = Vector3(0.35, 0.3, 0.5) * sf
+				_mesh_instance.mesh = prism
+				_mesh_instance.position = Vector3(0.0, 0.15 * sf, 0.0)
+				shadow_size = 0.5 * sf
+			EnemyData.EnemyType.TANK:
+				var box := BoxMesh.new()
+				box.size = Vector3(0.6, 0.55, 0.6) * sf
+				_mesh_instance.mesh = box
+				_mesh_instance.position = Vector3(0.0, 0.28 * sf, 0.0)
+				shadow_size = 0.8 * sf
+			EnemyData.EnemyType.SPLITTER:
+				var prism := PrismMesh.new()
+				prism.size = Vector3(0.4, 0.45, 0.4) * sf
+				_mesh_instance.mesh = prism
+				_mesh_instance.position = Vector3(0.0, 0.22 * sf, 0.0)
+				shadow_size = 0.5 * sf
+			EnemyData.EnemyType.EXPLODER:
+				var sphere := SphereMesh.new()
+				sphere.radius = 0.35 * sf
+				sphere.height = 0.7 * sf
+				sphere.radial_segments = 6
+				sphere.rings = 3
+				_mesh_instance.mesh = sphere
+				_mesh_instance.position = Vector3(0.0, 0.35 * sf, 0.0)
+				shadow_size = 0.6 * sf
+			EnemyData.EnemyType.DESTROYER:
+				var box := BoxMesh.new()
+				box.size = Vector3(0.8, 0.9, 0.8) * sf
+				_mesh_instance.mesh = box
+				_mesh_instance.position = Vector3(0.0, 0.45 * sf, 0.0)
+				shadow_size = 1.1 * sf
+			_:
+				var sphere := SphereMesh.new()
+				sphere.radius = 0.3 * sf
+				sphere.height = 0.6 * sf
+				_mesh_instance.mesh = sphere
+				_mesh_instance.position = Vector3(0.0, 0.3 * sf, 0.0)
+				shadow_size = 0.55 * sf
 
 	_body_mat = StandardMaterial3D.new()
 	var c: Color = data.color if data else Color.RED
@@ -169,10 +193,11 @@ func _physics_process(delta: float) -> void:
 		_stun_timer -= delta
 		return  # Stunned - skip all movement/attack
 
-	# Exploder: check proximity to buildings for self-destruct
+	# Exploder: check proximity to buildings for self-destruct (every 5 frames)
 	if data and data.enemy_type == EnemyData.EnemyType.EXPLODER:
-		if _check_explode_proximity():
-			return
+		if Engine.get_physics_frames() % 5 == hash(get_instance_id()) % 5:
+			if _check_explode_proximity():
+				return
 
 	if _attack_target:
 		if not is_instance_valid(_attack_target):
@@ -193,7 +218,9 @@ func _physics_process(delta: float) -> void:
 	# Movement - use flow field if available, otherwise direct path
 	var dir := _get_move_direction()
 	velocity = dir * data.speed * EventManager.get_enemy_speed_mult() * _slow_mult
+	var old_pos := global_position
 	var collision := move_and_collide(velocity * delta)
+	SpatialGrid.update_position(self, old_pos, "enemies")
 
 	if collision:
 		var collider := collision.get_collider()
@@ -201,8 +228,6 @@ func _physics_process(delta: float) -> void:
 			_attack_target = collider as BaseBuilding
 			_attack_timer = 0.0
 			velocity = Vector3.ZERO
-
-	_update_hp_bar()
 
 func _get_move_direction() -> Vector3:
 	if not flow_field.is_empty():
@@ -218,15 +243,9 @@ func _get_move_direction() -> Vector3:
 	return (tgt - my_pos).normalized()
 
 func _check_explode_proximity() -> bool:
-	# Find nearest building
-	var buildings := get_tree().get_nodes_in_group("buildings")
-	for building in buildings:
-		if not is_instance_valid(building):
-			continue
-		var dist := global_position.distance_to(building.global_position)
-		if dist <= 1.5:
-			_explode()
-			return true
+	if SpatialGrid.has_any_in_range(global_position, "buildings", 1.5):
+		_explode()
+		return true
 	return false
 
 func _explode() -> void:
@@ -302,17 +321,15 @@ func _die() -> void:
 	if _dead:
 		return
 	_dead = true
+	SpatialGrid.unregister(self, "enemies")
 
 	# Poison spread on death
 	if _poison_dps > 0.0 and _poison_timer > 0.0:
-		var enemies := get_tree().get_nodes_in_group("enemies")
-		for enemy in enemies:
-			if enemy == self or not is_instance_valid(enemy):
+		var nearby := SpatialGrid.find_in_range(global_position, "enemies", 3.0)
+		for enemy in nearby:
+			if enemy == self:
 				continue
-			if enemy.get("_dead"):
-				continue
-			var dist := global_position.distance_to(enemy.global_position)
-			if dist <= 3.0 and enemy.has_method("apply_poison"):
+			if enemy.has_method("apply_poison"):
 				enemy.apply_poison(_poison_dps * 0.6, 3.0)
 
 	# Splitter: spawn smaller enemies

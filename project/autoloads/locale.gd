@@ -34,6 +34,36 @@ var _strings: Dictionary = {
 	"choose_reward": ["보상 선택", "CHOOSE A REWARD"],
 	"skip": ["건너뛰기", "SKIP"],
 
+	# Rarity
+	"rarity_common": ["일반", "Common"],
+	"rarity_rare": ["희귀", "Rare"],
+	"rarity_legendary": ["전설", "Legendary"],
+
+	# Reward cards
+	"card_mineral_cache": ["미네랄 저장고", "Mineral Cache"],
+	"card_mineral_vein": ["미네랄 광맥", "Mineral Vein"],
+	"card_mineral_surge": ["미네랄 급등", "Mineral Surge"],
+	"card_motherlode": ["대광맥", "Motherlode"],
+	"card_fortified_walls": ["강화 성벽", "Fortified Walls"],
+	"card_iron_fortress": ["철의 요새", "Iron Fortress"],
+	"card_titans_blessing": ["거인의 축복", "Titan's Blessing"],
+	"card_sharp_blades": ["날카로운 칼날", "Sharp Blades"],
+	"card_war_drums": ["전쟁 북소리", "War Drums"],
+	"card_berserker_rage": ["광전사의 분노", "Berserker Rage"],
+	"card_essence_suffix": ["의 정수", " Essence"],
+	"card_trait_desc": ["%s 특성을 랜덤 타워에 부여", "Grant %s trait to a random tower"],
+	"card_mineral_desc": ["+%d 미네랄", "+%d minerals"],
+	"card_building_hp": ["전체 건물 +%d%% 체력", "All buildings +%d%% HP"],
+	"card_building_hp_heal": ["전체 건물 +%d%% 체력 + 회복", "All buildings +%d%% HP + heal"],
+	"card_unit_dps": ["전체 유닛 +%d%% 공격력", "All units +%d%% DPS"],
+
+	# Trait names
+	"trait_fire": ["화염", "Fire"],
+	"trait_ice": ["냉기", "Ice"],
+	"trait_poison": ["독", "Poison"],
+	"trait_electric": ["전기", "Electric"],
+	"trait_fortify": ["강화", "Fortify"],
+
 	# ESC menu
 	"resume": ["계속하기", "RESUME"],
 	"title_screen": ["타이틀 화면", "TITLE SCREEN"],

@@ -2,6 +2,10 @@ extends Control
 
 func _ready() -> void:
 	_build_ui()
+	# Title BGM
+	var title_bgm = load("res://assets/audio/bgm/title.ogg") if ResourceLoader.exists("res://assets/audio/bgm/title.ogg") else null
+	if title_bgm:
+		AudioManager.play_bgm(title_bgm)
 
 func _build_ui() -> void:
 	# Background

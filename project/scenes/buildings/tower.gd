@@ -16,11 +16,15 @@ func _get_height() -> float:
 
 func _setup_turret() -> void:
 	_turret_mesh = MeshInstance3D.new()
-	var cylinder := CylinderMesh.new()
-	cylinder.top_radius = 0.15
-	cylinder.bottom_radius = 0.22
-	cylinder.height = 0.35
-	_turret_mesh.mesh = cylinder
+	var glb := BaseBuilding._load_glb("buildings", "tower_turret")
+	if glb:
+		_turret_mesh.mesh = glb
+	else:
+		var cylinder := CylinderMesh.new()
+		cylinder.top_radius = 0.15
+		cylinder.bottom_radius = 0.22
+		cylinder.height = 0.35
+		_turret_mesh.mesh = cylinder
 	_turret_mesh.position = Vector3(0.0, 1.175, 0.0)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.9, 0.78, 0.25)
@@ -70,19 +74,7 @@ func _process(delta: float) -> void:
 			_attack_timer = 0.1
 
 func _find_nearest_enemy() -> Node3D:
-	var enemies := get_tree().get_nodes_in_group("enemies")
-	var nearest: Node3D = null
-	var nearest_dist := INF
-	for enemy in enemies:
-		if not is_instance_valid(enemy):
-			continue
-		if enemy.get("_dead"):
-			continue
-		var dist := global_position.distance_to(enemy.global_position)
-		if dist <= data.attack_range and dist < nearest_dist:
-			nearest = enemy
-			nearest_dist = dist
-	return nearest
+	return SpatialGrid.find_nearest(global_position, "enemies", data.attack_range)
 
 func _fire_at(target: Node3D) -> void:
 	# Muzzle flash
@@ -109,7 +101,7 @@ func _get_buffed_dps() -> float:
 	for b in buff_towers:
 		if not is_instance_valid(b) or not b.has_method("get_buff_range"):
 			continue
-		var dist := global_position.distance_to(b.global_position)
-		if dist <= b.get_buff_range():
+		var br: float = b.get_buff_range()
+		if global_position.distance_squared_to(b.global_position) <= br * br:
 			base_dps *= (1.0 + b.get_buff_multiplier())
 	return base_dps

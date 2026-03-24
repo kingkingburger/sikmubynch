@@ -58,6 +58,14 @@ func _init_unit_templates() -> void:
 	_unit_templates.append(bomber)
 
 func _setup_banner() -> void:
+	var glb := BaseBuilding._load_glb("buildings", "barracks_banner")
+	if glb:
+		var banner_mesh := MeshInstance3D.new()
+		banner_mesh.mesh = glb
+		banner_mesh.position = Vector3(0.3, 1.05, 0.3)
+		add_child(banner_mesh)
+		return
+	# Fallback: primitive banner
 	var banner := MeshInstance3D.new()
 	var box := BoxMesh.new()
 	box.size = Vector3(0.08, 0.5, 0.08)

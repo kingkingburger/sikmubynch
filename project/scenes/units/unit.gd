@@ -34,46 +34,62 @@ func _ready() -> void:
 	_build_mesh()
 	if data and data.unit_type == UnitData.UnitType.ARCHER:
 		projectile_scene = load("res://scenes/projectiles/projectile.tscn")
+	SpatialGrid.register(self, "units")
 
 func _build_mesh() -> void:
 	_mesh_instance = MeshInstance3D.new()
 	var unit_type: int = data.unit_type if data else UnitData.UnitType.SOLDIER
 
-	match unit_type:
-		UnitData.UnitType.SOLDIER:
-			# Upright capsule — infantry
-			var capsule := CapsuleMesh.new()
-			capsule.radius = 0.2
-			capsule.height = 0.6
-			_mesh_instance.mesh = capsule
-			_mesh_instance.position = Vector3(0.0, 0.3, 0.0)
-		UnitData.UnitType.ARCHER:
-			# Thinner, taller capsule
-			var capsule := CapsuleMesh.new()
-			capsule.radius = 0.15
-			capsule.height = 0.65
-			_mesh_instance.mesh = capsule
-			_mesh_instance.position = Vector3(0.0, 0.33, 0.0)
-		UnitData.UnitType.TANKER:
-			# Wide box — shield bearer
-			var box := BoxMesh.new()
-			box.size = Vector3(0.5, 0.55, 0.4)
-			_mesh_instance.mesh = box
-			_mesh_instance.position = Vector3(0.0, 0.28, 0.0)
-		UnitData.UnitType.BOMBER:
-			# Sphere — explosive
-			var sphere := SphereMesh.new()
-			sphere.radius = 0.25
-			sphere.height = 0.5
-			sphere.radial_segments = 8
-			_mesh_instance.mesh = sphere
-			_mesh_instance.position = Vector3(0.0, 0.25, 0.0)
-		_:
-			var capsule := CapsuleMesh.new()
-			capsule.radius = 0.2
-			capsule.height = 0.55
-			_mesh_instance.mesh = capsule
-			_mesh_instance.position = Vector3(0.0, 0.28, 0.0)
+	var _utype_names := {
+		UnitData.UnitType.SOLDIER: "soldier",
+		UnitData.UnitType.ARCHER: "archer",
+		UnitData.UnitType.TANKER: "tanker",
+		UnitData.UnitType.BOMBER: "bomber",
+	}
+	var uname: String = _utype_names.get(unit_type, "soldier")
+	var glb: Mesh = BaseBuilding._load_glb("units", uname)
+
+	if glb:
+		_mesh_instance.mesh = glb
+		match unit_type:
+			UnitData.UnitType.SOLDIER: _mesh_instance.position = Vector3(0.0, 0.3, 0.0)
+			UnitData.UnitType.ARCHER: _mesh_instance.position = Vector3(0.0, 0.33, 0.0)
+			UnitData.UnitType.TANKER: _mesh_instance.position = Vector3(0.0, 0.28, 0.0)
+			UnitData.UnitType.BOMBER: _mesh_instance.position = Vector3(0.0, 0.25, 0.0)
+			_: _mesh_instance.position = Vector3(0.0, 0.28, 0.0)
+	else:
+		# Fallback: primitive meshes
+		match unit_type:
+			UnitData.UnitType.SOLDIER:
+				var capsule := CapsuleMesh.new()
+				capsule.radius = 0.2
+				capsule.height = 0.6
+				_mesh_instance.mesh = capsule
+				_mesh_instance.position = Vector3(0.0, 0.3, 0.0)
+			UnitData.UnitType.ARCHER:
+				var capsule := CapsuleMesh.new()
+				capsule.radius = 0.15
+				capsule.height = 0.65
+				_mesh_instance.mesh = capsule
+				_mesh_instance.position = Vector3(0.0, 0.33, 0.0)
+			UnitData.UnitType.TANKER:
+				var box := BoxMesh.new()
+				box.size = Vector3(0.5, 0.55, 0.4)
+				_mesh_instance.mesh = box
+				_mesh_instance.position = Vector3(0.0, 0.28, 0.0)
+			UnitData.UnitType.BOMBER:
+				var sphere := SphereMesh.new()
+				sphere.radius = 0.25
+				sphere.height = 0.5
+				sphere.radial_segments = 8
+				_mesh_instance.mesh = sphere
+				_mesh_instance.position = Vector3(0.0, 0.25, 0.0)
+			_:
+				var capsule := CapsuleMesh.new()
+				capsule.radius = 0.2
+				capsule.height = 0.55
+				_mesh_instance.mesh = capsule
+				_mesh_instance.position = Vector3(0.0, 0.28, 0.0)
 
 	_body_mat = StandardMaterial3D.new()
 	var c: Color = data.color if data else Color.BLUE
@@ -239,32 +255,15 @@ func _fire_projectile(dmg: float) -> void:
 	get_parent().add_child(proj)
 
 func _bomber_explode() -> void:
-	# Deal AOE damage to all enemies in radius
-	var enemies := get_tree().get_nodes_in_group("enemies")
-	for enemy in enemies:
-		if not is_instance_valid(enemy):
-			continue
-		var dist := global_position.distance_to(enemy.global_position)
-		if dist <= BOMBER_AOE_RADIUS:
-			if enemy.has_method("take_damage"):
-				enemy.take_damage(data.dps)
+	var nearby := SpatialGrid.find_in_range(global_position, "enemies", BOMBER_AOE_RADIUS)
+	for enemy in nearby:
+		if enemy.has_method("take_damage"):
+			enemy.take_damage(data.dps)
 	_die()
 
 # -- Utility --
 func _find_nearest_enemy() -> Node3D:
-	var enemies := get_tree().get_nodes_in_group("enemies")
-	var nearest: Node3D = null
-	var nearest_dist := INF
-	for enemy in enemies:
-		if not is_instance_valid(enemy):
-			continue
-		if enemy.get("_dead"):
-			continue
-		var dist := global_position.distance_to(enemy.global_position)
-		if dist <= DETECTION_RANGE and dist < nearest_dist:
-			nearest = enemy
-			nearest_dist = dist
-	return nearest
+	return SpatialGrid.find_nearest(global_position, "enemies", DETECTION_RANGE)
 
 func _random_patrol_point() -> Vector3:
 	var offset := Vector3(
@@ -313,5 +312,6 @@ func _die() -> void:
 	if _state == State.DEAD:
 		return
 	_state = State.DEAD
+	SpatialGrid.unregister(self, "units")
 	died.emit()
 	queue_free()
