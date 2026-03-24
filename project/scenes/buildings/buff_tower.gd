@@ -28,9 +28,13 @@ func _setup_aura() -> void:
 
 	# Top crystal
 	var crystal := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(0.2, 0.3, 0.2)
-	crystal.mesh = box
+	var glb := BaseBuilding._load_glb("buildings", "buff_crystal")
+	if glb:
+		crystal.mesh = glb
+	else:
+		var box := BoxMesh.new()
+		box.size = Vector3(0.2, 0.3, 0.2)
+		crystal.mesh = box
 	crystal.position = Vector3(0.0, 1.05, 0.0)
 	crystal.rotation_degrees = Vector3(0.0, 45.0, 0.0)
 	var cmat := StandardMaterial3D.new()

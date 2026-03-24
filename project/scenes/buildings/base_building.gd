@@ -24,6 +24,7 @@ func _ready() -> void:
 	if data:
 		current_hp = data.max_hp
 	_build_mesh()
+	SpatialGrid.register(self, "buildings")
 
 func get_effective_max_hp() -> float:
 	if not data:
@@ -50,9 +51,14 @@ func _build_mesh() -> void:
 
 	# Main body mesh
 	_mesh_instance = MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(size_x, building_height, size_z)
-	_mesh_instance.mesh = box
+	var model_name := data.building_name.to_lower().replace(" ", "_") if data.building_name else "base"
+	var glb := _load_glb("buildings", model_name)
+	if glb:
+		_mesh_instance.mesh = glb
+	else:
+		var box := BoxMesh.new()
+		box.size = Vector3(size_x, building_height, size_z)
+		_mesh_instance.mesh = box
 	_mesh_instance.position = Vector3(0.0, building_height / 2.0, 0.0)
 
 	_damage_mat = StandardMaterial3D.new()
@@ -184,6 +190,7 @@ func die() -> void:
 	if _destroyed:
 		return
 	_destroyed = true
+	SpatialGrid.unregister(self, "buildings")
 	destroyed.emit()
 	queue_free()
 
@@ -208,3 +215,18 @@ func _update_level_visual() -> void:
 	if _mesh_instance:
 		var s := 1.0 + (level - 1) * 0.06
 		_mesh_instance.scale = Vector3(s, s, s)
+
+static func _load_glb(category: String, model_name: String) -> Mesh:
+	var path := "res://assets/models/%s/%s.glb" % [category, model_name]
+	if not ResourceLoader.exists(path):
+		return null
+	var res = load(path)
+	if res is PackedScene:
+		var instance := (res as PackedScene).instantiate()
+		for child in instance.get_children():
+			if child is MeshInstance3D:
+				var mesh: Mesh = child.mesh
+				instance.queue_free()
+				return mesh
+		instance.queue_free()
+	return null

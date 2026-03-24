@@ -10,10 +10,14 @@ var _trail_mesh: MeshInstance3D
 func _ready() -> void:
 	# Main projectile — larger and brighter
 	var mesh := MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.25
-	sphere.height = 0.5
-	mesh.mesh = sphere
+	var glb: Mesh = BaseBuilding._load_glb("effects", "projectile")
+	if glb:
+		mesh.mesh = glb
+	else:
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.25
+		sphere.height = 0.5
+		mesh.mesh = sphere
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(1.0, 0.9, 0.3)
 	mat.emission_enabled = true

@@ -14,10 +14,14 @@ func _ready() -> void:
 
 func _build_mesh() -> void:
 	_mesh = MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.15
-	sphere.height = 0.3
-	_mesh.mesh = sphere
+	var glb: Mesh = BaseBuilding._load_glb("effects", "mineral_orb")
+	if glb:
+		_mesh.mesh = glb
+	else:
+		var sphere := SphereMesh.new()
+		sphere.radius = 0.15
+		sphere.height = 0.3
+		_mesh.mesh = sphere
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.3, 0.9, 1.0)
 	mat.emission_enabled = true

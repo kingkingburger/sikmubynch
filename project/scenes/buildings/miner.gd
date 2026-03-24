@@ -11,11 +11,15 @@ func _get_height() -> float:
 
 func _setup_drill() -> void:
 	var drill := MeshInstance3D.new()
-	var cyl := CylinderMesh.new()
-	cyl.top_radius = 0.06
-	cyl.bottom_radius = 0.12
-	cyl.height = 0.4
-	drill.mesh = cyl
+	var glb := BaseBuilding._load_glb("buildings", "miner_drill")
+	if glb:
+		drill.mesh = glb
+	else:
+		var cyl := CylinderMesh.new()
+		cyl.top_radius = 0.06
+		cyl.bottom_radius = 0.12
+		cyl.height = 0.4
+		drill.mesh = cyl
 	drill.position = Vector3(0.0, 0.8, 0.0)
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(0.3, 0.85, 0.9)

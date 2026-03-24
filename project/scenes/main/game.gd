@@ -112,6 +112,10 @@ func _ready() -> void:
 	SynergyManager.synergy_changed.connect(_update_synergy_bar)
 	GameFeel.setup(_camera, _canvas)
 	_recalculate_flow_field()
+	# Battle BGM
+	var battle_bgm = load("res://assets/audio/bgm/battle.ogg") if ResourceLoader.exists("res://assets/audio/bgm/battle.ogg") else null
+	if battle_bgm:
+		AudioManager.play_bgm(battle_bgm)
 	_spawn_wave()
 
 func _init_building_data() -> void:
@@ -190,24 +194,25 @@ func _process(delta: float) -> void:
 		_event_timer -= delta
 		if _event_timer <= 0.0 and _event_label:
 			_event_label.visible = false
+	# Gradual enemy spawning
+	_process_spawn_queue()
 	# Pause wave countdown during card/choice selection
-	if _awaiting_card or _awaiting_choice:
-		return
-	if _between_waves:
+	if _between_waves and not _awaiting_card and not _awaiting_choice:
 		_wave_countdown -= delta
 		_update_hud()
 		if _wave_countdown <= 0.0:
 			_between_waves = false
 			_spawn_wave()
 	elif _wave_active:
-		# Periodic check for split spawns that bypassed the counter
-		var actual := get_tree().get_nodes_in_group("enemies").size()
-		if actual == 0:
-			_wave_active = false
-			enemies_alive = 0
-			_on_wave_cleared()
-		elif actual != enemies_alive:
-			enemies_alive = actual
+		# Periodic check for split spawns (every 30 frames, not every frame)
+		if Engine.get_process_frames() % 30 == 0:
+			var actual := get_tree().get_nodes_in_group("enemies").size()
+			if actual == 0:
+				_wave_active = false
+				enemies_alive = 0
+				_on_wave_cleared()
+			elif actual != enemies_alive:
+				enemies_alive = actual
 		_update_hud()
 
 # ---------------------------------------------------------------------------
@@ -881,6 +886,10 @@ func _create_enemy_templates(wave_num: int) -> Array:
 
 	return templates
 
+var _spawn_queue: Array = []
+var _spawn_rate: float = 0.0  # enemies per second
+const SPAWN_PER_FRAME := 3  # max enemies to spawn per frame
+
 func _spawn_wave() -> void:
 	var wave_num := GameManager.wave_number
 	# Tidal pattern: calm → storm cycle every 3 waves
@@ -893,24 +902,38 @@ func _spawn_wave() -> void:
 	var hq_pos := Vector3(32.5, 0.0, 32.5)
 	var field := FlowField.get_field()
 
+	# Queue enemies for gradual spawning instead of all at once
 	for i in enemy_count:
 		var template: EnemyData = templates[randi() % templates.size()]
+		_spawn_queue.append({
+			"template": template,
+			"hq_pos": hq_pos,
+			"field": field,
+			"edge": _random_edge_position(),
+		})
+
+	_wave_active = true
+	_update_hud()
+
+func _process_spawn_queue() -> void:
+	if _spawn_queue.is_empty():
+		return
+	var count := mini(SPAWN_PER_FRAME, _spawn_queue.size())
+	for i in count:
+		var info: Dictionary = _spawn_queue.pop_front()
 		var enemy: Node3D = enemy_scene.instantiate()
-		enemy.set("data", template)
-		enemy.set("target_position", hq_pos)
-		enemy.set("flow_field", field)
-		var edge := _random_edge_position()
-		enemy.position = Vector3(edge.x, 0.0, edge.y)
+		enemy.set("data", info["template"])
+		enemy.set("target_position", info["hq_pos"])
+		enemy.set("flow_field", info["field"])
+		enemy.position = Vector3(info["edge"].x, 0.0, info["edge"].y)
 		enemy.connect("died", _on_enemy_died)
 		if enemy.has_signal("drop_mineral"):
 			enemy.connect("drop_mineral", _on_enemy_drop_mineral)
 		add_child(enemy)
 		enemies_alive += 1
 
-	_wave_active = true
-	_update_hud()
-
 func _on_wave_cleared() -> void:
+	AudioManager.play_sfx_by_name("wave_start")
 	var bonus := 35 + GameManager.wave_number * 12
 	var reward_mult := EventManager.get_challenge_reward_mult()
 	GameManager.add_minerals(int(bonus * reward_mult))
@@ -1056,6 +1079,7 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 	building_grid[grid_pos] = building
 	FlowField.set_obstacle(grid_pos, true)
 	_recalculate_flow_field()
+	AudioManager.play_sfx_by_name("build")
 	if bd.trait_type >= 0:
 		SynergyManager.add_trait(bd.trait_type)
 
@@ -1171,6 +1195,7 @@ func _on_building_destroyed(grid_pos: Vector2i) -> void:
 func _on_enemy_died() -> void:
 	enemies_alive -= 1
 	GameFeel.shake(0.12)
+	AudioManager.play_sfx_by_name("death", -6.0)
 	# Check for split spawns — recount from group after a frame
 	_check_wave_completion.call_deferred()
 	_update_hud()
@@ -1228,6 +1253,7 @@ func _update_hud() -> void:
 		_mineral_orb_val.text = "%d" % GameManager.minerals
 
 func _on_game_over() -> void:
+	AudioManager.stop_bgm()
 	_game_over_panel.visible = true
 	_ghost_mesh.visible = false
 	var secs := int(GameManager.game_time)
@@ -1374,6 +1400,7 @@ func _on_esc_title() -> void:
 	EventManager.reset()
 	GameFeel.reset()
 	ObjectPool.reset()
+	SpatialGrid.reset()
 	get_tree().change_scene_to_file("res://scenes/main/title.tscn")
 
 func _on_restart() -> void:
@@ -1382,4 +1409,5 @@ func _on_restart() -> void:
 	EventManager.reset()
 	GameFeel.reset()
 	ObjectPool.reset()
+	SpatialGrid.reset()
 	get_tree().reload_current_scene()
