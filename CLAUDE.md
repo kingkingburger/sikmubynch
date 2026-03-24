@@ -8,6 +8,8 @@
 
 - Godot 4 + GDScript
 - 3D 이소메트릭 (디아블로/스타크래프트 스타일), GL Compatibility 렌더러
+- 비주얼: 다크 판타지 + 밀리터리, 로우폴리 스타일리쉬 모델
+- 로컬라이제이션: 한글(기본) + 영문 토글 (Locale autoload)
 - PC 전용 (키보드 + 마우스)
 
 ## 핵심 가치
@@ -27,7 +29,7 @@
 ```
 project/                                # Godot 4 프로젝트
   project.godot                         # 엔진 설정
-  autoloads/                            # 싱글톤 매니저 (GameManager, FlowField)
+  autoloads/                            # 싱글톤 매니저 (Locale, GameManager, FlowField, SynergyManager, EventManager, GameFeel, ObjectPool)
   scenes/                               # 씬 파일 (.tscn)
     main/                               #   메인 게임 씬
     buildings/                          #   건물 씬 (HQ, Barricade, Tower, Barracks)
@@ -52,5 +54,15 @@ M7 폴리시까지 전체 구현 완료. 7-마일스톤 로드맵 (M1-M7) 완결
 - M3 유닛 시스템: 배럭 + 4종 유닛 (솔저/아처/탱커/폭탄병) + 오토배틀 AI
 - M4 웨이브 + 적 다양성: 적 6종 + Flow Field 길찾기 + 파도형 난이도 + 미네랄 오브
 - M5 메타 시스템: 5종 특성 시너지 + 보상 카드 3택 + 이벤트 10종 + 채굴기/버프 타워
-- M6 게임 필: 타격감(쉐이크/히트스톱/flash/크리티컬) + WASD 카메라 + 줌 + 속도 조절 + 드래그 배치
-- M7 폴리시: 시작 화면 + ESC 메뉴 + 디버그 오버레이(F3)
+- M6 게임 필: 타격감(쉐이크/히트스톱/크리티컬) + WASD 카메라 + 줌 + 속도 조절 + 드래그 배치
+- M7 폴리시: 시작 화면 + ESC 메뉴 + 디버그 오버레이(F3) + 비주얼 오버홀(그림자/지형 셰이더/모델) + 로컬라이제이션(한/영)
+
+## 주요 시스템
+
+- **Locale**: 다국어 (한글/영문), 타이틀 화면에서 전환
+- **GameManager**: 게임 상태 (미네랄, 웨이브, 킬 카운트)
+- **FlowField**: BFS 기반 적 집단 길찾기
+- **SynergyManager**: 5종 특성 시너지 계산 + 보너스
+- **EventManager**: 전투/선택 이벤트 시스템
+- **GameFeel**: 화면 흔들림, 히트스톱, 게임 속도 관리
+- **ObjectPool**: 발사체/이펙트 재사용 풀
