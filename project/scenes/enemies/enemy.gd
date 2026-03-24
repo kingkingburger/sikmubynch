@@ -249,26 +249,15 @@ func _check_explode_proximity() -> bool:
 	return false
 
 func _explode() -> void:
-	# Deal AOE damage to nearby buildings and units
 	var radius := data.explode_radius
 	var dmg := data.explode_damage
 
-	# Damage buildings in range
-	var buildings := get_tree().get_nodes_in_group("buildings")
-	for building in buildings:
-		if not is_instance_valid(building):
-			continue
-		var dist := global_position.distance_to(building.global_position)
-		if dist <= radius and building.has_method("take_damage"):
+	for building in SpatialGrid.find_in_range(global_position, "buildings", radius):
+		if building.has_method("take_damage"):
 			building.take_damage(dmg)
 
-	# Damage friendly units in range
-	var units := get_tree().get_nodes_in_group("units")
-	for unit in units:
-		if not is_instance_valid(unit):
-			continue
-		var dist := global_position.distance_to(unit.global_position)
-		if dist <= radius and unit.has_method("take_damage"):
+	for unit in SpatialGrid.find_in_range(global_position, "units", radius):
+		if unit.has_method("take_damage"):
 			unit.take_damage(dmg)
 
 	_die()

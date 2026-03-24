@@ -96,10 +96,10 @@ func _get_buffed_dps() -> float:
 	# Synergy bonus
 	if data and data.trait_type >= 0:
 		base_dps *= SynergyManager.get_dps_multiplier(data.trait_type)
-	# Buff tower bonus
-	var buff_towers := get_tree().get_nodes_in_group("buildings")
-	for b in buff_towers:
-		if not is_instance_valid(b) or not b.has_method("get_buff_range"):
+	# Buff tower bonus — search nearby buildings only
+	var nearby_buildings := SpatialGrid.find_in_range(global_position, "buildings", 7.0)
+	for b in nearby_buildings:
+		if not b.has_method("get_buff_range"):
 			continue
 		var br: float = b.get_buff_range()
 		if global_position.distance_squared_to(b.global_position) <= br * br:

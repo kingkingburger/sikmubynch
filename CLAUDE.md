@@ -29,7 +29,8 @@
 ```
 project/                                # Godot 4 프로젝트
   project.godot                         # 엔진 설정
-  autoloads/                            # 싱글톤 매니저 (Locale, GameManager, FlowField, SynergyManager, EventManager, GameFeel, ObjectPool)
+  autoloads/                            # 싱글톤 매니저 (Locale, GameManager, FlowField, SynergyManager, EventManager, GameFeel, ObjectPool, AudioManager, SpatialGrid)
+  export_presets.cfg                    # Windows Desktop export 설정
   scenes/                               # 씬 파일 (.tscn)
     main/                               #   메인 게임 씬
     buildings/                          #   건물 씬 (HQ, Barricade, Tower, Barracks)
@@ -39,11 +40,17 @@ project/                                # Godot 4 프로젝트
     effects/                            #   이펙트 씬 (미네랄 오브)
   scripts/data/                         # 데이터 정의 (Resource 클래스)
   assets/                               # 스프라이트, 사운드
+    models/                             #   GLB 3D 모델 (buildings/, enemies/, units/, effects/)
+    audio/                              #   BGM + SFX (bgm/, sfx/)
 docs/ouroboros/{date}-{slug}/           # Ouroboros 프로세스 문서
   01-requirements.md                    # Phase 1: 요구사항
   02-design.md                          # Phase 2: 설계
   03-verification.md                    # Phase 3: 검증
+docs/3d-modeling-guide.md               # 3D 모델링 가이드 (Hunyuan3D-2 파이프라인)
+docs/sound-guide.md                     # 사운드 제작 가이드
 mockup.html                             # UI/레이아웃 목업 (디아블로 스타일 이소메트릭)
+build.sh                                # Windows exe 빌드 스크립트
+build/                                  # 빌드 출력 (git-ignored)
 ```
 
 ## 현재 상태
@@ -57,6 +64,13 @@ M7 폴리시까지 전체 구현 완료. 7-마일스톤 로드맵 (M1-M7) 완결
 - M6 게임 필: 타격감(쉐이크/히트스톱/크리티컬) + WASD 카메라 + 줌 + 속도 조절 + 드래그 배치
 - M7 폴리시: 시작 화면 + ESC 메뉴 + 디버그 오버레이(F3) + 비주얼 오버홀(그림자/지형 셰이더/모델) + 로컬라이제이션(한/영)
 
+## 출시 목표
+
+- Steam Early Access (무료 + 후원 DLC 모델), 2026년 하반기
+- 3D 모델링: Hunyuan3D-2 로컬 (GLB 로딩 코드 준비 완료, 모델 생성 대기)
+- 사운드: AI 생성 (Udio BGM + ElevenLabs SFX, AudioManager 코드 준비 완료)
+- Ouroboros 문서: `docs/ouroboros/2026-03-24-steam-release/`, `docs/ouroboros/2026-03-24-3d-modeling/`
+
 ## 주요 시스템
 
 - **Locale**: 다국어 (한글/영문), 타이틀 화면에서 전환
@@ -66,3 +80,5 @@ M7 폴리시까지 전체 구현 완료. 7-마일스톤 로드맵 (M1-M7) 완결
 - **EventManager**: 전투/선택 이벤트 시스템
 - **GameFeel**: 화면 흔들림, 히트스톱, 게임 속도 관리
 - **ObjectPool**: 발사체/이펙트 재사용 풀
+- **AudioManager**: BGM 크로스페이드 + SFX 풀링(8개) + 볼륨 제어
+- **SpatialGrid**: 공간 분할 그리드 (4x4셀, 16x16), O(N) 근접 탐색
