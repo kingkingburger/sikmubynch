@@ -16,6 +16,7 @@ var _hp_bar_bg: MeshInstance3D
 var _hp_bar_fill: MeshInstance3D
 var _damage_flash: float = 0.0
 var _damage_mat: StandardMaterial3D
+var _destroyed: bool = false
 
 func _ready() -> void:
 	if data:
@@ -25,7 +26,12 @@ func _ready() -> void:
 func get_effective_max_hp() -> float:
 	if not data:
 		return 100.0
-	return data.max_hp * (1.0 + LEVEL_BONUS * (level - 1))
+	var base := data.max_hp * (1.0 + LEVEL_BONUS * (level - 1))
+	# Fortify synergy HP bonus
+	var fortify_effects := SynergyManager.get_special_effects(TraitData.TraitType.FORTIFY)
+	if fortify_effects.has("hp_bonus"):
+		base *= (1.0 + fortify_effects["hp_bonus"])
+	return base
 
 func get_effective_dps() -> float:
 	if not data:
@@ -96,6 +102,10 @@ func _process(delta: float) -> void:
 		if _damage_flash < 0.0:
 			_damage_flash = 0.0
 		_update_material()
+	# Fortify synergy: regen
+	var fortify_effects := SynergyManager.get_special_effects(TraitData.TraitType.FORTIFY)
+	if fortify_effects.has("regen") and not _destroyed:
+		current_hp = minf(current_hp + fortify_effects["regen"] * delta, get_effective_max_hp())
 	_update_hp_bar()
 
 func _get_base_color() -> Color:
@@ -140,14 +150,24 @@ func _update_hp_bar() -> void:
 		else:
 			fill_mat.albedo_color = Color(0.9, 0.2, 0.15)
 
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, attacker: Node3D = null) -> void:
+	if _destroyed:
+		return
 	current_hp -= amount
 	_damage_flash = 1.0
 	_update_material()
+	# Thorns: reflect damage to attacker
+	var fortify_effects := SynergyManager.get_special_effects(TraitData.TraitType.FORTIFY)
+	if fortify_effects.has("thorns") and attacker and is_instance_valid(attacker):
+		if attacker.has_method("take_damage"):
+			attacker.take_damage(amount * 0.3)
 	if current_hp <= 0.0:
 		die()
 
 func die() -> void:
+	if _destroyed:
+		return
+	_destroyed = true
 	destroyed.emit()
 	queue_free()
 
