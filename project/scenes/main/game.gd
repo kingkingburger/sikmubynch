@@ -34,13 +34,13 @@ var _hq: BaseBuilding
 
 # UI
 var _canvas: CanvasLayer
-var _top_bar_label: Label
+var _mineral_label: Label
+var _wave_info_label: Label
+var _hp_label: Label
 var _hotbar_label: Label
 var _game_over_panel: PanelContainer
 var _result_label: Label
 var _slot_buttons: Array = []
-var _hp_orb_val: Label
-var _mineral_orb_val: Label
 
 # Reward card UI
 var _card_panel: PanelContainer
@@ -395,89 +395,131 @@ func _setup_ui() -> void:
 	_canvas = CanvasLayer.new()
 	add_child(_canvas)
 
-	# --- Top bar ---
-	var top_panel := PanelContainer.new()
-	top_panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top_panel.custom_minimum_size = Vector2(0, 48)
-	top_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.04, 0.04, 0.07, 0.92), Color(0.55, 0.45, 0.18), 2))
-	_canvas.add_child(top_panel)
+	# --- Top center: Mineral (big, prominent) ---
+	_mineral_label = Label.new()
+	_mineral_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	_mineral_label.offset_top = 6.0
+	_mineral_label.offset_left = -80.0
+	_mineral_label.offset_right = 80.0
+	_mineral_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_mineral_label.add_theme_font_size_override("font_size", 26)
+	_mineral_label.add_theme_color_override("font_color", Color(0.4, 0.95, 0.95))
+	_canvas.add_child(_mineral_label)
 
-	_top_bar_label = Label.new()
-	_top_bar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_top_bar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_top_bar_label.add_theme_font_size_override("font_size", 20)
-	_top_bar_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
-	top_panel.add_child(_top_bar_label)
+	# --- Top right: Wave / Kills / Time ---
+	var tr_panel := PanelContainer.new()
+	tr_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	tr_panel.offset_left = -220.0
+	tr_panel.offset_top = 6.0
+	tr_panel.offset_right = -8.0
+	tr_panel.add_theme_stylebox_override("panel", _create_panel_style(
+		Color(0.06, 0.06, 0.08, 0.85), Color(0.3, 0.25, 0.15, 0.4), 1))
+	_canvas.add_child(tr_panel)
+	_wave_info_label = Label.new()
+	_wave_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_wave_info_label.add_theme_font_size_override("font_size", 13)
+	_wave_info_label.add_theme_color_override("font_color", Color(0.85, 0.78, 0.5))
+	tr_panel.add_child(_wave_info_label)
 
-	# --- Bottom bar (Diablo-style: HP orb + build slots + mineral orb) ---
-	var bottom_panel := PanelContainer.new()
-	bottom_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom_panel.custom_minimum_size = Vector2(0, 110)
-	bottom_panel.offset_top = -110.0
-	bottom_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.03, 0.025, 0.02, 0.97), Color(0.45, 0.35, 0.18, 0.5), 2))
-	_canvas.add_child(bottom_panel)
+	# --- Bottom panel (StarCraft style: portrait | build | minimap) ---
+	var bottom := PanelContainer.new()
+	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	bottom.custom_minimum_size = Vector2(0, 150)
+	bottom.offset_top = -150.0
+	bottom.add_theme_stylebox_override("panel", _create_panel_style(
+		Color(0.08, 0.07, 0.06, 0.97), Color(0.35, 0.28, 0.15, 0.6), 2))
+	_canvas.add_child(bottom)
 
-	var hbox := HBoxContainer.new()
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_theme_constant_override("separation", 14)
-	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bottom_panel.add_child(hbox)
+	var grid := HBoxContainer.new()
+	grid.set_anchors_preset(Control.PRESET_FULL_RECT)
+	grid.add_theme_constant_override("separation", 0)
+	bottom.add_child(grid)
 
-	# --- HP Orb (left) ---
-	var hp_orb := _create_orb(Color(0.08, 0.27, 0.63), Color(0.05, 0.17, 0.45), Color(0.22, 0.37, 0.56))
-	hbox.add_child(hp_orb)
-	var hp_vbox: VBoxContainer = hp_orb.get_child(0)
-	var hp_label: Label = hp_vbox.get_child(0)
-	hp_label.text = Locale.t("hp")
-	hp_label.add_theme_color_override("font_color", Color(0.56, 0.79, 0.98))
-	_hp_orb_val = hp_vbox.get_child(1)
-	_hp_orb_val.add_theme_color_override("font_color", Color(0.89, 0.95, 0.99))
+	# --- Left: Portrait area ---
+	var portrait := PanelContainer.new()
+	portrait.custom_minimum_size = Vector2(160, 0)
+	portrait.add_theme_stylebox_override("panel", _create_panel_style(
+		Color(0.05, 0.04, 0.03, 0.9), Color(0.3, 0.25, 0.15, 0.4), 1))
+	grid.add_child(portrait)
+	var port_vbox := VBoxContainer.new()
+	port_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	portrait.add_child(port_vbox)
+	var port_title := Label.new()
+	port_title.text = "SELECTED"
+	port_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	port_title.add_theme_font_size_override("font_size", 9)
+	port_title.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35))
+	port_vbox.add_child(port_title)
+	_hp_label = Label.new()
+	_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hp_label.add_theme_font_size_override("font_size", 18)
+	_hp_label.add_theme_color_override("font_color", Color(0.5, 0.75, 1.0))
+	port_vbox.add_child(_hp_label)
+	var hp_sub := Label.new()
+	hp_sub.text = "HQ HP"
+	hp_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hp_sub.add_theme_font_size_override("font_size", 10)
+	hp_sub.add_theme_color_override("font_color", Color(0.4, 0.5, 0.65))
+	port_vbox.add_child(hp_sub)
 
-	# --- Build slots (center) ---
+	# --- Center: Build slots ---
+	var center := VBoxContainer.new()
+	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center.add_theme_constant_override("separation", 4)
+	grid.add_child(center)
+
+	# Wave info bar
+	var wave_bar := HBoxContainer.new()
+	wave_bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	center.add_child(wave_bar)
+
+	# Build buttons
 	var build_hbox := HBoxContainer.new()
 	build_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	build_hbox.add_theme_constant_override("separation", 5)
-	hbox.add_child(build_hbox)
+	build_hbox.add_theme_constant_override("separation", 3)
+	center.add_child(build_hbox)
 
 	for i in _building_datas.size():
 		var bd := _building_datas[i] as BuildingData
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(82, 82)
+		btn.custom_minimum_size = Vector2(60, 68)
 		var localized_name := Locale.get_building_name(bd.building_name)
-		btn.text = "[%d]\n%s\n$%d" % [i + 1, localized_name.substr(0, 5).to_upper(), bd.cost]
-		btn.add_theme_font_size_override("font_size", 11)
-		btn.add_theme_color_override("font_color", Color(0.92, 0.82, 0.38))
-		var normal_style := _create_panel_style(
-			Color(0.12, 0.1, 0.07, 0.75), Color(0.4, 0.3, 0.18, 0.5), 2)
-		normal_style.corner_radius_top_left = 6
-		normal_style.corner_radius_top_right = 6
-		normal_style.corner_radius_bottom_left = 6
-		normal_style.corner_radius_bottom_right = 6
-		btn.add_theme_stylebox_override("normal", normal_style)
-		var hover_style := _create_panel_style(
-			Color(0.22, 0.18, 0.1, 0.8), Color(1.0, 0.84, 0.2), 2)
-		hover_style.corner_radius_top_left = 6
-		hover_style.corner_radius_top_right = 6
-		hover_style.corner_radius_bottom_left = 6
-		hover_style.corner_radius_bottom_right = 6
-		btn.add_theme_stylebox_override("hover", hover_style)
-		btn.add_theme_stylebox_override("pressed", hover_style)
-		btn.add_theme_stylebox_override("focus", normal_style)
+		btn.text = "%d\n%s\n$%d" % [i + 1, localized_name.substr(0, 4).to_upper(), bd.cost]
+		btn.add_theme_font_size_override("font_size", 9)
+		btn.add_theme_color_override("font_color", Color(0.88, 0.78, 0.4))
+		var ns := _create_panel_style(
+			Color(0.1, 0.09, 0.07, 0.85), Color(0.3, 0.25, 0.15, 0.5), 2)
+		ns.corner_radius_top_left = 4
+		ns.corner_radius_top_right = 4
+		ns.corner_radius_bottom_left = 4
+		ns.corner_radius_bottom_right = 4
+		btn.add_theme_stylebox_override("normal", ns)
+		var hs := _create_panel_style(
+			Color(0.18, 0.15, 0.08, 0.9), Color(0.9, 0.75, 0.25), 2)
+		hs.corner_radius_top_left = 4
+		hs.corner_radius_top_right = 4
+		hs.corner_radius_bottom_left = 4
+		hs.corner_radius_bottom_right = 4
+		btn.add_theme_stylebox_override("hover", hs)
+		btn.add_theme_stylebox_override("pressed", hs)
+		btn.add_theme_stylebox_override("focus", ns)
 		btn.pressed.connect(_on_slot_pressed.bind(i))
 		build_hbox.add_child(btn)
 		_slot_buttons.append(btn)
 
-	# --- Mineral Orb (right) ---
-	var min_orb := _create_orb(Color(0.0, 0.32, 0.35), Color(0.0, 0.24, 0.25), Color(0.0, 0.42, 0.47))
-	hbox.add_child(min_orb)
-	var min_vbox: VBoxContainer = min_orb.get_child(0)
-	var min_label: Label = min_vbox.get_child(0)
-	min_label.text = Locale.t("mineral")
-	min_label.add_theme_color_override("font_color", Color(0.5, 0.87, 0.92))
-	_mineral_orb_val = min_vbox.get_child(1)
-	_mineral_orb_val.add_theme_color_override("font_color", Color(0.88, 0.97, 0.98))
+	# --- Right: Minimap placeholder ---
+	var minimap_panel := PanelContainer.new()
+	minimap_panel.custom_minimum_size = Vector2(170, 0)
+	minimap_panel.add_theme_stylebox_override("panel", _create_panel_style(
+		Color(0.04, 0.05, 0.03, 0.9), Color(0.3, 0.25, 0.15, 0.4), 1))
+	grid.add_child(minimap_panel)
+	var mm_label := Label.new()
+	mm_label.text = "MINIMAP\n256x256"
+	mm_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	mm_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	mm_label.add_theme_font_size_override("font_size", 11)
+	mm_label.add_theme_color_override("font_color", Color(0.4, 0.45, 0.35))
+	minimap_panel.add_child(mm_label)
 
 	_hotbar_label = Label.new()
 	_hotbar_label.visible = false
@@ -612,14 +654,14 @@ func _setup_synergy_bar() -> void:
 	var syn_panel := PanelContainer.new()
 	syn_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	syn_panel.offset_left = 6.0
-	syn_panel.offset_top = 54.0
-	syn_panel.custom_minimum_size = Vector2(170, 0)
+	syn_panel.offset_top = 40.0
+	syn_panel.custom_minimum_size = Vector2(140, 0)
 	syn_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.03, 0.03, 0.05, 0.8), Color(0.4, 0.35, 0.2, 0.4), 1))
+		Color(0.04, 0.04, 0.05, 0.7), Color(0.25, 0.22, 0.15, 0.3), 1))
 	_canvas.add_child(syn_panel)
 	_synergy_label = Label.new()
-	_synergy_label.add_theme_font_size_override("font_size", 13)
-	_synergy_label.add_theme_color_override("font_color", Color(0.9, 0.82, 0.55))
+	_synergy_label.add_theme_font_size_override("font_size", 11)
+	_synergy_label.add_theme_color_override("font_color", Color(0.85, 0.78, 0.5))
 	syn_panel.add_child(_synergy_label)
 	_update_synergy_bar()
 
@@ -1288,19 +1330,18 @@ func _on_slot_pressed(slot_index: int) -> void:
 	_update_slot_highlight()
 
 func _update_hud() -> void:
-	if _top_bar_label:
-		var wave_text := ""
+	if _mineral_label:
+		_mineral_label.text = "$%d" % GameManager.minerals
+	if _wave_info_label:
+		var next := ""
 		if _between_waves:
-			wave_text = "  |  " + Locale.t_fmt("next_wave", [int(ceil(_wave_countdown))])
-		var pause_text := "  ||  " + Locale.t("paused") if GameFeel.paused else ""
-		_top_bar_label.text = Locale.t_fmt("hud_format", [
-			GameManager.wave_number, GameManager.kill_count, enemies_alive
-		]) + wave_text + pause_text
-	if _hp_orb_val and _hq:
+			next = "  |  Next: %ds" % int(ceil(_wave_countdown))
+		var pause := "  ||" if GameFeel.paused else ""
+		_wave_info_label.text = "W%d  K:%d  E:%d%s%s" % [
+			GameManager.wave_number, GameManager.kill_count, enemies_alive, next, pause]
+	if _hp_label and _hq:
 		var hp := int(_hq.current_hp) if is_instance_valid(_hq) else 0
-		_hp_orb_val.text = "%d" % hp
-	if _mineral_orb_val:
-		_mineral_orb_val.text = "%d" % GameManager.minerals
+		_hp_label.text = "%d" % hp
 
 func _on_game_over() -> void:
 	AudioManager.stop_bgm()
