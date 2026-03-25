@@ -3,7 +3,7 @@ extends Node3D
 const RewardCard := preload("res://scripts/data/reward_card.gd")
 const TraitData := preload("res://scripts/data/trait_data.gd")
 
-const MAP_SIZE := 64
+const MAP_SIZE := 256
 const WAVE_INTERVAL := 10.0
 
 # Scenes
@@ -63,11 +63,11 @@ var _awaiting_card: bool = false
 var _awaiting_choice: bool = false
 
 # Camera control
-var _cam_center := Vector2(32.0, 32.0)
+var _cam_center := Vector2(128.0, 128.0)
 var _cam_zoom: float = 35.0
 const CAM_SPEED := 25.0
 const CAM_ZOOM_MIN := 18.0
-const CAM_ZOOM_MAX := 70.0
+const CAM_ZOOM_MAX := 120.0
 const CAM_DIST := 50.0
 
 # Drag build
@@ -269,7 +269,7 @@ uniform vec3 ground_dark : source_color = vec3(0.06, 0.07, 0.05);
 uniform vec3 ground_mid : source_color = vec3(0.10, 0.11, 0.08);
 uniform vec3 grid_color : source_color = vec3(0.14, 0.16, 0.10);
 uniform vec3 chunk_color : source_color = vec3(0.18, 0.14, 0.08);
-uniform float map_size = 64.0;
+uniform float map_size = 256.0;
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -347,13 +347,13 @@ func _add_border() -> void:
 func _setup_hq() -> void:
 	var hq_scene := load("res://scenes/buildings/hq.tscn") as PackedScene
 	_hq = hq_scene.instantiate() as BaseBuilding
-	_hq.position = Vector3(32.5, 0.0, 32.5)
+	_hq.position = Vector3(128.5, 0.0, 128.5)
 	_hq.add_to_group("buildings")
 	add_child(_hq)
 
 	for dx in 3:
 		for dz in 3:
-			var cell := Vector2i(31 + dx, 31 + dz)
+			var cell := Vector2i(127 + dx, 127 + dz)
 			building_grid[cell] = _hq
 
 func _setup_ghost() -> void:
@@ -918,7 +918,7 @@ func _spawn_wave() -> void:
 	var enemy_count := int(base_count * count_multiplier * EventManager.get_challenge_enemy_mult())
 
 	var templates := _create_enemy_templates(wave_num)
-	var hq_pos := Vector3(32.5, 0.0, 32.5)
+	var hq_pos := Vector3(128.5, 0.0, 128.5)
 	var field := FlowField.get_field()
 
 	# Queue enemies for gradual spawning instead of all at once
@@ -1241,18 +1241,18 @@ func _on_enemy_drop_mineral(pos: Vector3, amount: int) -> void:
 	var orb: Node3D = mineral_orb_scene.instantiate()
 	orb.position = pos + Vector3(0.0, 0.3, 0.0)
 	orb.set("amount", amount)
-	orb.set("target_position", Vector3(32.5, 0.5, 32.5))
+	orb.set("target_position", Vector3(128.5, 0.5, 128.5))
 	add_child(orb)
 
 func _on_minerals_changed(_amount: int) -> void:
 	_update_hud()
 
 func _recalculate_flow_field() -> void:
-	# HQ occupies 3x3 at (31,31)-(33,33), use center cells as targets
+	# HQ occupies 3x3 at (127,127)-(129,129), use center cells as targets
 	var targets: Array = []
 	for dx in 3:
 		for dz in 3:
-			targets.append(Vector2i(31 + dx, 31 + dz))
+			targets.append(Vector2i(127 + dx, 127 + dz))
 	FlowField.recalculate(targets)
 	# Update existing enemies with new field
 	var field := FlowField.get_field()

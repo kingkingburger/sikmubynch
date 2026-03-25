@@ -1,11 +1,11 @@
 extends Node
 
 ## 공간 분할 그리드 — O(N²) → O(N) 근접 탐색
-## 64x64 맵을 CELL_SIZE 단위 셀로 분할. 엔티티는 자기 셀에 등록.
+## 256x256 맵을 CELL_SIZE 단위 셀로 분할. 엔티티는 자기 셀에 등록.
 ## 근접 탐색 시 인접 셀만 검색하여 O(N*k) (k = 셀 내 평균 엔티티 수)
 
-const CELL_SIZE := 4.0  # 4x4 단위 셀 → 16x16 그리드
-const GRID_W := 16      # 64 / 4
+const CELL_SIZE := 8.0  # 8x8 단위 셀 → 32x32 그리드
+const GRID_W := 32      # 256 / 8
 
 # 그룹별 그리드: { "enemies": { Vector2i: [node, ...] }, "units": { ... } }
 var _grids: Dictionary = {}

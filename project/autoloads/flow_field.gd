@@ -1,6 +1,6 @@
 extends Node
 
-const MAP_SIZE := 64
+const MAP_SIZE := 256
 const DIRECTIONS := [
 	Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
 	Vector2i(1, 1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(-1, -1)

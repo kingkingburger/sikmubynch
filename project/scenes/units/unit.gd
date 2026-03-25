@@ -519,8 +519,8 @@ func _random_patrol_point() -> Vector3:
 		randf_range(-PATROL_RADIUS, PATROL_RADIUS)
 	)
 	var point := spawn_origin + offset
-	point.x = clampf(point.x, 1.0, 63.0)
-	point.z = clampf(point.z, 1.0, 63.0)
+	point.x = clampf(point.x, 1.0, 255.0)
+	point.z = clampf(point.z, 1.0, 255.0)
 	point.y = 0.0
 	return point
 
