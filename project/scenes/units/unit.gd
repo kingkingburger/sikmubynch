@@ -114,8 +114,8 @@ func _build_mesh() -> void:
 	_body_mat.albedo_color = c
 	_body_mat.roughness = 0.4
 	_body_mat.emission_enabled = true
-	_body_mat.emission = c * 0.4
-	_body_mat.emission_energy_multiplier = 1.5
+	_body_mat.emission = Color(0.2, 0.4, 1.0) * 0.8
+	_body_mat.emission_energy_multiplier = 3.0
 	_body_mat.rim_enabled = true
 	_body_mat.rim = 0.45
 	_body_mat.rim_tint = 0.25

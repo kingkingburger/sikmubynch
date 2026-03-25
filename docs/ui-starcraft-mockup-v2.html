@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>SIKMUBYNCH - UI Mockup v2</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #111; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; }
+
+.game-area {
+  width: 100%; height: calc(100vh - 170px);
+  background: linear-gradient(135deg, #0a0f05 0%, #0d1208 50%, #080d04 100%);
+  position: relative;
+}
+.game-area::before {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(90deg, transparent, transparent 59px, #1a2010 59px, #1a2010 60px),
+              repeating-linear-gradient(0deg, transparent, transparent 59px, #1a2010 59px, #1a2010 60px);
+  opacity: 0.12;
+}
+
+/* Top right: Resources */
+.top-right {
+  position: absolute; top: 8px; right: 12px; z-index: 10;
+  display: flex; gap: 16px;
+  background: linear-gradient(180deg, #1a1a22ee, #12121aee);
+  border: 1px solid #3a3530; border-radius: 6px;
+  padding: 6px 16px;
+}
+.res { display: flex; align-items: center; gap: 5px; }
+.res .dot { width: 10px; height: 10px; border-radius: 3px; }
+.res .v { color: #e8d5a0; font-size: 14px; font-weight: bold; }
+.res .l { color: #7a6d50; font-size: 9px; }
+.d-min { background: #22aaaa; }
+.d-wave { background: #cc8833; }
+.d-kill { background: #cc3333; }
+.d-time { background: #8888cc; }
+
+/* Left side: Synergy */
+.synergy-panel {
+  position: absolute; left: 8px; top: 50px; z-index: 10;
+  background: linear-gradient(180deg, #14131166, #0e0d0b88);
+  border: 1px solid #2a252066;
+  border-radius: 6px;
+  padding: 8px 10px;
+  min-width: 130px;
+}
+.syn-title { color: #5a5040; font-size: 8px; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; border-bottom: 1px solid #2a252044; padding-bottom: 4px; }
+.syn-row { display: flex; align-items: center; gap: 5px; padding: 2px 0; }
+.syn-icon { width: 14px; height: 14px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: bold; color: #fff; }
+.s-fire { background: #aa2211; }
+.s-ice { background: #2266aa; }
+.s-poison { background: #22aa33; }
+.s-elec { background: #aaaa22; }
+.s-fort { background: #666677; }
+.syn-name { color: #a09070; font-size: 10px; flex: 1; }
+.syn-cnt { color: #c9a84c; font-size: 10px; font-weight: bold; }
+.syn-tier { color: #ffcc44; font-size: 8px; }
+
+/* Bottom panel */
+.bottom-panel {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 170px;
+  background: linear-gradient(180deg, #1c1a18, #0f0e0c);
+  border-top: 2px solid #3a3530;
+  display: grid;
+  grid-template-columns: 200px 1fr 200px;
+}
+
+/* Bottom left: Portrait / concept art */
+.portrait-section {
+  border-right: 2px solid #2a2520;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden;
+}
+.portrait-frame {
+  width: 160px; height: 140px;
+  background: linear-gradient(135deg, #0d0c0a, #1a1815);
+  border: 2px solid #3a3530;
+  border-radius: 4px;
+  position: relative; overflow: hidden;
+}
+.portrait-frame::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at 50% 60%, #1a2a4422, transparent 70%);
+}
+/* Animated soldier silhouette */
+.portrait-char {
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+}
+.p-body { width: 30px; height: 50px; background: linear-gradient(180deg, #3a4a6a, #2a3555); border-radius: 4px 4px 2px 2px; position: relative; animation: breathe 2s ease-in-out infinite; }
+.p-head { position: absolute; top: -16px; left: 50%; transform: translateX(-50%); width: 20px; height: 20px; border-radius: 50%; background: radial-gradient(#ccaa88, #997755); }
+.p-helmet { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); width: 24px; height: 14px; border-radius: 12px 12px 2px 2px; background: #3a4050; }
+.p-sword { position: absolute; top: -5px; right: -12px; width: 4px; height: 40px; background: linear-gradient(#ccccdd, #888899); transform: rotate(-10deg); border-radius: 1px; }
+.p-shield { position: absolute; top: 5px; left: -10px; width: 18px; height: 24px; background: linear-gradient(135deg, #5a4a2a, #3a3020); border-radius: 3px; border: 1px solid #6a5a3a; }
+.p-shield::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 6px; height: 6px; border-radius: 50%; background: #8a7a4a; }
+@keyframes breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+.portrait-name { position: absolute; bottom: 4px; left: 0; right: 0; text-align: center; color: #c9a84c; font-size: 10px; font-weight: bold; text-shadow: 0 1px 3px #000; }
+.portrait-label { position: absolute; top: 4px; left: 6px; color: #5a5040; font-size: 7px; text-transform: uppercase; letter-spacing: 1px; }
+
+/* Center: Build panel */
+.center-section {
+  padding: 6px 12px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.wave-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 10px;
+  background: #12110f;
+  border: 1px solid #2a2520;
+  border-radius: 3px;
+}
+.wave-bar .wi { color: #c9a84c; font-size: 13px; font-weight: bold; }
+.wave-bar .ti { color: #88ccaa; font-size: 11px; }
+.wave-bar .sp { color: #999; font-size: 10px; }
+.build-grid {
+  display: flex; gap: 3px; justify-content: center;
+}
+.b-btn {
+  width: 60px; height: 70px;
+  background: linear-gradient(180deg, #1a1815, #0e0d0b);
+  border: 2px solid #2a2520;
+  border-radius: 3px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  cursor: pointer; position: relative;
+  transition: all 0.1s;
+}
+.b-btn:hover { border-color: #c9a84c; background: linear-gradient(180deg, #2a2518, #1a1810); }
+.b-btn.sel { border-color: #ddb84c; box-shadow: 0 0 6px #c9a84c33; }
+.b-btn .hk { position: absolute; top: 1px; left: 3px; color: #c9a84c; font-size: 8px; }
+.b-btn .ic { width: 24px; height: 24px; border-radius: 3px; margin-bottom: 2px; }
+.b-btn .nm { color: #908070; font-size: 7px; text-transform: uppercase; }
+.b-btn .cs { color: #55cccc; font-size: 9px; font-weight: bold; }
+.i1 { background: linear-gradient(135deg, #555544, #333322); }
+.i2 { background: linear-gradient(135deg, #4466aa, #2a3a66); }
+.i3 { background: linear-gradient(135deg, #885533, #553322); }
+.i4 { background: linear-gradient(135deg, #228888, #115555); }
+.i5 { background: linear-gradient(135deg, #aa8833, #665522); }
+.i6 { background: linear-gradient(135deg, #cc4422, #882211); }
+.i7 { background: linear-gradient(135deg, #6666aa, #333366); }
+.i8 { background: linear-gradient(135deg, #3388cc, #225588); }
+
+/* HQ status below build */
+.hq-bar {
+  display: flex; gap: 12px; align-items: center;
+  padding: 3px 10px;
+  background: #12110f;
+  border: 1px solid #2a2520;
+  border-radius: 3px;
+}
+.hq-hp-wrap { flex: 1; }
+.hq-hp-label { color: #5a7aaa; font-size: 8px; }
+.hq-hp-bg { height: 10px; background: #1a1815; border: 1px solid #2a2520; border-radius: 2px; overflow: hidden; }
+.hq-hp-fill { height: 100%; width: 85%; background: linear-gradient(90deg, #2266cc, #3388dd); }
+.hq-hp-text { color: #7799cc; font-size: 9px; text-align: right; }
+
+/* Bottom right: Minimap */
+.minimap-section {
+  border-left: 2px solid #2a2520;
+  padding: 6px;
+  display: flex; flex-direction: column; align-items: center;
+}
+.minimap {
+  width: 170px; height: 136px;
+  background: #080b06;
+  border: 2px solid #3a3530;
+  border-radius: 2px;
+  position: relative; overflow: hidden;
+}
+.minimap::before {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(90deg, transparent, transparent 9px, #162010 9px, #162010 10px),
+              repeating-linear-gradient(0deg, transparent, transparent 9px, #162010 9px, #162010 10px);
+  opacity: 0.15;
+}
+.m-hq { position: absolute; width: 8px; height: 8px; background: #4477cc; box-shadow: 0 0 6px #4477cc; top: 48%; left: 48%; }
+.m-tw { position: absolute; width: 3px; height: 3px; background: #ccaa44; }
+.m-t1 { top: 43%; left: 40%; }
+.m-t2 { top: 52%; left: 55%; }
+.m-en { position: absolute; width: 2px; height: 2px; background: #ff3322; border-radius: 50%; }
+.m-e1 { top: 10%; right: 15%; }
+.m-e2 { top: 13%; right: 20%; }
+.m-e3 { top: 8%; right: 25%; }
+.m-e4 { top: 20%; right: 10%; }
+.m-e5 { top: 5%; left: 30%; }
+.m-vp { position: absolute; width: 25px; height: 18px; border: 1px solid #ffffff77; top: 40%; left: 40%; }
+.mm-lbl { color: #5a5040; font-size: 8px; margin-top: 3px; }
+</style>
+</head>
+<body>
+
+<div class="game-area">
+  <!-- Top right: Resources -->
+  <div class="top-right">
+    <div class="res"><div class="dot d-wave"></div><div><div class="v">Wave 3</div><div class="l">STORM</div></div></div>
+    <div class="res"><div class="dot d-min"></div><div><div class="v">245</div><div class="l">MINERAL</div></div></div>
+    <div class="res"><div class="dot d-kill"></div><div><div class="v">127</div><div class="l">KILLS</div></div></div>
+    <div class="res"><div class="dot d-time"></div><div><div class="v">4:32</div><div class="l">TIME</div></div></div>
+  </div>
+
+  <!-- Left: Synergy -->
+  <div class="synergy-panel">
+    <div class="syn-title">Synergy</div>
+    <div class="syn-row"><div class="syn-icon s-fire">F</div><div class="syn-name">Fire</div><div class="syn-cnt">x3</div><div class="syn-tier">T1</div></div>
+    <div class="syn-row"><div class="syn-icon s-ice">I</div><div class="syn-name">Ice</div><div class="syn-cnt">x2</div><div class="syn-tier">—</div></div>
+    <div class="syn-row"><div class="syn-icon s-fort">D</div><div class="syn-name">Fortify</div><div class="syn-cnt">x1</div><div class="syn-tier">—</div></div>
+  </div>
+</div>
+
+<!-- Bottom panel -->
+<div class="bottom-panel">
+  <!-- Left: Portrait -->
+  <div class="portrait-section">
+    <div class="portrait-frame">
+      <div class="portrait-label">SELECTED</div>
+      <div class="portrait-char">
+        <div class="p-body">
+          <div class="p-head"></div>
+          <div class="p-helmet"></div>
+          <div class="p-sword"></div>
+          <div class="p-shield"></div>
+        </div>
+      </div>
+      <div class="portrait-name">SOLDIER</div>
+    </div>
+  </div>
+
+  <!-- Center: Build + info -->
+  <div class="center-section">
+    <div class="wave-bar">
+      <span class="wi">WAVE 3 — Storm</span>
+      <span class="ti">Next: 12s</span>
+      <span class="sp">1.0x [F]</span>
+    </div>
+    <div class="build-grid">
+      <div class="b-btn sel"><span class="hk">1</span><div class="ic i1"></div><div class="nm">Wall</div><div class="cs">$10</div></div>
+      <div class="b-btn"><span class="hk">2</span><div class="ic i2"></div><div class="nm">Tower</div><div class="cs">$40</div></div>
+      <div class="b-btn"><span class="hk">3</span><div class="ic i3"></div><div class="nm">Barrack</div><div class="cs">$60</div></div>
+      <div class="b-btn"><span class="hk">4</span><div class="ic i4"></div><div class="nm">Miner</div><div class="cs">$50</div></div>
+      <div class="b-btn"><span class="hk">5</span><div class="ic i5"></div><div class="nm">Buff</div><div class="cs">$80</div></div>
+      <div class="b-btn"><span class="hk">6</span><div class="ic i6"></div><div class="nm">Flame</div><div class="cs">$70</div></div>
+      <div class="b-btn"><span class="hk">7</span><div class="ic i7"></div><div class="nm">Sniper</div><div class="cs">$90</div></div>
+      <div class="b-btn"><span class="hk">8</span><div class="ic i8"></div><div class="nm">Slow</div><div class="cs">$60</div></div>
+    </div>
+    <div class="hq-bar">
+      <div class="hq-hp-wrap">
+        <div class="hq-hp-label">HQ HP</div>
+        <div class="hq-hp-bg"><div class="hq-hp-fill"></div></div>
+      </div>
+      <div class="hq-hp-text">850/1000</div>
+    </div>
+  </div>
+
+  <!-- Right: Minimap -->
+  <div class="minimap-section">
+    <div class="minimap">
+      <div class="m-hq"></div>
+      <div class="m-tw m-t1"></div>
+      <div class="m-tw m-t2"></div>
+      <div class="m-en m-e1"></div>
+      <div class="m-en m-e2"></div>
+      <div class="m-en m-e3"></div>
+      <div class="m-en m-e4"></div>
+      <div class="m-en m-e5"></div>
+      <div class="m-vp"></div>
+    </div>
+    <div class="mm-lbl">256×256</div>
+  </div>
+</div>
+
+</body>
+</html>

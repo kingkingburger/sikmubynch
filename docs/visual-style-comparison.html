@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>SIKMUBYNCH - Visual Style Comparison</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0f; color: #ddd; font-family: 'Segoe UI', sans-serif; padding: 20px; }
+h1 { text-align: center; color: #c9a84c; margin-bottom: 30px; font-size: 28px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; max-width: 1200px; margin: 0 auto; }
+.card { border: 2px solid #333; border-radius: 12px; overflow: hidden; transition: border-color 0.3s; }
+.card:hover { border-color: #c9a84c; }
+.card h2 { padding: 12px 16px; font-size: 18px; }
+.card .desc { padding: 0 16px 12px; font-size: 13px; color: #999; }
+.scene { height: 320px; position: relative; overflow: hidden; }
+
+/* Style A: Matte Low-poly (Hades) */
+.style-a { background: linear-gradient(135deg, #1a1520 0%, #0d0a12 100%); }
+.style-a h2 { background: #2a1f35; color: #e8a0ff; }
+.style-a .ground { position: absolute; bottom: 0; width: 100%; height: 60%; background: linear-gradient(0deg, #1a1a22, #12121a); transform: perspective(400px) rotateX(45deg); transform-origin: bottom; }
+.style-a .ground::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent, transparent 49px, #252530 49px, #252530 50px), repeating-linear-gradient(0deg, transparent, transparent 49px, #252530 49px, #252530 50px); opacity: 0.3; }
+.style-a .unit { position: absolute; width: 28px; height: 42px; border-radius: 4px 4px 2px 2px; }
+.style-a .soldier { background: #3355aa; bottom: 45%; left: 30%; box-shadow: 0 0 8px #3355aa88; }
+.style-a .soldier::before { content: ''; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 16px; height: 16px; border-radius: 50%; background: #ddb88a; }
+.style-a .soldier::after { content: ''; position: absolute; top: -4px; right: -10px; width: 4px; height: 30px; background: linear-gradient(#aab, #667); transform: rotate(-15deg); border-radius: 1px; }
+.style-a .enemy { background: #aa3322; bottom: 35%; right: 25%; box-shadow: 0 0 12px #aa332288; border-radius: 2px; width: 24px; height: 30px; }
+.style-a .enemy::before { content: ''; position: absolute; top: -6px; left: 3px; width: 6px; height: 6px; border-radius: 50%; background: #ff4422; box-shadow: 12px 0 0 #ff4422, 0 0 6px #ff4422; }
+.style-a .hq { position: absolute; bottom: 48%; left: 50%; transform: translateX(-50%); width: 60px; height: 50px; background: #2a3555; border: 2px solid #4466aa; box-shadow: 0 0 30px #3355aa44, inset 0 0 15px #223366; }
+.style-a .hq::before { content: ''; position: absolute; top: -15px; left: 50%; transform: translateX(-50%); border-left: 35px solid transparent; border-right: 35px solid transparent; border-bottom: 15px solid #334466; }
+.style-a .tower { position: absolute; bottom: 46%; left: 38%; width: 22px; height: 35px; background: #3a3a44; border: 1px solid #555; }
+.style-a .tower::after { content: ''; position: absolute; top: -4px; left: 50%; transform: translateX(-50%); width: 8px; height: 8px; border-radius: 50%; background: #ffcc44; box-shadow: 0 0 12px #ffcc44; }
+.style-a .label { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #e8a0ff; background: #1a1520cc; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+
+/* Style B: Realistic Dark (Diablo 4) */
+.style-b { background: linear-gradient(135deg, #151210 0%, #0a0908 100%); }
+.style-b h2 { background: #2a2015; color: #d4a84c; }
+.style-b .ground { position: absolute; bottom: 0; width: 100%; height: 60%; background: linear-gradient(0deg, #1a1610, #0f0d0a); transform: perspective(400px) rotateX(45deg); transform-origin: bottom; }
+.style-b .ground::before { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 40%, #2a221a33 0%, transparent 60%); }
+.style-b .unit { position: absolute; }
+.style-b .soldier { bottom: 44%; left: 28%; width: 26px; height: 44px; background: linear-gradient(180deg, #445577, #2a3550, #1a2535); border-radius: 3px 3px 1px 1px; box-shadow: 0 2px 8px #00000088, 0 0 6px #33557744; }
+.style-b .soldier::before { content: ''; position: absolute; top: -10px; left: 50%; transform: translateX(-50%); width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(#ccaa88, #997755); }
+.style-b .soldier::after { content: ''; position: absolute; top: 2px; right: -8px; width: 3px; height: 32px; background: linear-gradient(#c8c8d0, #8888a0, #555568); box-shadow: 0 0 4px #aaaacc44; }
+.style-b .enemy { bottom: 36%; right: 22%; width: 30px; height: 36px; background: linear-gradient(180deg, #6a2218, #4a1510, #2a0a08); border-radius: 2px; box-shadow: 0 0 15px #aa220022; }
+.style-b .enemy::before { content: ''; position: absolute; top: 4px; left: 6px; width: 5px; height: 3px; border-radius: 50%; background: #ff3300; box-shadow: 12px 0 0 #ff3300, 0 0 8px #ff330088, 12px 0 8px #ff330088; }
+.style-b .hq { position: absolute; bottom: 47%; left: 48%; transform: translateX(-50%); width: 65px; height: 55px; background: linear-gradient(180deg, #2a3050, #1a2040, #101530); border: 1px solid #334466; box-shadow: 0 0 40px #2244aa22, 0 0 80px #2244aa11; }
+.style-b .hq::before { content: ''; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); border-left: 38px solid transparent; border-right: 38px solid transparent; border-bottom: 12px solid #223355; }
+.style-b .hq::after { content: ''; position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); width: 12px; height: 18px; background: #1a2a55; border: 1px solid #3355aa; box-shadow: inset 0 0 6px #4477cc; }
+.style-b .tower { position: absolute; bottom: 45%; left: 36%; width: 20px; height: 38px; background: linear-gradient(180deg, #3a3530, #2a2520, #1a1510); border: 1px solid #4a4035; }
+.style-b .tower::after { content: ''; position: absolute; top: -2px; left: 50%; transform: translateX(-50%); width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(#ffdd66, #cc9922); box-shadow: 0 0 15px #ffcc4488; }
+.style-b .fog { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 50%, transparent 30%, #0a090844 60%, #0a0908cc 100%); }
+.style-b .label { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #d4a84c; background: #151210cc; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+
+/* Style C: Pixel Art Dark (The Last Spell) */
+.style-c { background: #0f1018; image-rendering: pixelated; }
+.style-c h2 { background: #1a1525; color: #7ecfdf; }
+.style-c .ground { position: absolute; bottom: 0; width: 100%; height: 60%; background: #161820; transform: perspective(400px) rotateX(45deg); transform-origin: bottom; }
+.style-c .ground::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent, transparent 31px, #222830 31px, #222830 32px), repeating-linear-gradient(0deg, transparent, transparent 31px, #222830 31px, #222830 32px); }
+.style-c .unit { position: absolute; image-rendering: pixelated; }
+.style-c .soldier { bottom: 44%; left: 30%; width: 24px; height: 36px; background: #3366cc; box-shadow: 2px 2px 0 #1a3366, -1px 0 0 #4477dd; }
+.style-c .soldier::before { content: ''; position: absolute; top: -10px; left: 4px; width: 16px; height: 12px; background: #ddbb88; box-shadow: 2px 0 0 #bb9966; }
+.style-c .soldier::after { content: ''; position: absolute; top: 4px; right: -8px; width: 4px; height: 24px; background: #ccccdd; box-shadow: 1px 1px 0 #8888aa; }
+.style-c .enemy { bottom: 36%; right: 24%; width: 20px; height: 28px; background: #cc3322; box-shadow: 2px 2px 0 #881a11; }
+.style-c .enemy::before { content: ''; position: absolute; top: 3px; left: 3px; width: 4px; height: 4px; background: #ff6644; box-shadow: 8px 0 0 #ff6644; }
+.style-c .hq { position: absolute; bottom: 47%; left: 48%; transform: translateX(-50%); width: 56px; height: 48px; background: #2a3555; box-shadow: 3px 3px 0 #152040, -1px -1px 0 #3a4566; }
+.style-c .hq::before { content: ''; position: absolute; top: -10px; left: 2px; width: 52px; height: 12px; background: #334466; box-shadow: 2px 0 0 #223355; }
+.style-c .tower { position: absolute; bottom: 45%; left: 37%; width: 18px; height: 32px; background: #444450; box-shadow: 2px 2px 0 #222228; }
+.style-c .tower::after { content: ''; position: absolute; top: -2px; left: 5px; width: 8px; height: 8px; background: #ffcc33; box-shadow: 0 0 0 2px #cc9900; }
+.style-c .label { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #7ecfdf; background: #0f1018cc; padding: 2px 8px; border-radius: 2px; white-space: nowrap; font-family: monospace; }
+
+/* Style D: Toon Shading (Polytopia) */
+.style-d { background: linear-gradient(135deg, #151822 0%, #0c0e15 100%); }
+.style-d h2 { background: #1a2030; color: #66ccaa; }
+.style-d .ground { position: absolute; bottom: 0; width: 100%; height: 60%; background: #1a1e28; transform: perspective(400px) rotateX(45deg); transform-origin: bottom; }
+.style-d .ground::before { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent, transparent 39px, #252a35 39px, #252a35 40px), repeating-linear-gradient(0deg, transparent, transparent 39px, #252a35 39px, #252a35 40px); opacity: 0.5; }
+.style-d .unit { position: absolute; }
+.style-d .soldier { bottom: 44%; left: 30%; width: 22px; height: 38px; background: #4488cc; border: 2px solid #2266aa; border-radius: 6px 6px 3px 3px; }
+.style-d .soldier::before { content: ''; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); width: 16px; height: 16px; border-radius: 50%; background: #eeccaa; border: 2px solid #cc9977; }
+.style-d .soldier::after { content: ''; position: absolute; top: 0; right: -10px; width: 4px; height: 28px; background: #bbbbcc; border: 1px solid #8888aa; border-radius: 2px; }
+.style-d .enemy { bottom: 36%; right: 24%; width: 26px; height: 32px; background: #dd4433; border: 2px solid #aa2211; border-radius: 4px; }
+.style-d .enemy::before { content: ''; position: absolute; top: 5px; left: 4px; width: 6px; height: 6px; border-radius: 50%; background: #ffcc00; border: 1px solid #cc9900; box-shadow: 10px 0 0 #ffcc00; }
+.style-d .hq { position: absolute; bottom: 47%; left: 48%; transform: translateX(-50%); width: 58px; height: 48px; background: #3355aa; border: 3px solid #2244aa; border-radius: 6px; }
+.style-d .hq::before { content: ''; position: absolute; top: -14px; left: 50%; transform: translateX(-50%); border-left: 34px solid transparent; border-right: 34px solid transparent; border-bottom: 14px solid #4466bb; }
+.style-d .hq::after { content: ''; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); width: 14px; height: 16px; background: #224488; border: 2px solid #3366cc; border-radius: 2px 2px 0 0; }
+.style-d .tower { position: absolute; bottom: 45%; left: 37%; width: 20px; height: 34px; background: #555566; border: 2px solid #444455; border-radius: 4px; }
+.style-d .tower::after { content: ''; position: absolute; top: -3px; left: 50%; transform: translateX(-50%); width: 10px; height: 10px; border-radius: 50%; background: #ffdd44; border: 2px solid #ccaa22; }
+.style-d .label { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); font-size: 11px; color: #66ccaa; background: #151822cc; padding: 2px 8px; border-radius: 4px; white-space: nowrap; }
+
+.pros { padding: 12px 16px; font-size: 12px; color: #8c8; }
+.cons { padding: 0 16px 12px; font-size: 12px; color: #c88; }
+</style>
+</head>
+<body>
+<h1>SIKMUBYNCH — Visual Style Comparison</h1>
+<div class="grid">
+
+<div class="card">
+<h2>A. 매트 로우폴리 (Hades 스타일)</h2>
+<div class="desc">날카로운 면 처리, 무광택, 색면 대비 강한 스타일라이즈드</div>
+<div class="scene style-a">
+<div class="ground"></div>
+<div class="hq"></div>
+<div class="tower"></div>
+<div class="soldier unit"></div>
+<div class="enemy unit"></div>
+<div class="label">무광택 + 선명한 색상 대비</div>
+</div>
+<div class="pros">+ Godot에서 바로 가능, 단색 머티리얼만으로 멋있음</div>
+<div class="cons">- 텍스처 없이 밋밋할 수 있음</div>
+</div>
+
+<div class="card">
+<h2>B. 리얼리스틱 다크 (Diablo 4 스타일)</h2>
+<div class="desc">사실적 그라데이션, 안개 효과, 빛과 그림자 대비</div>
+<div class="scene style-b">
+<div class="ground"></div>
+<div class="hq"></div>
+<div class="tower"></div>
+<div class="soldier unit"></div>
+<div class="enemy unit"></div>
+<div class="fog"></div>
+<div class="label">PBR 질감 + 안개 + 드라마틱 조명</div>
+</div>
+<div class="pros">+ 가장 고급스러운 느낌, 분위기 최고</div>
+<div class="cons">- 텍스처가 있는 모델 필요 (AI 생성 또는 수동)</div>
+</div>
+
+<div class="card">
+<h2>C. 픽셀아트 다크 (The Last Spell)</h2>
+<div class="desc">고해상도 도트 아트 캐릭터, 3D 지형 위 2D 빌보드</div>
+<div class="scene style-c">
+<div class="ground"></div>
+<div class="hq"></div>
+<div class="tower"></div>
+<div class="soldier unit"></div>
+<div class="enemy unit"></div>
+<div class="label">픽셀아트 + 네온 발광 + 어두운 톤</div>
+</div>
+<div class="pros">+ AI 이미지 생성으로 고퀄 스프라이트 가능</div>
+<div class="cons">- 3D→2D 전환 작업 필요</div>
+</div>
+
+<div class="card">
+<h2>D. 톤 셰이딩 (Polytopia 스타일)</h2>
+<div class="desc">플랫 색상 + 셀 셰이딩(2-3단계 그림자), 깔끔한 윤곽</div>
+<div class="scene style-d">
+<div class="ground"></div>
+<div class="hq"></div>
+<div class="tower"></div>
+<div class="soldier unit"></div>
+<div class="enemy unit"></div>
+<div class="label">셀 셰이딩 + 두꺼운 윤곽선 + 깔끔</div>
+</div>
+<div class="pros">+ 현재 3D 유지, 커스텀 셰이더로 구현 가능</div>
+<div class="cons">- 다크 판타지 느낌 약할 수 있음</div>
+</div>
+
+</div>
+</body>
+</html>

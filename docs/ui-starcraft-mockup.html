@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>SIKMUBYNCH - StarCraft Style UI Mockup</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #111; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; }
+
+/* Game area */
+.game-area {
+  width: 100%; height: calc(100vh - 180px);
+  background: linear-gradient(135deg, #0a0f05 0%, #0d1208 50%, #080d04 100%);
+  position: relative;
+}
+.game-area::before {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(90deg, transparent, transparent 59px, #1a2010 59px, #1a2010 60px),
+              repeating-linear-gradient(0deg, transparent, transparent 59px, #1a2010 59px, #1a2010 60px);
+  opacity: 0.15;
+}
+/* Sample units on field */
+.field-unit { position: absolute; border-radius: 3px; }
+.field-hq { width: 50px; height: 45px; background: linear-gradient(180deg, #2a3555, #1a2540); border: 2px solid #4466aa; box-shadow: 0 0 25px #3355aa55; top: 35%; left: 45%; }
+.field-hq::after { content: 'HQ'; position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #7799dd; font-size: 10px; font-weight: bold; }
+.field-tower { width: 18px; height: 28px; background: #3a3a44; border: 1px solid #666; top: 30%; left: 38%; box-shadow: 0 0 10px #ffcc4433; }
+.field-tower::after { content: ''; position: absolute; top: -3px; left: 50%; transform: translateX(-50%); width: 6px; height: 6px; border-radius: 50%; background: #ffcc44; box-shadow: 0 0 8px #ffcc44; }
+.field-soldier { width: 12px; height: 18px; background: #3366cc; top: 38%; left: 42%; box-shadow: 0 0 6px #3366cc55; }
+.field-soldier2 { width: 12px; height: 18px; background: #3366cc; top: 40%; left: 40%; box-shadow: 0 0 6px #3366cc55; }
+.field-enemy1 { width: 10px; height: 14px; background: #cc3322; top: 20%; right: 30%; box-shadow: 0 0 8px #cc332244; }
+.field-enemy2 { width: 10px; height: 14px; background: #cc3322; top: 22%; right: 28%; box-shadow: 0 0 8px #cc332244; }
+.field-enemy3 { width: 14px; height: 18px; background: #aa2244; top: 18%; right: 25%; box-shadow: 0 0 10px #aa224444; }
+
+/* Top resource bar */
+.top-bar {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  background: linear-gradient(180deg, #1a1a22ee, #12121aee);
+  border: 1px solid #3a3530; border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 6px 24px; display: flex; gap: 28px; z-index: 10;
+}
+.resource { display: flex; align-items: center; gap: 6px; }
+.resource .icon { width: 18px; height: 18px; border-radius: 4px; }
+.resource .val { color: #e8d5a0; font-size: 15px; font-weight: bold; }
+.resource .lbl { color: #8a7d60; font-size: 10px; }
+.icon-mineral { background: linear-gradient(135deg, #22aaaa, #115555); }
+.icon-wave { background: linear-gradient(135deg, #cc8833, #885522); }
+.icon-kill { background: linear-gradient(135deg, #cc3333, #882222); }
+.icon-time { background: linear-gradient(135deg, #8888cc, #555588); }
+
+/* Bottom panel — StarCraft style */
+.bottom-panel {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 180px;
+  background: linear-gradient(180deg, #1c1a18, #0f0e0c);
+  border-top: 2px solid #3a3530;
+  display: grid;
+  grid-template-columns: 200px 1fr 220px;
+  gap: 0;
+}
+
+/* Left: Minimap */
+.minimap-section {
+  border-right: 2px solid #2a2520;
+  padding: 8px;
+  display: flex; flex-direction: column; align-items: center;
+}
+.minimap {
+  width: 160px; height: 130px;
+  background: #0a0d08;
+  border: 2px solid #3a3530;
+  border-radius: 2px;
+  position: relative; overflow: hidden;
+}
+.minimap::before {
+  content: ''; position: absolute; inset: 0;
+  background: repeating-linear-gradient(90deg, transparent, transparent 9px, #1a2010 9px, #1a2010 10px),
+              repeating-linear-gradient(0deg, transparent, transparent 9px, #1a2010 9px, #1a2010 10px);
+  opacity: 0.2;
+}
+.mm-hq { position: absolute; width: 8px; height: 8px; background: #4477cc; box-shadow: 0 0 6px #4477cc; top: 45%; left: 45%; }
+.mm-tower { position: absolute; width: 4px; height: 4px; background: #ccaa44; top: 40%; left: 38%; }
+.mm-enemies { position: absolute; width: 3px; height: 3px; background: #ff3322; border-radius: 50%; }
+.mm-e1 { top: 15%; right: 20%; }
+.mm-e2 { top: 18%; right: 25%; }
+.mm-e3 { top: 12%; right: 30%; }
+.mm-e4 { top: 25%; right: 15%; }
+.mm-viewport { position: absolute; width: 30px; height: 22px; border: 1px solid #ffffff88; top: 35%; left: 35%; }
+.minimap-label { color: #6a6050; font-size: 9px; margin-top: 4px; }
+
+/* Center: Build panel + info */
+.center-section {
+  padding: 8px 16px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.build-row {
+  display: flex; gap: 4px; justify-content: center;
+}
+.build-btn {
+  width: 64px; height: 64px;
+  background: linear-gradient(180deg, #1a1815, #0e0d0b);
+  border: 2px solid #2a2520;
+  border-radius: 4px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s;
+  position: relative;
+}
+.build-btn:hover {
+  border-color: #c9a84c;
+  background: linear-gradient(180deg, #2a2518, #1a1810);
+}
+.build-btn.selected {
+  border-color: #ddb84c;
+  background: linear-gradient(180deg, #2a2215, #1a1810);
+  box-shadow: 0 0 8px #c9a84c44;
+}
+.build-btn .hotkey {
+  position: absolute; top: 2px; left: 4px;
+  color: #c9a84c; font-size: 9px; font-weight: bold;
+}
+.build-btn .icon-slot {
+  width: 28px; height: 28px; border-radius: 3px; margin-bottom: 2px;
+}
+.build-btn .name { color: #a09080; font-size: 8px; text-transform: uppercase; }
+.build-btn .cost { color: #55cccc; font-size: 9px; font-weight: bold; }
+.icon-barricade { background: linear-gradient(135deg, #555544, #333322); }
+.icon-tower { background: linear-gradient(135deg, #4466aa, #2a3a66); }
+.icon-barracks { background: linear-gradient(135deg, #885533, #553322); }
+.icon-miner { background: linear-gradient(135deg, #228888, #115555); }
+.icon-buff { background: linear-gradient(135deg, #aa8833, #665522); }
+.icon-flame { background: linear-gradient(135deg, #cc4422, #882211); }
+.icon-sniper { background: linear-gradient(135deg, #6666aa, #333366); }
+.icon-slow { background: linear-gradient(135deg, #3388cc, #225588); }
+
+.info-bar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 8px;
+  background: #12110f;
+  border: 1px solid #2a2520;
+  border-radius: 3px;
+}
+.info-bar .wave-info { color: #c9a84c; font-size: 13px; }
+.info-bar .timer { color: #88ccaa; font-size: 12px; }
+.info-bar .speed { color: #aaa; font-size: 11px; }
+
+/* Right: Synergy + Selected info */
+.right-section {
+  border-left: 2px solid #2a2520;
+  padding: 8px 10px;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.section-title {
+  color: #6a6050; font-size: 9px; text-transform: uppercase;
+  letter-spacing: 1px; border-bottom: 1px solid #2a2520;
+  padding-bottom: 3px; margin-bottom: 2px;
+}
+.synergy-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 2px 0;
+}
+.synergy-icon {
+  width: 16px; height: 16px; border-radius: 3px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight: bold; color: #fff;
+}
+.syn-fire { background: #aa2211; }
+.syn-ice { background: #2266aa; }
+.syn-poison { background: #22aa33; }
+.syn-electric { background: #aaaa22; }
+.syn-fortify { background: #666677; }
+.synergy-name { color: #b0a080; font-size: 11px; flex: 1; }
+.synergy-count { color: #c9a84c; font-size: 11px; font-weight: bold; }
+.synergy-tier { color: #ffcc44; font-size: 9px; }
+
+.hp-section { margin-top: auto; }
+.hp-label { color: #6a6050; font-size: 10px; margin-bottom: 2px; }
+.hp-bar-bg {
+  width: 100%; height: 14px;
+  background: #1a1815; border: 1px solid #2a2520; border-radius: 2px;
+  overflow: hidden;
+}
+.hp-bar-fill {
+  height: 100%; width: 85%;
+  background: linear-gradient(90deg, #2266cc, #3388dd);
+  border-radius: 1px;
+}
+.hp-text { color: #88aadd; font-size: 11px; text-align: center; margin-top: 2px; }
+
+.mineral-section { margin-top: 6px; }
+.mineral-bar-fill {
+  height: 100%; width: 60%;
+  background: linear-gradient(90deg, #22aaaa, #33cccc);
+}
+.mineral-text { color: #88cccc; font-size: 11px; text-align: center; margin-top: 2px; }
+
+/* Annotations */
+.annotation {
+  position: absolute; background: #c9a84cee; color: #111;
+  padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold;
+  z-index: 20; white-space: nowrap;
+}
+.annotation::after {
+  content: ''; position: absolute;
+  border: 6px solid transparent;
+}
+.ann-minimap { bottom: 190px; left: 60px; }
+.ann-minimap::after { bottom: -12px; left: 20px; border-top-color: #c9a84cee; }
+.ann-build { bottom: 190px; left: 50%; transform: translateX(-50%); }
+.ann-build::after { bottom: -12px; left: 50%; transform: translateX(-50%); border-top-color: #c9a84cee; }
+.ann-synergy { bottom: 190px; right: 60px; }
+.ann-synergy::after { bottom: -12px; right: 20px; border-top-color: #c9a84cee; }
+.ann-resources { top: 40px; left: 50%; transform: translateX(-50%); }
+.ann-resources::after { top: -12px; left: 50%; transform: translateX(-50%); border-bottom-color: #c9a84cee; }
+</style>
+</head>
+<body>
+
+<!-- Annotations -->
+<div class="annotation ann-minimap">Minimap (클릭으로 이동)</div>
+<div class="annotation ann-build">Build Panel (8 슬롯, 단축키 1-8)</div>
+<div class="annotation ann-synergy">Synergy + HQ Status</div>
+<div class="annotation ann-resources">Resources Bar</div>
+
+<!-- Game area -->
+<div class="game-area">
+  <div class="field-hq field-unit"></div>
+  <div class="field-tower field-unit"></div>
+  <div class="field-soldier field-unit"></div>
+  <div class="field-soldier2 field-unit"></div>
+  <div class="field-enemy1 field-unit"></div>
+  <div class="field-enemy2 field-unit"></div>
+  <div class="field-enemy3 field-unit"></div>
+
+  <!-- Top resource bar -->
+  <div class="top-bar">
+    <div class="resource">
+      <div class="icon icon-wave"></div>
+      <div><div class="val">Wave 3</div><div class="lbl">WAVE</div></div>
+    </div>
+    <div class="resource">
+      <div class="icon icon-mineral"></div>
+      <div><div class="val">245</div><div class="lbl">MINERAL</div></div>
+    </div>
+    <div class="resource">
+      <div class="icon icon-kill"></div>
+      <div><div class="val">127</div><div class="lbl">KILLS</div></div>
+    </div>
+    <div class="resource">
+      <div class="icon icon-time"></div>
+      <div><div class="val">4:32</div><div class="lbl">TIME</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom StarCraft-style panel -->
+<div class="bottom-panel">
+
+  <!-- Left: Minimap -->
+  <div class="minimap-section">
+    <div class="minimap">
+      <div class="mm-hq"></div>
+      <div class="mm-tower"></div>
+      <div class="mm-enemies mm-e1"></div>
+      <div class="mm-enemies mm-e2"></div>
+      <div class="mm-enemies mm-e3"></div>
+      <div class="mm-enemies mm-e4"></div>
+      <div class="mm-viewport"></div>
+    </div>
+    <div class="minimap-label">MAP 256×256</div>
+  </div>
+
+  <!-- Center: Build buttons + wave info -->
+  <div class="center-section">
+    <div class="info-bar">
+      <span class="wave-info">WAVE 3 — Storm Phase</span>
+      <span class="timer">Next: 12s</span>
+      <span class="speed">1.0x [F]</span>
+    </div>
+    <div class="build-row">
+      <div class="build-btn selected">
+        <span class="hotkey">1</span>
+        <div class="icon-slot icon-barricade"></div>
+        <div class="name">Barricade</div>
+        <div class="cost">$10</div>
+      </div>
+      <div class="build-btn">
+        <span class="hotkey">2</span>
+        <div class="icon-slot icon-tower"></div>
+        <div class="name">Tower</div>
+        <div class="cost">$40</div>
+      </div>
+      <div class="build-btn">
+        <span class="hotkey">3</span>
+        <div class="icon-slot icon-barracks"></div>
+        <div class="name">Barracks</div>
+        <div class="cost">$60</div>
+      </div>
+      <div class="build-btn">
+        <span class="hotkey">4</span>
+        <div class="icon-slot icon-miner"></div>
+        <div class="name">Miner</div>
+        <div class="cost">$50</div>
+      </div>
+      <div class="build-btn">
+        <span class="hotkey">5</span>
+        <div class="icon-slot icon-buff"></div>
+        <div class="name">Buff</div>
+        <div class="cost">$80</div>
+      </div>
+      <div class="build-btn">
+        <span class="hotkey">6</span>
+        <div class="icon-slot icon-flame"></div>
+        <div class="name">Flame</div>
+        <div class="cost">$70</div>
+      </div>
+      <div class="build-btn">
+        <span class="hotkey">7</span>
+        <div class="icon-slot icon-sniper"></div>
+        <div class="name">Sniper</div>
+        <div class="cost">$90</div>
+      </div>
+      <div class="build-btn">
+        <span class="hotkey">8</span>
+        <div class="icon-slot icon-slow"></div>
+        <div class="name">Slow</div>
+        <div class="cost">$60</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Synergy + HQ HP -->
+  <div class="right-section">
+    <div class="section-title">Synergy</div>
+    <div class="synergy-row">
+      <div class="synergy-icon syn-fire">F</div>
+      <div class="synergy-name">Fire</div>
+      <div class="synergy-count">x3</div>
+      <div class="synergy-tier">T1</div>
+    </div>
+    <div class="synergy-row">
+      <div class="synergy-icon syn-ice">I</div>
+      <div class="synergy-name">Ice</div>
+      <div class="synergy-count">x2</div>
+      <div class="synergy-tier">—</div>
+    </div>
+    <div class="synergy-row">
+      <div class="synergy-icon syn-fortify">D</div>
+      <div class="synergy-name">Fortify</div>
+      <div class="synergy-count">x1</div>
+      <div class="synergy-tier">—</div>
+    </div>
+
+    <div class="hp-section">
+      <div class="section-title">HQ Status</div>
+      <div class="hp-label">HP</div>
+      <div class="hp-bar-bg"><div class="hp-bar-fill"></div></div>
+      <div class="hp-text">850 / 1000</div>
+      <div class="mineral-section">
+        <div class="hp-label">MINERAL</div>
+        <div class="hp-bar-bg"><div class="mineral-bar-fill"></div></div>
+        <div class="mineral-text">245</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

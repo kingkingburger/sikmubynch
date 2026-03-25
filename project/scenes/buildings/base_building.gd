@@ -24,7 +24,45 @@ func _ready() -> void:
 	if data:
 		current_hp = data.max_hp
 	_build_mesh()
+	_add_building_light()
 	SpatialGrid.register(self, "buildings")
+
+func _add_building_light() -> void:
+	var light := OmniLight3D.new()
+	light.shadow_enabled = false
+	var bname: String = data.building_name if data else ""
+	match bname:
+		"HQ":
+			light.light_color = Color(0.3, 0.5, 1.0)
+			light.light_energy = 2.0
+			light.omni_range = 14.0
+			light.position = Vector3(0, 2.0, 0)
+		"Tower":
+			light.light_color = Color(1.0, 0.85, 0.4)
+			light.light_energy = 1.2
+			light.omni_range = 8.0
+			light.position = Vector3(0, 1.5, 0)
+		"Barracks":
+			light.light_color = Color(1.0, 0.7, 0.3)
+			light.light_energy = 0.8
+			light.omni_range = 6.0
+			light.position = Vector3(0, 1.2, 0)
+		"Miner":
+			light.light_color = Color(0.2, 0.85, 0.9)
+			light.light_energy = 1.0
+			light.omni_range = 7.0
+			light.position = Vector3(0, 1.0, 0)
+		"Buff Tower":
+			light.light_color = Color(1.0, 0.85, 0.3)
+			light.light_energy = 1.5
+			light.omni_range = 10.0
+			light.position = Vector3(0, 1.5, 0)
+		_:
+			light.light_color = Color(0.8, 0.6, 0.3)
+			light.light_energy = 0.6
+			light.omni_range = 5.0
+			light.position = Vector3(0, 1.0, 0)
+	add_child(light)
 
 func get_effective_max_hp() -> float:
 	if not data:

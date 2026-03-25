@@ -248,19 +248,27 @@ func _update_camera_position() -> void:
 	GameFeel.update_camera_base(pos)
 
 func _setup_lighting() -> void:
+	# Dim directional — barely visible, just for shadows
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55.0, 30.0, 0.0)
-	sun.light_color = Color(1.0, 0.97, 0.88)
-	sun.light_energy = 1.2
+	sun.light_color = Color(0.95, 0.9, 0.8)
+	sun.light_energy = 1.1
 	sun.shadow_enabled = true
 	add_child(sun)
 
+	# Dark environment —発光体 only
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.02, 0.02, 0.03)
+	env.background_color = Color(0.01, 0.01, 0.015)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.25, 0.27, 0.32)
+	env.ambient_light_color = Color(0.22, 0.24, 0.3)
 	env.ambient_light_energy = 0.5
+	# Glow/Bloom — makes emission pop
+	env.glow_enabled = true
+	env.glow_intensity = 0.8
+	env.glow_bloom = 0.15
+	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
+	env.glow_hdr_threshold = 0.8
 
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
@@ -275,10 +283,10 @@ func _setup_ground() -> void:
 	shader.code = """
 shader_type spatial;
 
-uniform vec3 ground_dark : source_color = vec3(0.06, 0.07, 0.05);
-uniform vec3 ground_mid : source_color = vec3(0.10, 0.11, 0.08);
-uniform vec3 grid_color : source_color = vec3(0.14, 0.16, 0.10);
-uniform vec3 chunk_color : source_color = vec3(0.18, 0.14, 0.08);
+uniform vec3 ground_dark : source_color = vec3(0.05, 0.06, 0.04);
+uniform vec3 ground_mid : source_color = vec3(0.09, 0.1, 0.07);
+uniform vec3 grid_color : source_color = vec3(0.12, 0.14, 0.09);
+uniform vec3 chunk_color : source_color = vec3(0.16, 0.13, 0.07);
 uniform float map_size = 256.0;
 
 float hash(vec2 p) {
@@ -314,7 +322,7 @@ void fragment() {
 	// Vignette — darken edges
 	vec2 center_uv = UV - 0.5;
 	float vignette = 1.0 - dot(center_uv, center_uv) * 0.8;
-	vignette = clamp(vignette, 0.3, 1.0);
+	vignette = clamp(vignette, 0.35, 1.0);
 
 	vec3 col = base;
 	col = mix(col, grid_color, is_line);
