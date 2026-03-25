@@ -10,3 +10,4 @@ Thumbs.db
 .godot/
 *.import
 export_presets.cfg
+build/

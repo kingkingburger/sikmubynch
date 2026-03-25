@@ -7,10 +7,10 @@
 ## 기술 스택
 
 - Godot 4 + GDScript
-- 3D 이소메트릭 (디아블로/스타크래프트 스타일), GL Compatibility 렌더러
-- 비주얼: 다크 판타지 + 밀리터리, 로우폴리 스타일리쉬 모델
+- 3D 이소메트릭 (스타크래프트 스타일 UI), GL Compatibility 렌더러
+- 비주얼: 다크 판타지 + 밀리터리, 로우폴리 스타일리쉬 모델 + Glow/Bloom
 - 로컬라이제이션: 한글(기본) + 영문 토글 (Locale autoload)
-- PC 전용 (키보드 + 마우스)
+- PC 전용 (키보드 + 마우스 + 우클릭 드래그 카메라)
 
 ## 핵심 가치
 
@@ -23,6 +23,7 @@
 - Ouroboros 프로세스로 요구사항/설계/검증 문서화 (`docs/ouroboros/`)
 - 프로토타입 우선: 구현 → 플레이 → 피드백 → 반복
 - 기술 결정은 자율적으로, 게임 경험 관련만 사용자 확인
+- **비주얼 작업은 반드시 HTML 목업 → 승인 → 구현** 순서
 
 ## 프로젝트 구조
 
@@ -40,15 +41,22 @@ project/                                # Godot 4 프로젝트
     effects/                            #   이펙트 씬 (미네랄 오브)
   scripts/data/                         # 데이터 정의 (Resource 클래스)
   assets/                               # 스프라이트, 사운드
-    models/                             #   GLB 3D 모델 (buildings/, enemies/, units/, effects/)
+    models/                             #   GLB 3D 모델 17종 (buildings/5, enemies/6, units/4, effects/2)
     audio/                              #   BGM + SFX (bgm/, sfx/)
+tools/                                  # 3D 모델 생성 도구
+  create_models.py                      #   trimesh 로우폴리 GLB 생성 (17종)
+  generate_models.py                    #   Hunyuan3D-2 AI 모델 자동 생성
+  start_hunyuan.bat                     #   Hunyuan3D-2 서버 시작 스크립트
+  pyproject.toml                        #   uv 프로젝트 설정 (trimesh, numpy)
 docs/ouroboros/{date}-{slug}/           # Ouroboros 프로세스 문서
   01-requirements.md                    # Phase 1: 요구사항
   02-design.md                          # Phase 2: 설계
   03-verification.md                    # Phase 3: 검증
 docs/3d-modeling-guide.md               # 3D 모델링 가이드 (Hunyuan3D-2 파이프라인)
 docs/sound-guide.md                     # 사운드 제작 가이드
-mockup.html                             # UI/레이아웃 목업 (디아블로 스타일 이소메트릭)
+docs/ui-starcraft-mockup-v2.html        # UI 레이아웃 목업 (스타크래프트 스타일)
+docs/visual-style-comparison.html       # 비주얼 스타일 4종 비교 목업
+mockup.html                             # 초기 UI/레이아웃 목업
 build.sh                                # Windows exe 빌드 스크립트
 build/                                  # 빌드 출력 (git-ignored)
 ```
@@ -63,22 +71,30 @@ M7 폴리시까지 전체 구현 완료. 7-마일스톤 로드맵 (M1-M7) 완결
 - M5 메타 시스템: 5종 특성 시너지 + 보상 카드 3택 + 이벤트 10종 + 채굴기/버프 타워
 - M6 게임 필: 타격감(쉐이크/히트스톱/크리티컬) + WASD 카메라 + 줌 + 속도 조절 + 드래그 배치
 - M7 폴리시: 시작 화면 + ESC 메뉴 + 디버그 오버레이(F3) + 비주얼 오버홀(그림자/지형 셰이더/모델) + 로컬라이제이션(한/영)
+- Post-M7: 맵 64→256 확장 + 다크 판타지 조명(Glow/Bloom/OmniLight) + StarCraft UI + trimesh GLB 모델 17종 + FlowField 반해상도 최적화 + 프로시저럴 애니메이션 + 파티클 이펙트
 
 ## 출시 목표
 
 - Steam Early Access (무료 + 후원 DLC 모델), 2026년 하반기
-- 3D 모델링: Hunyuan3D-2 로컬 (GLB 로딩 코드 준비 완료, 모델 생성 대기)
+- 3D 모델링: trimesh GLB 17종 생성 완료 (tools/create_models.py), Hunyuan3D-2 고품질 교체 대기
 - 사운드: AI 생성 (Udio BGM + ElevenLabs SFX, AudioManager 코드 준비 완료)
-- Ouroboros 문서: `docs/ouroboros/2026-03-24-steam-release/`, `docs/ouroboros/2026-03-24-3d-modeling/`
+- Ouroboros 문서: `docs/ouroboros/2026-03-24-steam-release/`, `docs/ouroboros/2026-03-24-3d-modeling/`, `docs/ouroboros/2026-03-25-map-expansion/`, `docs/ouroboros/2026-03-25-visual-atmosphere/`
 
 ## 주요 시스템
 
 - **Locale**: 다국어 (한글/영문), 타이틀 화면에서 전환
 - **GameManager**: 게임 상태 (미네랄, 웨이브, 킬 카운트)
-- **FlowField**: BFS 기반 적 집단 길찾기
+- **FlowField**: BFS 기반 적 집단 길찾기, 반해상도 128x128 (MAP_SIZE 256, FLOW_RES 2)
 - **SynergyManager**: 5종 특성 시너지 계산 + 보너스
 - **EventManager**: 전투/선택 이벤트 시스템
 - **GameFeel**: 화면 흔들림, 히트스톱, 게임 속도 관리
 - **ObjectPool**: 발사체/이펙트 재사용 풀
 - **AudioManager**: BGM 크로스페이드 + SFX 풀링(8개) + 볼륨 제어
-- **SpatialGrid**: 공간 분할 그리드 (4x4셀, 16x16), O(N) 근접 탐색
+- **SpatialGrid**: 공간 분할 그리드 (8.0셀, 32x32), O(N) 근접 탐색
+
+## 주요 상수
+
+- **MAP_SIZE**: 256 (game.gd, flow_field.gd)
+- **FLOW_RES**: 2 (flow_field.gd — 128x128 반해상도 BFS)
+- **CELL_SIZE**: 8.0, **GRID_W**: 32 (spatial_grid.gd)
+- **CAM_ZOOM**: 22~120, **CAM_SPEED**: 35 (game.gd)
