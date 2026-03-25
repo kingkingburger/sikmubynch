@@ -223,10 +223,16 @@ static func _load_glb(category: String, model_name: String) -> Mesh:
 	var res = load(path)
 	if res is PackedScene:
 		var instance := (res as PackedScene).instantiate()
-		for child in instance.get_children():
-			if child is MeshInstance3D:
-				var mesh: Mesh = child.mesh
-				instance.queue_free()
-				return mesh
+		var mesh := _find_mesh_recursive(instance)
 		instance.queue_free()
+		return mesh
+	return null
+
+static func _find_mesh_recursive(node: Node) -> Mesh:
+	if node is MeshInstance3D and node.mesh:
+		return node.mesh
+	for child in node.get_children():
+		var found := _find_mesh_recursive(child)
+		if found:
+			return found
 	return null
