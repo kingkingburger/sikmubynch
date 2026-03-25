@@ -5,6 +5,9 @@ var _turret_mesh: MeshInstance3D
 var _muzzle_flash: MeshInstance3D
 var _muzzle_timer: float = 0.0
 var projectile_scene: PackedScene
+var _cached_buff_mult: float = 1.0
+var _buff_cache_timer: float = 0.0
+const BUFF_CACHE_INTERVAL := 2.0  # Recalculate buffs every 2 seconds
 
 func _ready() -> void:
 	super._ready()
@@ -64,6 +67,12 @@ func _process(delta: float) -> void:
 			_muzzle_flash.visible = false
 			_muzzle_timer = 0.0
 
+	# Refresh buff cache periodically
+	_buff_cache_timer -= delta
+	if _buff_cache_timer <= 0.0:
+		_buff_cache_timer = BUFF_CACHE_INTERVAL
+		_cached_buff_mult = _calculate_buff_mult()
+
 	_attack_timer -= delta
 	if _attack_timer <= 0.0:
 		var target := _find_nearest_enemy()
@@ -96,12 +105,17 @@ func _get_buffed_dps() -> float:
 	# Synergy bonus
 	if data and data.trait_type >= 0:
 		base_dps *= SynergyManager.get_dps_multiplier(data.trait_type)
-	# Buff tower bonus — search nearby buildings only
+	# Buff tower bonus — use cached value
+	base_dps *= _cached_buff_mult
+	return base_dps
+
+func _calculate_buff_mult() -> float:
+	var mult := 1.0
 	var nearby_buildings := SpatialGrid.find_in_range(global_position, "buildings", 7.0)
 	for b in nearby_buildings:
 		if not b.has_method("get_buff_range"):
 			continue
 		var br: float = b.get_buff_range()
 		if global_position.distance_squared_to(b.global_position) <= br * br:
-			base_dps *= (1.0 + b.get_buff_multiplier())
-	return base_dps
+			mult *= (1.0 + b.get_buff_multiplier())
+	return mult

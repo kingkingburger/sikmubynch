@@ -22,6 +22,8 @@ var _selected_slot: int = 0
 # State
 var building_grid: Dictionary = {}
 var enemies_alive: int = 0
+var _units_alive: int = 0
+var _buildings_count: int = 0
 var _wave_active: bool = false
 var _between_waves: bool = false
 var _wave_countdown: float = 0.0
@@ -104,6 +106,7 @@ func _ready() -> void:
 	_setup_hq()
 	_setup_ghost()
 	_setup_ui()
+	_buildings_count = 1  # HQ
 
 	GameManager.minerals_changed.connect(_on_minerals_changed)
 	GameManager.game_over_triggered.connect(_on_game_over)
@@ -133,9 +136,9 @@ func _init_building_data() -> void:
 	twr.max_hp = 100.0
 	twr.size = Vector2i(1, 1)
 	twr.color = Color(0.35, 0.55, 0.75)
-	twr.dps = 18.0
+	twr.dps = 15.0
 	twr.attack_range = 7.0
-	twr.attack_speed = 1.2
+	twr.attack_speed = 1.0
 	_building_datas.append(twr)
 
 	var brk := BuildingData.new()
@@ -181,13 +184,10 @@ func _process(delta: float) -> void:
 		_cam_center.x = clampf(_cam_center.x, 0.0, float(MAP_SIZE))
 		_cam_center.y = clampf(_cam_center.y, 0.0, float(MAP_SIZE))
 		_update_camera_position()
-	# Debug overlay
+	# Debug overlay — uses cached counters, no tree scan
 	if _debug_visible and _debug_label:
-		var enemy_count := get_tree().get_nodes_in_group("enemies").size()
-		var unit_count := get_tree().get_nodes_in_group("units").size()
-		var building_count := get_tree().get_nodes_in_group("buildings").size()
 		_debug_label.text = "FPS: %d\nEnemies: %d\nUnits: %d\nBuildings: %d\nSpeed: %.1fx" % [
-			Engine.get_frames_per_second(), enemy_count, unit_count, building_count, GameFeel.game_speed
+			Engine.get_frames_per_second(), enemies_alive, _units_alive, _buildings_count, GameFeel.game_speed
 		]
 	# Fade event notification
 	if _event_timer > 0.0:
@@ -204,15 +204,11 @@ func _process(delta: float) -> void:
 			_between_waves = false
 			_spawn_wave()
 	elif _wave_active:
-		# Periodic check for split spawns (every 30 frames, not every frame)
-		if Engine.get_process_frames() % 30 == 0:
-			var actual := get_tree().get_nodes_in_group("enemies").size()
-			if actual == 0:
-				_wave_active = false
-				enemies_alive = 0
-				_on_wave_cleared()
-			elif actual != enemies_alive:
-				enemies_alive = actual
+		# Check wave completion using cached counter (no tree scan)
+		if enemies_alive <= 0 and _spawn_queue.is_empty():
+			_wave_active = false
+			enemies_alive = 0
+			_on_wave_cleared()
 		_update_hud()
 
 # ---------------------------------------------------------------------------
@@ -803,16 +799,18 @@ func _create_panel_style(bg_color: Color, border_color: Color = Color.TRANSPAREN
 # ---------------------------------------------------------------------------
 
 func _create_enemy_templates(wave_num: int) -> Array:
-	var hp_scale := 1.0 + (wave_num - 1) * 0.15
+	# Exponential HP scaling: 1.30^(wave-1) — wave 3=1.69x, wave 5=2.86x, wave 7=4.83x
+	var hp_scale := pow(1.30, wave_num - 1)
 	var speed_scale := 1.0 + (wave_num - 1) * 0.03
+	var dps_scale := 1.0 + (wave_num - 1) * 0.10
 	var templates: Array = []
 
 	# Rusher — always present
 	var rusher := EnemyData.new()
 	rusher.enemy_name = "Rusher"
 	rusher.enemy_type = EnemyData.EnemyType.RUSHER
-	rusher.max_hp = 18.0 * hp_scale
-	rusher.dps = 6.0
+	rusher.max_hp = 25.0 * hp_scale
+	rusher.dps = 8.0 * dps_scale
 	rusher.speed = 3.5 * speed_scale
 	rusher.mineral_reward = 3
 	rusher.color = Color(0.85, 0.2, 0.15)
@@ -823,8 +821,8 @@ func _create_enemy_templates(wave_num: int) -> Array:
 		var splitter := EnemyData.new()
 		splitter.enemy_name = "Splitter"
 		splitter.enemy_type = EnemyData.EnemyType.SPLITTER
-		splitter.max_hp = 30.0 * hp_scale
-		splitter.dps = 5.0
+		splitter.max_hp = 40.0 * hp_scale
+		splitter.dps = 6.0 * dps_scale
 		splitter.speed = 3.0 * speed_scale
 		splitter.mineral_reward = 5
 		splitter.color = Color(0.6, 0.85, 0.2)
@@ -836,8 +834,8 @@ func _create_enemy_templates(wave_num: int) -> Array:
 		var tank := EnemyData.new()
 		tank.enemy_name = "Tank"
 		tank.enemy_type = EnemyData.EnemyType.TANK
-		tank.max_hp = 80.0 * hp_scale
-		tank.dps = 12.0
+		tank.max_hp = 120.0 * hp_scale
+		tank.dps = 14.0 * dps_scale
 		tank.speed = 1.8 * speed_scale
 		tank.mineral_reward = 8
 		tank.color = Color(0.5, 0.35, 0.6)
@@ -849,13 +847,13 @@ func _create_enemy_templates(wave_num: int) -> Array:
 		var exploder := EnemyData.new()
 		exploder.enemy_name = "Exploder"
 		exploder.enemy_type = EnemyData.EnemyType.EXPLODER
-		exploder.max_hp = 15.0 * hp_scale
-		exploder.dps = 3.0
+		exploder.max_hp = 20.0 * hp_scale
+		exploder.dps = 4.0 * dps_scale
 		exploder.speed = 4.5 * speed_scale
 		exploder.mineral_reward = 4
 		exploder.color = Color(1.0, 0.6, 0.1)
 		exploder.explode_radius = 2.5
-		exploder.explode_damage = 30.0 + wave_num * 5.0
+		exploder.explode_damage = 35.0 + wave_num * 8.0
 		templates.append(exploder)
 
 	# Wave 5+: Elite Rusher
@@ -863,8 +861,8 @@ func _create_enemy_templates(wave_num: int) -> Array:
 		var elite := EnemyData.new()
 		elite.enemy_name = "Elite Rusher"
 		elite.enemy_type = EnemyData.EnemyType.ELITE_RUSHER
-		elite.max_hp = 45.0 * hp_scale
-		elite.dps = 15.0
+		elite.max_hp = 60.0 * hp_scale
+		elite.dps = 18.0 * dps_scale
 		elite.speed = 4.5 * speed_scale
 		elite.mineral_reward = 6
 		elite.color = Color(0.95, 0.15, 0.3)
@@ -876,8 +874,8 @@ func _create_enemy_templates(wave_num: int) -> Array:
 		var destroyer := EnemyData.new()
 		destroyer.enemy_name = "Destroyer"
 		destroyer.enemy_type = EnemyData.EnemyType.DESTROYER
-		destroyer.max_hp = 120.0 * hp_scale
-		destroyer.dps = 20.0
+		destroyer.max_hp = 180.0 * hp_scale
+		destroyer.dps = 25.0 * dps_scale
 		destroyer.speed = 1.5 * speed_scale
 		destroyer.mineral_reward = 12
 		destroyer.color = Color(0.3, 0.1, 0.4)
@@ -934,7 +932,7 @@ func _process_spawn_queue() -> void:
 
 func _on_wave_cleared() -> void:
 	AudioManager.play_sfx_by_name("wave_start")
-	var bonus := 35 + GameManager.wave_number * 12
+	var bonus := 25 + GameManager.wave_number * 10
 	var reward_mult := EventManager.get_challenge_reward_mult()
 	GameManager.add_minerals(int(bonus * reward_mult))
 	EventManager.clear_combat_effects()
@@ -1076,6 +1074,7 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 	building.add_to_group("buildings")
 	building.destroyed.connect(_on_building_destroyed.bind(grid_pos))
 	add_child(building)
+	_buildings_count += 1
 	building_grid[grid_pos] = building
 	FlowField.set_obstacle(grid_pos, true)
 	_recalculate_flow_field()
@@ -1179,11 +1178,19 @@ func _try_drag_build(screen_pos: Vector2) -> void:
 	building.add_to_group("buildings")
 	building.destroyed.connect(_on_building_destroyed.bind(grid_pos))
 	add_child(building)
+	_buildings_count += 1
 	building_grid[grid_pos] = building
 	FlowField.set_obstacle(grid_pos, true)
 	_recalculate_flow_field()
 
+func _on_unit_spawned() -> void:
+	_units_alive += 1
+
+func _on_unit_died() -> void:
+	_units_alive -= 1
+
 func _on_building_destroyed(grid_pos: Vector2i) -> void:
+	_buildings_count -= 1
 	if building_grid.has(grid_pos):
 		var b = building_grid[grid_pos]
 		if is_instance_valid(b) and b.data and b.data.trait_type >= 0:
@@ -1203,8 +1210,7 @@ func _on_enemy_died() -> void:
 func _check_wave_completion() -> void:
 	if not _wave_active:
 		return
-	var enemy_count := get_tree().get_nodes_in_group("enemies").size()
-	if enemy_count <= 0:
+	if enemies_alive <= 0 and _spawn_queue.is_empty():
 		_wave_active = false
 		enemies_alive = 0
 		_on_wave_cleared()

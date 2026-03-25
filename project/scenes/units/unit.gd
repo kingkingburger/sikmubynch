@@ -154,9 +154,12 @@ func _physics_process(delta: float) -> void:
 
 	if _flash > 0.0:
 		_flash -= delta * 5.0
-		if _flash < 0.0:
+		if _flash <= 0.0:
 			_flash = 0.0
-		_update_flash()
+			if _body_mat and data:
+				_body_mat.albedo_color = data.color
+		elif Engine.get_physics_frames() % 3 == 0:
+			_update_flash()
 
 	match _state:
 		State.PATROL:
@@ -166,16 +169,15 @@ func _physics_process(delta: float) -> void:
 		State.ATTACK:
 			_process_attack(delta)
 
-	_update_hp_bar()
-
 # -- State: PATROL --
 func _process_patrol(delta: float) -> void:
-	# Check for enemies
-	var enemy := _find_nearest_enemy()
-	if enemy:
-		_chase_target = enemy
-		_state = State.CHASE
-		return
+	# Stagger enemy detection — check every 5 physics frames per unit
+	if Engine.get_physics_frames() % 5 == hash(get_instance_id()) % 5:
+		var enemy := _find_nearest_enemy()
+		if enemy:
+			_chase_target = enemy
+			_state = State.CHASE
+			return
 
 	# Move to patrol point
 	var to_target := _patrol_target - global_position
@@ -305,6 +307,7 @@ func take_damage(amount: float) -> void:
 	current_hp -= amount
 	_flash = 1.0
 	_update_flash()
+	_update_hp_bar()
 	if current_hp <= 0.0:
 		_die()
 

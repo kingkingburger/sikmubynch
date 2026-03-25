@@ -89,6 +89,8 @@ func cycle_speed() -> float:
 		set_game_speed(2.0)
 	elif game_speed < 2.5:
 		set_game_speed(3.0)
+	elif game_speed < 4.0:
+		set_game_speed(5.0)
 	else:
 		set_game_speed(1.0)
 	return game_speed

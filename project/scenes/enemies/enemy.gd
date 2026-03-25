@@ -3,6 +3,8 @@ extends CharacterBody3D
 signal died()
 signal drop_mineral(pos: Vector3, amount: int)
 
+const _enemy_scene_preload: PackedScene = preload("res://scenes/enemies/enemy.tscn")
+
 var data: EnemyData
 var current_hp: float
 var target_position: Vector3
@@ -170,9 +172,13 @@ func _physics_process(delta: float) -> void:
 
 	if _attack_flash > 0.0:
 		_attack_flash -= delta * 5.0
-		if _attack_flash < 0.0:
+		if _attack_flash <= 0.0:
 			_attack_flash = 0.0
-		_update_flash()
+			# Reset color once when flash ends (no per-frame lerp)
+			if _body_mat and data:
+				_body_mat.albedo_color = data.color
+		elif Engine.get_physics_frames() % 3 == 0:
+			_update_flash()
 
 	# Status effect ticks
 	if _burn_timer > 0.0:
@@ -325,12 +331,12 @@ func _die() -> void:
 	if data and data.enemy_type == EnemyData.EnemyType.SPLITTER:
 		_spawn_splits()
 
-	# Mineral orb handled by game.gd via drop_mineral signal
-	if drop_mineral.get_connections().size() > 0:
-		drop_mineral.emit(global_position, data.mineral_reward if data else 3)
+	# Mineral drop — emit signal if connected, else direct add
+	var reward := data.mineral_reward if data else 3
+	if drop_mineral.get_connections().is_empty():
+		GameManager.add_minerals(reward)
 	else:
-		# Fallback for split spawns not connected to game.gd
-		GameManager.add_minerals(data.mineral_reward if data else 3)
+		drop_mineral.emit(global_position, reward)
 	GameManager.add_kill()
 	died.emit()
 	queue_free()
@@ -346,10 +352,9 @@ func _spawn_splits() -> void:
 	split_data.color = data.color.lightened(0.3)
 	split_data.scale_factor = 0.6
 
-	var enemy_scene := load("res://scenes/enemies/enemy.tscn") as PackedScene
 	var parent := get_parent()
 	for i in data.split_count:
-		var mini: CharacterBody3D = enemy_scene.instantiate()
+		var mini: CharacterBody3D = _enemy_scene_preload.instantiate()
 		mini.set("data", split_data)
 		mini.set("target_position", target_position)
 		mini.set("flow_field", flow_field)

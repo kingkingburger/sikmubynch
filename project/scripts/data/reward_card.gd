@@ -31,10 +31,10 @@ static func generate_pool(wave: int) -> Array:
 	var pool: Array = []
 
 	# Common cards
-	pool.append(_make_mineral("card_mineral_cache", 50, Rarity.COMMON))
-	pool.append(_make_mineral("card_mineral_vein", 80, Rarity.COMMON))
-	pool.append(_make_stat("card_fortified_walls", "card_building_hp", EffectType.BUILDING_HEAL, 0.15, Rarity.COMMON, 15))
-	pool.append(_make_stat("card_sharp_blades", "card_unit_dps", EffectType.UNIT_BUFF, 0.1, Rarity.COMMON, 10))
+	pool.append(_make_mineral("card_mineral_cache", 35, Rarity.COMMON))
+	pool.append(_make_mineral("card_mineral_vein", 55, Rarity.COMMON))
+	pool.append(_make_stat("card_fortified_walls", "card_building_hp", EffectType.BUILDING_HEAL, 0.10, Rarity.COMMON, 10))
+	pool.append(_make_stat("card_sharp_blades", "card_unit_dps", EffectType.UNIT_BUFF, 0.08, Rarity.COMMON, 8))
 
 	# Trait cards (common)
 	var _trait_keys := {
@@ -58,15 +58,15 @@ static func generate_pool(wave: int) -> Array:
 
 	# Rare cards (wave 3+)
 	if wave >= 3:
-		pool.append(_make_mineral("card_mineral_surge", 150, Rarity.RARE))
-		pool.append(_make_stat("card_iron_fortress", "card_building_hp", EffectType.BUILDING_HEAL, 0.3, Rarity.RARE, 30))
-		pool.append(_make_stat("card_war_drums", "card_unit_dps", EffectType.UNIT_BUFF, 0.25, Rarity.RARE, 25))
+		pool.append(_make_mineral("card_mineral_surge", 90, Rarity.RARE))
+		pool.append(_make_stat("card_iron_fortress", "card_building_hp", EffectType.BUILDING_HEAL, 0.20, Rarity.RARE, 20))
+		pool.append(_make_stat("card_war_drums", "card_unit_dps", EffectType.UNIT_BUFF, 0.15, Rarity.RARE, 15))
 
 	# Legendary cards (wave 5+)
 	if wave >= 5:
-		pool.append(_make_mineral("card_motherlode", 300, Rarity.LEGENDARY))
-		pool.append(_make_stat("card_titans_blessing", "card_building_hp_heal", EffectType.BUILDING_HEAL, 0.5, Rarity.LEGENDARY, 50))
-		pool.append(_make_stat("card_berserker_rage", "card_unit_dps", EffectType.UNIT_BUFF, 0.5, Rarity.LEGENDARY, 50))
+		pool.append(_make_mineral("card_motherlode", 180, Rarity.LEGENDARY))
+		pool.append(_make_stat("card_titans_blessing", "card_building_hp_heal", EffectType.BUILDING_HEAL, 0.35, Rarity.LEGENDARY, 35))
+		pool.append(_make_stat("card_berserker_rage", "card_unit_dps", EffectType.UNIT_BUFF, 0.30, Rarity.LEGENDARY, 30))
 
 	return pool
 

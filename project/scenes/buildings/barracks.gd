@@ -1,6 +1,6 @@
 extends BaseBuilding
 
-const SPAWN_INTERVAL := 8.0
+const SPAWN_INTERVAL := 12.0
 
 var _spawn_timer: float = SPAWN_INTERVAL
 var _unit_scene: PackedScene
@@ -50,8 +50,8 @@ func _init_unit_templates() -> void:
 	var bomber := UnitData.new()
 	bomber.unit_name = "Bomber"
 	bomber.unit_type = UnitData.UnitType.BOMBER
-	bomber.max_hp = 30.0
-	bomber.dps = 25.0
+	bomber.max_hp = 50.0
+	bomber.dps = 12.0
 	bomber.speed = 5.0
 	bomber.attack_range = 1.5
 	bomber.color = Color(0.95, 0.5, 0.15)
@@ -116,4 +116,10 @@ func _spawn_unit() -> void:
 	spawn_pos.y = 0.0
 	unit.position = spawn_pos
 
-	get_parent().add_child(unit)
+	var game := get_parent()
+	game.add_child(unit)
+	# Track unit count in game.gd
+	if game.has_method("_on_unit_spawned"):
+		game._on_unit_spawned()
+	if unit.has_signal("died") and game.has_method("_on_unit_died"):
+		unit.connect("died", game._on_unit_died)
