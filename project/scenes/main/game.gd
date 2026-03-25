@@ -64,8 +64,11 @@ var _awaiting_choice: bool = false
 
 # Camera control
 var _cam_center := Vector2(128.0, 128.0)
-var _cam_zoom: float = 35.0
-const CAM_SPEED := 25.0
+var _cam_zoom: float = 22.0
+const CAM_SPEED := 35.0
+var _right_dragging: bool = false
+var _flow_dirty: bool = false
+var _flow_timer: float = 0.0
 const CAM_ZOOM_MIN := 18.0
 const CAM_ZOOM_MAX := 120.0
 const CAM_DIST := 50.0
@@ -171,18 +174,18 @@ func _init_building_data() -> void:
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
 		return
-	# Camera WASD movement
+	# Camera WASD
 	var cam_dir := Vector2.ZERO
 	if Input.is_key_pressed(KEY_W): cam_dir.y -= 1.0
 	if Input.is_key_pressed(KEY_S): cam_dir.y += 1.0
 	if Input.is_key_pressed(KEY_A): cam_dir.x -= 1.0
 	if Input.is_key_pressed(KEY_D): cam_dir.x += 1.0
 	if cam_dir != Vector2.ZERO:
-		# Rotate by 45 degrees for isometric view
 		var rotated := cam_dir.rotated(deg_to_rad(-45.0))
 		_cam_center += rotated.normalized() * CAM_SPEED * delta
-		_cam_center.x = clampf(_cam_center.x, 0.0, float(MAP_SIZE))
-		_cam_center.y = clampf(_cam_center.y, 0.0, float(MAP_SIZE))
+		var pad := _cam_zoom * 0.3
+		_cam_center.x = clampf(_cam_center.x, pad, float(MAP_SIZE) - pad)
+		_cam_center.y = clampf(_cam_center.y, pad, float(MAP_SIZE) - pad)
 		_update_camera_position()
 	# Debug overlay — uses cached counters, no tree scan
 	if _debug_visible and _debug_label:
@@ -194,10 +197,17 @@ func _process(delta: float) -> void:
 		_event_timer -= delta
 		if _event_timer <= 0.0 and _event_label:
 			_event_label.visible = false
+	# Deferred FlowField recalculation (avoid lag on build)
+	if _flow_dirty:
+		_flow_timer += delta
+		if _flow_timer >= 0.3:
+			_flow_dirty = false
+			_flow_timer = 0.0
+			_recalculate_flow_field()
 	# Gradual enemy spawning
 	_process_spawn_queue()
 	# Pause wave countdown during card/choice selection
-	if _between_waves and not _awaiting_card and not _awaiting_choice:
+	if _between_waves and not _awaiting_choice:
 		_wave_countdown -= delta
 		_update_hud()
 		if _wave_countdown <= 0.0:
@@ -259,7 +269,7 @@ func _setup_lighting() -> void:
 func _setup_ground() -> void:
 	var ground := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(MAP_SIZE, MAP_SIZE)
+	plane.size = Vector2(MAP_SIZE + 128, MAP_SIZE + 128)
 	var shader_mat := ShaderMaterial.new()
 	var shader := Shader.new()
 	shader.code = """
@@ -919,7 +929,6 @@ func _spawn_wave() -> void:
 
 	var templates := _create_enemy_templates(wave_num)
 	var hq_pos := Vector3(128.5, 0.0, 128.5)
-	var field := FlowField.get_field()
 
 	# Queue enemies for gradual spawning instead of all at once
 	for i in enemy_count:
@@ -927,7 +936,6 @@ func _spawn_wave() -> void:
 		_spawn_queue.append({
 			"template": template,
 			"hq_pos": hq_pos,
-			"field": field,
 			"edge": _random_edge_position(),
 		})
 
@@ -943,7 +951,6 @@ func _process_spawn_queue() -> void:
 		var enemy: Node3D = enemy_scene.instantiate()
 		enemy.set("data", info["template"])
 		enemy.set("target_position", info["hq_pos"])
-		enemy.set("flow_field", info["field"])
 		enemy.position = Vector3(info["edge"].x, 0.0, info["edge"].y)
 		enemy.connect("died", _on_enemy_died)
 		if enemy.has_signal("drop_mineral"):
@@ -989,6 +996,16 @@ func _random_edge_position() -> Vector2:
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		_update_ghost(event.position)
+		# Right-click drag camera (StarCraft style)
+		if _right_dragging:
+			var spd := _cam_zoom * 0.004
+			var cam_delta := Vector2(-event.relative.x, -event.relative.y) * spd
+			cam_delta = cam_delta.rotated(deg_to_rad(-45.0))
+			_cam_center += cam_delta
+			var pad := _cam_zoom * 0.3
+			_cam_center.x = clampf(_cam_center.x, pad, float(MAP_SIZE) - pad)
+			_cam_center.y = clampf(_cam_center.y, pad, float(MAP_SIZE) - pad)
+			_update_camera_position()
 		# Drag build for barricades
 		if _dragging and _selected_slot == 0:
 			_try_drag_build(event.position)
@@ -1001,6 +1018,9 @@ func _input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
 			_cam_zoom = minf(_cam_zoom + 3.0, CAM_ZOOM_MAX)
 			_update_camera_position()
+		# Right-click drag
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			_right_dragging = event.pressed
 		# Drag start/stop
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
@@ -1098,7 +1118,7 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 	_buildings_count += 1
 	building_grid[grid_pos] = building
 	FlowField.set_obstacle(grid_pos, true)
-	_recalculate_flow_field()
+	_flow_dirty = true
 	AudioManager.play_sfx_by_name("build")
 	if bd.trait_type >= 0:
 		SynergyManager.add_trait(bd.trait_type)
@@ -1202,7 +1222,7 @@ func _try_drag_build(screen_pos: Vector2) -> void:
 	_buildings_count += 1
 	building_grid[grid_pos] = building
 	FlowField.set_obstacle(grid_pos, true)
-	_recalculate_flow_field()
+	_flow_dirty = true
 
 func _on_unit_spawned() -> void:
 	_units_alive += 1
@@ -1218,7 +1238,7 @@ func _on_building_destroyed(grid_pos: Vector2i) -> void:
 			SynergyManager.remove_trait(b.data.trait_type)
 	building_grid.erase(grid_pos)
 	FlowField.set_obstacle(grid_pos, false)
-	_recalculate_flow_field()
+	_flow_dirty = true
 
 func _on_enemy_died() -> void:
 	enemies_alive -= 1
@@ -1254,11 +1274,6 @@ func _recalculate_flow_field() -> void:
 		for dz in 3:
 			targets.append(Vector2i(127 + dx, 127 + dz))
 	FlowField.recalculate(targets)
-	# Update existing enemies with new field
-	var field := FlowField.get_field()
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if is_instance_valid(enemy):
-			enemy.set("flow_field", field)
 
 func _on_slot_pressed(slot_index: int) -> void:
 	_selected_slot = slot_index

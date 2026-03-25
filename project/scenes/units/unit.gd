@@ -112,12 +112,49 @@ func _build_mesh() -> void:
 	_body_mat = StandardMaterial3D.new()
 	var c: Color = data.color if data else Color.BLUE
 	_body_mat.albedo_color = c
-	_body_mat.roughness = 0.5
+	_body_mat.roughness = 0.4
 	_body_mat.emission_enabled = true
-	_body_mat.emission = c * 0.3
-	_body_mat.emission_energy_multiplier = 1.2
+	_body_mat.emission = c * 0.4
+	_body_mat.emission_energy_multiplier = 1.5
+	_body_mat.rim_enabled = true
+	_body_mat.rim = 0.45
+	_body_mat.rim_tint = 0.25
 	_mesh_instance.material_override = _body_mat
 	_body_pivot.add_child(_mesh_instance)
+
+	# Head
+	var head := MeshInstance3D.new()
+	var head_mesh := SphereMesh.new()
+	var unit_type_h: int = data.unit_type if data else UnitData.UnitType.SOLDIER
+	match unit_type_h:
+		UnitData.UnitType.SOLDIER:
+			head_mesh.radius = 0.11
+			head_mesh.height = 0.22
+			head.position = Vector3(0.0, _base_mesh_y + 0.28, 0.0)
+		UnitData.UnitType.ARCHER:
+			head_mesh.radius = 0.09
+			head_mesh.height = 0.18
+			head.position = Vector3(0.0, _base_mesh_y + 0.32, 0.0)
+		UnitData.UnitType.TANKER:
+			head_mesh.radius = 0.13
+			head_mesh.height = 0.26
+			head.position = Vector3(0.0, _base_mesh_y + 0.25, 0.0)
+		_:
+			head_mesh.radius = 0.1
+			head_mesh.height = 0.2
+			head.position = Vector3(0.0, _base_mesh_y + 0.2, 0.0)
+	head.mesh = head_mesh
+	var head_mat := StandardMaterial3D.new()
+	head_mat.albedo_color = c.lightened(0.15)
+	head_mat.roughness = 0.3
+	head_mat.emission_enabled = true
+	head_mat.emission = c * 0.3
+	head_mat.emission_energy_multiplier = 1.2
+	head_mat.rim_enabled = true
+	head_mat.rim = 0.5
+	head_mat.rim_tint = 0.2
+	head.material_override = head_mat
+	_body_pivot.add_child(head)
 
 	# Weapon
 	_build_weapon(unit_type)

@@ -8,7 +8,7 @@ const _enemy_scene_preload: PackedScene = preload("res://scenes/enemies/enemy.ts
 var data: EnemyData
 var current_hp: float
 var target_position: Vector3
-var flow_field: Dictionary = {}
+var flow_field: Dictionary = {}  # Legacy — enemies now use FlowField autoload directly
 
 var _dead: bool = false
 var _attack_target: BaseBuilding = null
@@ -129,10 +129,13 @@ func _build_mesh() -> void:
 	_body_mat = StandardMaterial3D.new()
 	var c: Color = data.color if data else Color.RED
 	_body_mat.albedo_color = c
-	_body_mat.roughness = 0.5
+	_body_mat.roughness = 0.35
 	_body_mat.emission_enabled = true
 	_body_mat.emission = c * 0.5
-	_body_mat.emission_energy_multiplier = 1.8
+	_body_mat.emission_energy_multiplier = 2.0
+	_body_mat.rim_enabled = true
+	_body_mat.rim = 0.5
+	_body_mat.rim_tint = 0.3
 	_mesh_instance.material_override = _body_mat
 	_body_pivot.add_child(_mesh_instance)
 
@@ -385,13 +388,9 @@ func _physics_process(delta: float) -> void:
 	_animate(delta)
 
 func _get_move_direction() -> Vector3:
-	if not flow_field.is_empty():
-		var gx := int(floor(global_position.x))
-		var gz := int(floor(global_position.z))
-		var cell := Vector2i(gx, gz)
-		if flow_field.has(cell):
-			var flow_dir: Vector2 = flow_field[cell]
-			return Vector3(flow_dir.x, 0.0, flow_dir.y).normalized()
+	var flow_dir := FlowField.get_direction(global_position.x, global_position.z)
+	if flow_dir != Vector2.ZERO:
+		return Vector3(flow_dir.x, 0.0, flow_dir.y).normalized()
 	var my_pos := Vector3(global_position.x, 0.0, global_position.z)
 	var tgt := Vector3(target_position.x, 0.0, target_position.z)
 	return (tgt - my_pos).normalized()
