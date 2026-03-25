@@ -380,30 +380,30 @@ func _setup_ui() -> void:
 	# --- Top bar ---
 	var top_panel := PanelContainer.new()
 	top_panel.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	top_panel.custom_minimum_size = Vector2(0, 44)
+	top_panel.custom_minimum_size = Vector2(0, 48)
 	top_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.05, 0.05, 0.08, 0.88), Color(0.6, 0.5, 0.2), 2))
+		Color(0.04, 0.04, 0.07, 0.92), Color(0.55, 0.45, 0.18), 2))
 	_canvas.add_child(top_panel)
 
 	_top_bar_label = Label.new()
 	_top_bar_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_top_bar_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_top_bar_label.add_theme_font_size_override("font_size", 18)
+	_top_bar_label.add_theme_font_size_override("font_size", 20)
 	_top_bar_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
 	top_panel.add_child(_top_bar_label)
 
 	# --- Bottom bar (Diablo-style: HP orb + build slots + mineral orb) ---
 	var bottom_panel := PanelContainer.new()
 	bottom_panel.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom_panel.custom_minimum_size = Vector2(0, 100)
-	bottom_panel.offset_top = -100.0
+	bottom_panel.custom_minimum_size = Vector2(0, 110)
+	bottom_panel.offset_top = -110.0
 	bottom_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.04, 0.03, 0.02, 0.97), Color(0.47, 0.33, 0.23, 0.3), 1))
+		Color(0.03, 0.025, 0.02, 0.97), Color(0.45, 0.35, 0.18, 0.5), 2))
 	_canvas.add_child(bottom_panel)
 
 	var hbox := HBoxContainer.new()
 	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_theme_constant_override("separation", 12)
+	hbox.add_theme_constant_override("separation", 14)
 	hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bottom_panel.add_child(hbox)
 
@@ -420,30 +420,30 @@ func _setup_ui() -> void:
 	# --- Build slots (center) ---
 	var build_hbox := HBoxContainer.new()
 	build_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	build_hbox.add_theme_constant_override("separation", 6)
+	build_hbox.add_theme_constant_override("separation", 5)
 	hbox.add_child(build_hbox)
 
 	for i in _building_datas.size():
 		var bd := _building_datas[i] as BuildingData
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(72, 72)
+		btn.custom_minimum_size = Vector2(82, 82)
 		var localized_name := Locale.get_building_name(bd.building_name)
-		btn.text = "%d\n%s\n%d" % [i + 1, localized_name.substr(0, 5).to_upper(), bd.cost]
-		btn.add_theme_font_size_override("font_size", 10)
-		btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
+		btn.text = "[%d]\n%s\n$%d" % [i + 1, localized_name.substr(0, 5).to_upper(), bd.cost]
+		btn.add_theme_font_size_override("font_size", 11)
+		btn.add_theme_color_override("font_color", Color(0.92, 0.82, 0.38))
 		var normal_style := _create_panel_style(
-			Color(0.23, 0.18, 0.12, 0.6), Color(0.47, 0.33, 0.23, 0.4), 2)
-		normal_style.corner_radius_top_left = 4
-		normal_style.corner_radius_top_right = 4
-		normal_style.corner_radius_bottom_left = 4
-		normal_style.corner_radius_bottom_right = 4
+			Color(0.12, 0.1, 0.07, 0.75), Color(0.4, 0.3, 0.18, 0.5), 2)
+		normal_style.corner_radius_top_left = 6
+		normal_style.corner_radius_top_right = 6
+		normal_style.corner_radius_bottom_left = 6
+		normal_style.corner_radius_bottom_right = 6
 		btn.add_theme_stylebox_override("normal", normal_style)
 		var hover_style := _create_panel_style(
-			Color(0.39, 0.31, 0.16, 0.4), Color(1.0, 0.84, 0.2), 2)
-		hover_style.corner_radius_top_left = 4
-		hover_style.corner_radius_top_right = 4
-		hover_style.corner_radius_bottom_left = 4
-		hover_style.corner_radius_bottom_right = 4
+			Color(0.22, 0.18, 0.1, 0.8), Color(1.0, 0.84, 0.2), 2)
+		hover_style.corner_radius_top_left = 6
+		hover_style.corner_radius_top_right = 6
+		hover_style.corner_radius_bottom_left = 6
+		hover_style.corner_radius_bottom_right = 6
 		btn.add_theme_stylebox_override("hover", hover_style)
 		btn.add_theme_stylebox_override("pressed", hover_style)
 		btn.add_theme_stylebox_override("focus", normal_style)
@@ -471,11 +471,11 @@ func _setup_ui() -> void:
 	_game_over_panel = PanelContainer.new()
 	_game_over_panel.visible = false
 	_game_over_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_game_over_panel.custom_minimum_size = Vector2(420, 260)
-	_game_over_panel.offset_left = -210.0
-	_game_over_panel.offset_top = -130.0
-	_game_over_panel.offset_right = 210.0
-	_game_over_panel.offset_bottom = 130.0
+	_game_over_panel.custom_minimum_size = Vector2(460, 280)
+	_game_over_panel.offset_left = -230.0
+	_game_over_panel.offset_top = -140.0
+	_game_over_panel.offset_right = 230.0
+	_game_over_panel.offset_bottom = 140.0
 	_game_over_panel.add_theme_stylebox_override("panel", _create_panel_style(
 		Color(0.04, 0.03, 0.06, 0.96), Color(0.6, 0.5, 0.2), 3))
 	_canvas.add_child(_game_over_panel)
@@ -528,11 +528,11 @@ func _setup_card_ui() -> void:
 	_card_panel = PanelContainer.new()
 	_card_panel.visible = false
 	_card_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_card_panel.custom_minimum_size = Vector2(620, 280)
-	_card_panel.offset_left = -310.0
-	_card_panel.offset_top = -140.0
-	_card_panel.offset_right = 310.0
-	_card_panel.offset_bottom = 140.0
+	_card_panel.custom_minimum_size = Vector2(700, 320)
+	_card_panel.offset_left = -350.0
+	_card_panel.offset_top = -160.0
+	_card_panel.offset_right = 350.0
+	_card_panel.offset_bottom = 160.0
 	_card_panel.add_theme_stylebox_override("panel", _create_panel_style(
 		Color(0.03, 0.03, 0.06, 0.96), Color(0.7, 0.55, 0.15), 3))
 	_canvas.add_child(_card_panel)
@@ -556,13 +556,24 @@ func _setup_card_ui() -> void:
 
 	for i in 3:
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(180, 120)
-		btn.add_theme_font_size_override("font_size", 12)
+		btn.custom_minimum_size = Vector2(200, 150)
+		btn.add_theme_font_size_override("font_size", 13)
 		btn.add_theme_color_override("font_color", Color(0.95, 0.9, 0.7))
-		btn.add_theme_stylebox_override("normal", _create_panel_style(
-			Color(0.08, 0.06, 0.04, 0.95), Color(0.5, 0.4, 0.2), 2))
-		btn.add_theme_stylebox_override("hover", _create_panel_style(
-			Color(0.14, 0.11, 0.06, 0.95), Color(0.85, 0.72, 0.3), 2))
+		var card_normal := _create_panel_style(
+			Color(0.07, 0.05, 0.03, 0.95), Color(0.5, 0.4, 0.2), 2)
+		card_normal.corner_radius_top_left = 8
+		card_normal.corner_radius_top_right = 8
+		card_normal.corner_radius_bottom_left = 8
+		card_normal.corner_radius_bottom_right = 8
+		btn.add_theme_stylebox_override("normal", card_normal)
+		var card_hover := _create_panel_style(
+			Color(0.14, 0.11, 0.06, 0.95), Color(0.95, 0.8, 0.3), 3)
+		card_hover.corner_radius_top_left = 8
+		card_hover.corner_radius_top_right = 8
+		card_hover.corner_radius_bottom_left = 8
+		card_hover.corner_radius_bottom_right = 8
+		btn.add_theme_stylebox_override("hover", card_hover)
+		btn.add_theme_stylebox_override("pressed", card_hover)
 		btn.pressed.connect(_on_card_selected.bind(i))
 		hbox.add_child(btn)
 		_card_buttons.append(btn)
@@ -580,14 +591,18 @@ func _setup_card_ui() -> void:
 	vbox.add_child(skip_center)
 
 func _setup_synergy_bar() -> void:
+	var syn_panel := PanelContainer.new()
+	syn_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	syn_panel.offset_left = 6.0
+	syn_panel.offset_top = 54.0
+	syn_panel.custom_minimum_size = Vector2(170, 0)
+	syn_panel.add_theme_stylebox_override("panel", _create_panel_style(
+		Color(0.03, 0.03, 0.05, 0.8), Color(0.4, 0.35, 0.2, 0.4), 1))
+	_canvas.add_child(syn_panel)
 	_synergy_label = Label.new()
-	_synergy_label.set_anchors_preset(Control.PRESET_LEFT_WIDE)
-	_synergy_label.offset_left = 8.0
-	_synergy_label.offset_top = 52.0
-	_synergy_label.offset_right = 200.0
 	_synergy_label.add_theme_font_size_override("font_size", 13)
-	_synergy_label.add_theme_color_override("font_color", Color(0.85, 0.8, 0.6))
-	_canvas.add_child(_synergy_label)
+	_synergy_label.add_theme_color_override("font_color", Color(0.9, 0.82, 0.55))
+	syn_panel.add_child(_synergy_label)
 	_update_synergy_bar()
 
 func _setup_event_ui() -> void:
@@ -735,63 +750,69 @@ func _setup_debug_overlay() -> void:
 func _update_slot_highlight() -> void:
 	for i in _slot_buttons.size():
 		var btn: Button = _slot_buttons[i]
+		var style: StyleBoxFlat
 		if i == _selected_slot:
-			btn.add_theme_stylebox_override("normal", _create_panel_style(
-				Color(0.14, 0.11, 0.06, 0.95), Color(0.95, 0.8, 0.3), 3))
+			style = _create_panel_style(
+				Color(0.18, 0.14, 0.06, 0.95), Color(1.0, 0.85, 0.25), 3)
 		else:
-			btn.add_theme_stylebox_override("normal", _create_panel_style(
-				Color(0.08, 0.06, 0.04, 0.95), Color(0.4, 0.35, 0.2), 1))
+			style = _create_panel_style(
+				Color(0.12, 0.1, 0.07, 0.75), Color(0.4, 0.3, 0.18, 0.5), 2)
+		style.corner_radius_top_left = 6
+		style.corner_radius_top_right = 6
+		style.corner_radius_bottom_left = 6
+		style.corner_radius_bottom_right = 6
+		btn.add_theme_stylebox_override("normal", style)
 
 func _create_orb(bg_center: Color, bg_edge: Color, border_color: Color) -> PanelContainer:
 	var orb := PanelContainer.new()
-	orb.custom_minimum_size = Vector2(76, 76)
+	orb.custom_minimum_size = Vector2(88, 88)
 	var style := StyleBoxFlat.new()
 	style.bg_color = bg_center
-	style.corner_radius_top_left = 38
-	style.corner_radius_top_right = 38
-	style.corner_radius_bottom_left = 38
-	style.corner_radius_bottom_right = 38
+	style.corner_radius_top_left = 44
+	style.corner_radius_top_right = 44
+	style.corner_radius_bottom_left = 44
+	style.corner_radius_bottom_right = 44
 	style.border_color = border_color
 	style.border_width_top = 3
 	style.border_width_bottom = 3
 	style.border_width_left = 3
 	style.border_width_right = 3
-	style.content_margin_left = 4
-	style.content_margin_right = 4
-	style.content_margin_top = 4
-	style.content_margin_bottom = 4
+	style.content_margin_left = 6
+	style.content_margin_right = 6
+	style.content_margin_top = 6
+	style.content_margin_bottom = 6
 	orb.add_theme_stylebox_override("panel", style)
 	var vbox := VBoxContainer.new()
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 0)
+	vbox.add_theme_constant_override("separation", 2)
 	orb.add_child(vbox)
 	var lbl := Label.new()
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 9)
+	lbl.add_theme_font_size_override("font_size", 10)
 	vbox.add_child(lbl)
 	var val := Label.new()
 	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	val.add_theme_font_size_override("font_size", 16)
+	val.add_theme_font_size_override("font_size", 20)
 	vbox.add_child(val)
 	return orb
 
 func _create_panel_style(bg_color: Color, border_color: Color = Color.TRANSPARENT, border_width: int = 0) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = bg_color
-	style.corner_radius_top_left = 2
-	style.corner_radius_top_right = 2
-	style.corner_radius_bottom_left = 2
-	style.corner_radius_bottom_right = 2
+	style.corner_radius_top_left = 4
+	style.corner_radius_top_right = 4
+	style.corner_radius_bottom_left = 4
+	style.corner_radius_bottom_right = 4
 	if border_color != Color.TRANSPARENT:
 		style.border_color = border_color
 		style.border_width_bottom = border_width
 		style.border_width_top = border_width
 		style.border_width_left = border_width
 		style.border_width_right = border_width
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
+	style.content_margin_left = 14
+	style.content_margin_right = 14
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
 	return style
 
 # ---------------------------------------------------------------------------
@@ -1328,19 +1349,29 @@ func _apply_card(card: RewardCard) -> void:
 func _update_synergy_bar() -> void:
 	if not _synergy_label:
 		return
+	var _trait_icons := {
+		TraitData.TraitType.FIRE: "F",
+		TraitData.TraitType.ICE: "I",
+		TraitData.TraitType.POISON: "P",
+		TraitData.TraitType.ELECTRIC: "E",
+		TraitData.TraitType.FORTIFY: "D",
+	}
 	var text := ""
 	for t in [TraitData.TraitType.FIRE, TraitData.TraitType.ICE, TraitData.TraitType.POISON,
 			TraitData.TraitType.ELECTRIC, TraitData.TraitType.FORTIFY]:
 		var count := SynergyManager.get_trait_count(t)
 		if count > 0:
 			var tier := SynergyManager.get_synergy_tier(t)
-			var tier_str := ""
-			if tier > 0:
-				tier_str = " [T%d]" % tier
-			text += "%s: %d%s\n" % [TraitData.get_trait_name(t), count, tier_str]
+			var tier_mark := ""
+			if tier >= 2:
+				tier_mark = " **"
+			elif tier >= 1:
+				tier_mark = " *"
+			var icon: String = _trait_icons.get(t, "?")
+			text += "[%s] %s x%d%s\n" % [icon, TraitData.get_trait_name(t), count, tier_mark]
 	var cross := SynergyManager.get_cross_synergies()
 	for c in cross:
-		text += c.to_upper() + "\n"
+		text += ">> %s\n" % c.to_upper()
 	_synergy_label.text = text
 
 # ---------------------------------------------------------------------------
