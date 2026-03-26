@@ -102,9 +102,22 @@ func play_sfx(stream: AudioStream, volume_offset_db: float = 0.0) -> void:
 
 func play_sfx_by_name(sfx_name: String, volume_offset_db: float = 0.0) -> void:
 	if not _sfx_cache.has(sfx_name):
-		var path := "res://assets/audio/sfx/%s.ogg" % sfx_name
-		if ResourceLoader.exists(path):
-			_sfx_cache[sfx_name] = load(path)
-		else:
+		var base := "res://assets/audio/sfx/%s" % sfx_name
+		var stream: AudioStream = null
+		for ext in [".ogg", ".wav", ".mp3"]:
+			var path := base + ext
+			if ResourceLoader.exists(path):
+				stream = load(path)
+				break
+		if stream == null:
 			return
+		_sfx_cache[sfx_name] = stream
 	play_sfx(_sfx_cache[sfx_name], volume_offset_db)
+
+func play_bgm_by_name(bgm_name: String) -> void:
+	var base := "res://assets/audio/bgm/%s" % bgm_name
+	for ext in [".ogg", ".wav", ".mp3"]:
+		var path := base + ext
+		if ResourceLoader.exists(path):
+			play_bgm(load(path))
+			return

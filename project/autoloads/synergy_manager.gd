@@ -22,8 +22,14 @@ const TIER_3_BONUS := 1.0   # +100% + game changer
 func add_trait(trait_type: int) -> void:
 	if not _trait_counts.has(trait_type):
 		_trait_counts[trait_type] = 0
+	var old_tier := get_synergy_tier(trait_type)
 	_trait_counts[trait_type] += 1
 	_recalculate()
+	var new_tier := get_synergy_tier(trait_type)
+	if new_tier > old_tier:
+		AudioManager.play_sfx_by_name("synergy")
+		var color: Color = TraitData.get_trait_color(trait_type)
+		EffectsManager.spawn_synergy_effect(Vector3(128.5, 0.5, 128.5), color)
 
 func remove_trait(trait_type: int) -> void:
 	if _trait_counts.has(trait_type):

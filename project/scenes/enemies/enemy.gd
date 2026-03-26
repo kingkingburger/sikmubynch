@@ -525,19 +525,28 @@ func _update_hp_bar() -> void:
 		fill_mat.albedo_color = Color(0.15, 0.85, 0.2) if hp_ratio > 0.5 else Color(0.9, 0.3, 0.1)
 
 func apply_burn(dps: float, duration: float = 3.0) -> void:
+	var is_new := _burn_timer <= 0.0
 	_burn_dps = maxf(_burn_dps, dps)
 	_burn_timer = maxf(_burn_timer, duration)
+	if is_new:
+		EffectsManager.spawn_burn_tick(global_position)
 
 func apply_slow(mult: float, duration: float = 2.0) -> void:
 	_slow_mult = minf(_slow_mult, 1.0 - mult)
 	_slow_timer = maxf(_slow_timer, duration)
 
 func apply_poison(dps: float, duration: float = 4.0) -> void:
+	var is_new := _poison_timer <= 0.0
 	_poison_dps = maxf(_poison_dps, dps)
 	_poison_timer = maxf(_poison_timer, duration)
+	if is_new:
+		EffectsManager.spawn_poison_tick(global_position)
 
 func apply_stun(duration: float = 0.5) -> void:
+	var is_new := _stun_timer <= 0.0
 	_stun_timer = maxf(_stun_timer, duration)
+	if is_new:
+		EffectsManager.spawn_freeze_effect(global_position)
 
 func take_damage(amount: float) -> void:
 	if _dead:
@@ -557,6 +566,10 @@ func _die() -> void:
 		return
 	_dead = true
 	SpatialGrid.unregister(self, "enemies")
+	# Exploder/Destroyer: explosion SFX + visual, others handled by game.gd
+	if data and data.enemy_type in [EnemyData.EnemyType.EXPLODER, EnemyData.EnemyType.DESTROYER]:
+		AudioManager.play_sfx_by_name("explosion", -3.0)
+		EffectsManager.spawn_explosion_effect(global_position, data.explode_radius)
 
 	if _poison_dps > 0.0 and _poison_timer > 0.0:
 		var nearby := SpatialGrid.find_in_range(global_position, "enemies", 3.0)

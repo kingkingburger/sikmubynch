@@ -11,6 +11,34 @@ var _mesh: MeshInstance3D
 func _ready() -> void:
 	_start_pos = global_position
 	_build_mesh()
+	_build_trail()
+
+func _build_trail() -> void:
+	var trail := CPUParticles3D.new()
+	trail.emitting = true
+	trail.amount = 6
+	trail.lifetime = 0.3
+	trail.explosiveness = 0.0
+	trail.direction = Vector3.ZERO
+	trail.spread = 180.0
+	trail.initial_velocity_min = 0.0
+	trail.initial_velocity_max = 0.2
+	trail.gravity = Vector3.ZERO
+	trail.scale_amount_min = 0.1
+	trail.scale_amount_max = 0.25
+	trail.color = Color(0.3, 0.9, 1.0, 0.7)
+	var tmesh := SphereMesh.new()
+	tmesh.radius = 0.02
+	tmesh.height = 0.04
+	trail.mesh = tmesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.2, 0.8, 1.0)
+	mat.emission_enabled = true
+	mat.emission = Color(0.2, 0.8, 1.0)
+	mat.emission_energy_multiplier = 3.0
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	trail.material_override = mat
+	add_child(trail)
 
 func _build_mesh() -> void:
 	_mesh = MeshInstance3D.new()
@@ -54,5 +82,6 @@ func _process(delta: float) -> void:
 
 	if t >= 1.0:
 		_collected = true
+		AudioManager.play_sfx_by_name("mineral", -10.0)
 		GameManager.add_minerals(amount)
 		queue_free()

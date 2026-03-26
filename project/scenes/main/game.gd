@@ -119,9 +119,7 @@ func _ready() -> void:
 	GameFeel.setup(_camera, _canvas)
 	_recalculate_flow_field()
 	# Battle BGM
-	var battle_bgm = load("res://assets/audio/bgm/battle.ogg") if ResourceLoader.exists("res://assets/audio/bgm/battle.ogg") else null
-	if battle_bgm:
-		AudioManager.play_bgm(battle_bgm)
+	AudioManager.play_bgm_by_name("battle")
 	_spawn_wave()
 
 func _init_building_data() -> void:
@@ -1010,6 +1008,7 @@ func _process_spawn_queue() -> void:
 
 func _on_wave_cleared() -> void:
 	AudioManager.play_sfx_by_name("wave_start")
+	EffectsManager.spawn_reward_sparkle(Vector3(128.5, 1.0, 128.5))
 	var bonus := 25 + GameManager.wave_number * 10
 	var reward_mult := EventManager.get_challenge_reward_mult()
 	GameManager.add_minerals(int(bonus * reward_mult))
@@ -1170,6 +1169,7 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 	FlowField.set_obstacle(grid_pos, true)
 	_flow_dirty = true
 	AudioManager.play_sfx_by_name("build")
+	EffectsManager.spawn_build_effect(building.position + Vector3(0, 0.2, 0), bd.color)
 	if bd.trait_type >= 0:
 		SynergyManager.add_trait(bd.trait_type)
 
@@ -1281,6 +1281,9 @@ func _on_unit_died() -> void:
 	_units_alive -= 1
 
 func _on_building_destroyed(grid_pos: Vector2i) -> void:
+	AudioManager.play_sfx_by_name("destroy")
+	var destroy_pos := Vector3(float(grid_pos.x) + 0.5, 0.0, float(grid_pos.y) + 0.5)
+	EffectsManager.spawn_destroy_effect(destroy_pos)
 	_buildings_count -= 1
 	if building_grid.has(grid_pos):
 		var b = building_grid[grid_pos]
@@ -1326,6 +1329,7 @@ func _recalculate_flow_field() -> void:
 	FlowField.recalculate(targets)
 
 func _on_slot_pressed(slot_index: int) -> void:
+	AudioManager.play_sfx_by_name("ui_click", -3.0)
 	_selected_slot = slot_index
 	_update_slot_highlight()
 
@@ -1345,6 +1349,7 @@ func _update_hud() -> void:
 
 func _on_game_over() -> void:
 	AudioManager.stop_bgm()
+	AudioManager.play_sfx_by_name("destroy", 3.0)
 	_game_over_panel.visible = true
 	_ghost_mesh.visible = false
 	var secs := int(GameManager.game_time)
@@ -1378,6 +1383,8 @@ func _show_reward_cards() -> void:
 func _on_card_selected(index: int) -> void:
 	if index >= _pending_cards.size():
 		return
+	AudioManager.play_sfx_by_name("reward")
+	EffectsManager.spawn_reward_sparkle(Vector3(128.5, 1.0, 128.5))
 	var card: RewardCard = _pending_cards[index]
 	_apply_card(card)
 	_card_panel.visible = false
@@ -1466,6 +1473,7 @@ func _on_choice_event(event_name: String, description: String, choices: Array) -
 func _on_choice_selected(index: int) -> void:
 	if index >= _pending_choices.size():
 		return
+	AudioManager.play_sfx_by_name("ui_click")
 	var choice_id: String = _pending_choices[index]["id"]
 	var result := EventManager.resolve_choice(choice_id)
 	_choice_panel.visible = false

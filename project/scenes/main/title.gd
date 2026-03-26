@@ -3,9 +3,7 @@ extends Control
 func _ready() -> void:
 	_build_ui()
 	# Title BGM
-	var title_bgm = load("res://assets/audio/bgm/title.ogg") if ResourceLoader.exists("res://assets/audio/bgm/title.ogg") else null
-	if title_bgm:
-		AudioManager.play_bgm(title_bgm)
+	AudioManager.play_bgm_by_name("title")
 
 func _build_ui() -> void:
 	# Background
@@ -107,4 +105,5 @@ func _build_ui() -> void:
 	vbox.add_child(info)
 
 func _on_start() -> void:
+	AudioManager.play_sfx_by_name("ui_click")
 	get_tree().change_scene_to_file("res://scenes/main/game.tscn")

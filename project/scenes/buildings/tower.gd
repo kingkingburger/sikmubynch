@@ -94,7 +94,7 @@ func _fire_at(target: Node3D) -> void:
 	var projectile := projectile_scene.instantiate()
 	projectile.position = Vector3(global_position.x, 1.35, global_position.z)
 	projectile.target = target
-	projectile.damage = GameFeel.roll_critical(_get_buffed_dps())
+	projectile.damage = GameFeel.roll_critical(_get_buffed_dps(), global_position)
 	# Pass synergy effects to projectile
 	if data and data.trait_type >= 0:
 		projectile.set("trait_effects", SynergyManager.get_special_effects(data.trait_type))

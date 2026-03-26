@@ -26,6 +26,7 @@ GameFeel="*res://autoloads/game_feel.gd"
 ObjectPool="*res://autoloads/object_pool.gd"
 AudioManager="*res://autoloads/audio_manager.gd"
 SpatialGrid="*res://autoloads/spatial_grid.gd"
+EffectsManager="*res://autoloads/effects_manager.gd"
 
 [display]
 

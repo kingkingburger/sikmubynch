@@ -603,6 +603,9 @@ func _die() -> void:
 	SpatialGrid.unregister(self, "units")
 	died.emit()
 	_spawn_death_particles()
+	if data and data.unit_type == UnitData.UnitType.BOMBER:
+		AudioManager.play_sfx_by_name("explosion", -3.0)
+		EffectsManager.spawn_explosion_effect(global_position, 2.5)
 	# Disable collision
 	collision_layer = 0
 	collision_mask = 0

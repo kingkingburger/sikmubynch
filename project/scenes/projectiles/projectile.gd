@@ -93,6 +93,8 @@ func _on_hit() -> void:
 
 	# Impact particles
 	_spawn_impact()
+	AudioManager.play_sfx_by_name("hit", -8.0)
+	EffectsManager.spawn_hit_impact(global_position)
 
 	# Apply damage
 	if target.has_method("take_damage"):
