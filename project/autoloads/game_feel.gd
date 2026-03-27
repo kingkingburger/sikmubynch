@@ -69,8 +69,6 @@ func hitstop(duration: float = 0.04) -> void:
 func flash_white() -> void:
 	pass  # Disabled: full-screen flash causes eye strain
 
-var _last_crit_pos: Vector3 = Vector3.ZERO
-
 func roll_critical(base_damage: float, pos: Vector3 = Vector3.ZERO) -> float:
 	if randf() < CRIT_CHANCE:
 		shake(0.15)

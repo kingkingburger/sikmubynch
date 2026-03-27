@@ -2,7 +2,6 @@
 numpy + stdlib wave로 SFX 9종 + BGM 2종 생성.
 """
 
-import struct
 import wave
 from pathlib import Path
 
@@ -29,7 +28,6 @@ def save_wav(path: Path, data: np.ndarray, sr: int = SAMPLE_RATE) -> None:
 def envelope(length: int, attack: float = 0.01, decay: float = 0.1,
              sustain: float = 0.7, release: float = 0.2) -> np.ndarray:
     """ADSR envelope."""
-    total = length / SAMPLE_RATE
     a = int(attack * SAMPLE_RATE)
     d = int(decay * SAMPLE_RATE)
     r = int(release * SAMPLE_RATE)
