@@ -257,24 +257,16 @@ func _setup_lighting() -> void:
 	# Dark environment —発光体 only
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.008, 0.008, 0.012)
+	env.background_color = Color(0.01, 0.01, 0.015)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.18, 0.2, 0.28)
-	env.ambient_light_energy = 0.4
+	env.ambient_light_color = Color(0.22, 0.24, 0.3)
+	env.ambient_light_energy = 0.5
 	# Glow/Bloom — makes emission pop
 	env.glow_enabled = true
-	env.glow_intensity = 0.9
-	env.glow_bloom = 0.2
+	env.glow_intensity = 0.8
+	env.glow_bloom = 0.15
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
-	env.glow_hdr_threshold = 0.7
-	# Fog — distance-based atmosphere
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.03, 0.035, 0.05)
-	env.fog_light_energy = 0.3
-	env.fog_density = 0.003
-	# Tonemap — cinematic contrast
-	env.tonemap_mode = Environment.TONE_MAP_FILMIC
-	env.tonemap_exposure = 0.95
+	env.glow_hdr_threshold = 0.8
 
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
@@ -864,11 +856,11 @@ func _setup_esc_menu() -> void:
 	_esc_panel = PanelContainer.new()
 	_esc_panel.visible = false
 	_esc_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_esc_panel.custom_minimum_size = Vector2(320, 240)
+	_esc_panel.custom_minimum_size = Vector2(320, 380)
 	_esc_panel.offset_left = -160.0
-	_esc_panel.offset_top = -120.0
+	_esc_panel.offset_top = -190.0
 	_esc_panel.offset_right = 160.0
-	_esc_panel.offset_bottom = 120.0
+	_esc_panel.offset_bottom = 190.0
 	_esc_panel.add_theme_stylebox_override("panel", _create_panel_style(
 		Color(0.04, 0.03, 0.06, 0.96), Color(0.6, 0.5, 0.2), 3))
 	_canvas.add_child(_esc_panel)
@@ -925,6 +917,38 @@ func _setup_esc_menu() -> void:
 	var c3 := CenterContainer.new()
 	c3.add_child(title_btn)
 	vbox.add_child(c3)
+
+	# --- Volume sliders ---
+	var vol_label_color := Color(0.75, 0.68, 0.4)
+	var slider_names := ["Master", "Music", "SFX"]
+	var slider_defaults := [AudioManager.master_volume, AudioManager.music_volume, AudioManager.sfx_volume]
+	for i in 3:
+		var row := HBoxContainer.new()
+		row.custom_minimum_size = Vector2(260, 28)
+		row.add_theme_constant_override("separation", 8)
+		var lbl := Label.new()
+		lbl.text = slider_names[i]
+		lbl.custom_minimum_size = Vector2(55, 0)
+		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_color_override("font_color", vol_label_color)
+		row.add_child(lbl)
+		var slider := HSlider.new()
+		slider.min_value = 0.0
+		slider.max_value = 1.0
+		slider.step = 0.05
+		slider.value = slider_defaults[i]
+		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var idx := i
+		slider.value_changed.connect(func(val: float) -> void:
+			match idx:
+				0: AudioManager.master_volume = val
+				1: AudioManager.music_volume = val
+				2: AudioManager.sfx_volume = val
+		)
+		row.add_child(slider)
+		var cc := CenterContainer.new()
+		cc.add_child(row)
+		vbox.add_child(cc)
 
 func _setup_debug_overlay() -> void:
 	_debug_label = Label.new()

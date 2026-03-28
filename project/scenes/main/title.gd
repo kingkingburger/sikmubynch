@@ -99,6 +99,27 @@ func _build_ui() -> void:
 	var lang_center := CenterContainer.new()
 	lang_center.add_child(lang_btn)
 	vbox.add_child(lang_center)
+
+	# Sound toggle button
+	var sound_btn := Button.new()
+	sound_btn.text = "Sound: OFF"
+	sound_btn.custom_minimum_size = Vector2(140, 36)
+	sound_btn.add_theme_font_size_override("font_size", 14)
+	sound_btn.add_theme_color_override("font_color", Color(0.7, 0.65, 0.5))
+	sound_btn.add_theme_stylebox_override("normal", lang_style)
+	sound_btn.pressed.connect(func():
+		if AudioManager.master_volume < 0.01:
+			AudioManager.master_volume = 0.8
+			sound_btn.text = "Sound: ON"
+			AudioManager.play_bgm_by_name("title")
+		else:
+			AudioManager.master_volume = 0.0
+			sound_btn.text = "Sound: OFF"
+	)
+	var sound_center := CenterContainer.new()
+	sound_center.add_child(sound_btn)
+	vbox.add_child(sound_center)
+
 	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	info.add_theme_font_size_override("font_size", 13)
 	info.add_theme_color_override("font_color", Color(0.4, 0.38, 0.3))

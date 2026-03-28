@@ -7,7 +7,7 @@ var _bgm_fade_player: AudioStreamPlayer
 var _sfx_players: Array[AudioStreamPlayer] = []
 const SFX_POOL_SIZE := 8
 
-var master_volume: float = 0.8:
+var master_volume: float = 0.0:
 	set(v):
 		master_volume = clampf(v, 0.0, 1.0)
 		AudioServer.set_bus_volume_db(0, linear_to_db(master_volume))
