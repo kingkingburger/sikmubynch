@@ -28,7 +28,7 @@ func _setup_aura() -> void:
 
 	# Top crystal
 	var crystal := MeshInstance3D.new()
-	var glb := BaseBuilding._load_glb("buildings", "buff_crystal")
+	var glb := BaseBuilding._load_glb("buildings", "buff_tower")
 	if glb:
 		crystal.mesh = glb
 	else:

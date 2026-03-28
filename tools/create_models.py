@@ -57,7 +57,7 @@ def box(size, pos=(0,0,0), rot=None, color=(0.5,0.5,0.5), metal=0.0, rough=0.7):
     return cm(m, color, metal, rough)
 
 
-def cyl(r, h, pos=(0,0,0), rot=None, segs=8, color=(0.5,0.5,0.5), metal=0.0, rough=0.7):
+def cyl(r, h, pos=(0,0,0), rot=None, segs=12, color=(0.5,0.5,0.5), metal=0.0, rough=0.7):
     m = trimesh.creation.cylinder(radius=r, height=h, sections=segs)
     if rot is not None:
         m.apply_transform(rot)
@@ -65,7 +65,7 @@ def cyl(r, h, pos=(0,0,0), rot=None, segs=8, color=(0.5,0.5,0.5), metal=0.0, rou
     return cm(m, color, metal, rough)
 
 
-def cone(r, h, pos=(0,0,0), rot=None, segs=6, color=(0.5,0.5,0.5), metal=0.0, rough=0.7):
+def cone(r, h, pos=(0,0,0), rot=None, segs=10, color=(0.5,0.5,0.5), metal=0.0, rough=0.7):
     m = trimesh.creation.cone(radius=r, height=h, sections=segs)
     if rot is not None:
         m.apply_transform(rot)
@@ -73,7 +73,7 @@ def cone(r, h, pos=(0,0,0), rot=None, segs=6, color=(0.5,0.5,0.5), metal=0.0, ro
     return cm(m, color, metal, rough)
 
 
-def sphere(r, pos=(0,0,0), sub=1, color=(0.5,0.5,0.5), metal=0.0, rough=0.7):
+def sphere(r, pos=(0,0,0), sub=2, color=(0.5,0.5,0.5), metal=0.0, rough=0.7):
     m = trimesh.creation.icosphere(subdivisions=sub, radius=r)
     m.apply_translation(pos)
     return cm(m, color, metal, rough)
@@ -224,7 +224,7 @@ def make_soldier():
     # 얼굴
     p.append(sphere(0.085, (0, 0.495, 0), sub=1, color=SKIN_COLOR))
     # 헬멧 본체
-    helm_body = trimesh.creation.icosphere(subdivisions=1, radius=0.098)
+    helm_body = trimesh.creation.icosphere(subdivisions=2, radius=0.098)
     helm_body.apply_translation((0, 0.505, 0))
     cm(helm_body, STEEL_DARK, 0.65, 0.35)
     p.append(helm_body)
@@ -249,13 +249,13 @@ def make_soldier():
 
     # --- 카이트 실드 (왼손) ---
     # 실드 본체 (육각형 실린더로 납작하게)
-    shield_body = trimesh.creation.cylinder(radius=0.12, height=0.025, sections=5)
+    shield_body = trimesh.creation.cylinder(radius=0.12, height=0.025, sections=12)
     shield_body.apply_transform(Rx(np.pi/2))
     shield_body.apply_translation((-0.24, 0.28, 0.08))
     cm(shield_body, STEEL_MID, 0.55, 0.4)
     p.append(shield_body)
     # 실드 보스 (중앙 돌출 원뿔)
-    shield_boss = trimesh.creation.cone(radius=0.04, height=0.05, sections=6)
+    shield_boss = trimesh.creation.cone(radius=0.04, height=0.05, sections=12)
     shield_boss.apply_transform(Rx(-np.pi/2))
     shield_boss.apply_translation((-0.24, 0.28, 0.115))
     cm(shield_boss, STEEL_LIGHT, 0.7, 0.3)
@@ -320,13 +320,13 @@ def make_archer():
     # 중앙 그립
     p.append(cyl(0.018, 0.16, (-0.22, 0.35, 0.06), segs=6, color=BOW_WOOD))
     # 위쪽 활 곡선 (기울인 실린더)
-    bow_top = trimesh.creation.cylinder(radius=0.012, height=0.22, sections=5)
+    bow_top = trimesh.creation.cylinder(radius=0.012, height=0.22, sections=12)
     bow_top.apply_transform(Rz(np.radians(20)))
     bow_top.apply_translation((-0.28, 0.50, 0.06))
     cm(bow_top, BOW_WOOD)
     p.append(bow_top)
     # 아래쪽 활 곡선
-    bow_bot = trimesh.creation.cylinder(radius=0.012, height=0.22, sections=5)
+    bow_bot = trimesh.creation.cylinder(radius=0.012, height=0.22, sections=12)
     bow_bot.apply_transform(Rz(np.radians(-20)))
     bow_bot.apply_translation((-0.28, 0.20, 0.06))
     cm(bow_bot, BOW_WOOD)
@@ -346,7 +346,7 @@ def make_tanker():
         # 허벅지 아머
         p.append(box((0.12, 0.18, 0.14), (sx, 0.18, 0), color=GOLD_DARK, metal=0.6, rough=0.4))
         # 무릎 원형 플레이트
-        knee = trimesh.creation.cylinder(radius=0.07, height=0.04, sections=8)
+        knee = trimesh.creation.cylinder(radius=0.07, height=0.04, sections=12)
         knee.apply_transform(Rx(np.pi/2))
         knee.apply_translation((sx, 0.10, 0.07))
         cm(knee, GOLD_MID, 0.65, 0.35)
@@ -362,7 +362,7 @@ def make_tanker():
     p.append(box((0.30, 0.28, 0.05), (0, 0.30, 0.14), color=GOLD_MID, metal=0.65, rough=0.35))
     p.append(box((0.22, 0.20, 0.04), (0, 0.32, 0.185), color=GOLD_LIGHT, metal=0.70, rough=0.30))
     # 흉갑 중앙 문장 (원형)
-    emblem = trimesh.creation.cylinder(radius=0.06, height=0.03, sections=8)
+    emblem = trimesh.creation.cylinder(radius=0.06, height=0.03, sections=12)
     emblem.apply_transform(Rx(np.pi/2))
     emblem.apply_translation((0, 0.32, 0.22))
     cm(emblem, GOLD_RIVET, 0.8, 0.2)
@@ -390,7 +390,7 @@ def make_tanker():
     p.append(box((0.20, 0.08, 0.06), (0, 0.530, 0.12), color=LEATHER_DARK))  # 바이저 슬릿
     # 좌우 뿔
     for sx in [-1, 1]:
-        horn = trimesh.creation.cone(radius=0.028, height=0.16, sections=5)
+        horn = trimesh.creation.cone(radius=0.028, height=0.16, sections=12)
         horn.apply_transform(Rz(sx * np.radians(25)))
         horn.apply_translation((sx*0.11, 0.65, 0))
         cm(horn, GOLD_LIGHT, 0.5, 0.5)
@@ -404,7 +404,7 @@ def make_tanker():
     p.append(box((0.06, 0.40, 0.035), (0, 0.28, 0.27), color=GOLD_LIGHT, metal=0.7))
     p.append(box((0.30, 0.06, 0.035), (0, 0.28, 0.27), color=GOLD_LIGHT, metal=0.7))
     # 실드 중앙 원형 보스
-    boss = trimesh.creation.cylinder(radius=0.055, height=0.05, sections=8)
+    boss = trimesh.creation.cylinder(radius=0.055, height=0.05, sections=12)
     boss.apply_transform(Rx(np.pi/2))
     boss.apply_translation((0, 0.28, 0.290))
     cm(boss, GOLD_RIVET, 0.8, 0.2)
@@ -423,7 +423,7 @@ def make_bomber():
         p.append(box((0.08, 0.055, 0.09), (sx, 0.03, 0.015), color=BOMBER_DARK))  # 낡은 신발
 
     # --- 몸통 (통통, 웅크림) ---
-    body = trimesh.creation.icosphere(subdivisions=1, radius=0.15)
+    body = trimesh.creation.icosphere(subdivisions=2, radius=0.15)
     body.apply_translation((0, 0.25, 0.01))
     cm(body, BOMBER_CLOTH)
     p.append(body)
@@ -436,7 +436,7 @@ def make_bomber():
     p.append(box((0.08, 0.05, 0.09), (0.16, 0.32, 0), color=BOMBER_DARK))
 
     # --- 머리 (앞으로 숙임) ---
-    head = trimesh.creation.icosphere(subdivisions=1, radius=0.082)
+    head = trimesh.creation.icosphere(subdivisions=2, radius=0.082)
     head.apply_translation((0, 0.425, 0.04))
     cm(head, SKIN_COLOR)
     p.append(head)
@@ -504,7 +504,7 @@ def make_rusher():
             p.append(claw_m)
 
     # --- 몸통 (웅크림, 앞으로 기울어짐) ---
-    body = trimesh.creation.cone(radius=0.13, height=0.22, sections=5)
+    body = trimesh.creation.cone(radius=0.13, height=0.22, sections=12)
     body.apply_transform(Rx(np.radians(-15)))
     body.apply_translation((0, 0.19, 0.02))
     cm(body, GOBLIN_DARK)
@@ -513,14 +513,14 @@ def make_rusher():
     # --- 팔 (길고 위협적) ---
     for sx in [-1, 1]:
         # 상완 (앞으로 뻗은)
-        arm_upper = trimesh.creation.cylinder(radius=0.028, height=0.20, sections=5)
+        arm_upper = trimesh.creation.cylinder(radius=0.028, height=0.20, sections=12)
         arm_upper.apply_transform(Rz(sx * np.radians(40)))
         arm_upper.apply_transform(Rx(np.radians(-30)))
         arm_upper.apply_translation((sx*0.18, 0.28, 0.10))
         cm(arm_upper, GOBLIN_MID)
         p.append(arm_upper)
         # 전완
-        arm_lower = trimesh.creation.cylinder(radius=0.022, height=0.18, sections=5)
+        arm_lower = trimesh.creation.cylinder(radius=0.022, height=0.18, sections=12)
         arm_lower.apply_transform(Rx(np.radians(-50)))
         arm_lower.apply_translation((sx*0.25, 0.18, 0.18))
         cm(arm_lower, GOBLIN_DARK)
@@ -581,7 +581,7 @@ def make_tank_enemy():
         (-0.28, 0.12, 40), (-0.28, 0, 50), (-0.28, -0.12, 40),
         (0.28, 0.12, -40), (0.28, 0, -50), (0.28, -0.12, -40),
     ]):
-        leg = trimesh.creation.cylinder(radius=0.025, height=0.18, sections=5)
+        leg = trimesh.creation.cylinder(radius=0.025, height=0.18, sections=12)
         leg.apply_transform(Rz(np.radians(ang)))
         leg.apply_translation((lx, 0.10, lz))
         cm(leg, BEETLE_MID)
@@ -678,11 +678,11 @@ def make_splitter():
         p.append(crack)
 
     # --- 내부 발광 코어 ---
-    core_inner = trimesh.creation.icosphere(subdivisions=1, radius=0.06)
+    core_inner = trimesh.creation.icosphere(subdivisions=2, radius=0.06)
     core_inner.apply_translation((0, 0.20, 0))
     cm(core_inner, CRYSTAL_GLOW, 0.0, 0.05)
     p.append(core_inner)
-    core_outer = trimesh.creation.icosphere(subdivisions=1, radius=0.10)
+    core_outer = trimesh.creation.icosphere(subdivisions=2, radius=0.10)
     core_outer.apply_translation((0, 0.20, 0))
     cm(core_outer, CRYSTAL_MID, 0.0, 0.2)
     p.append(core_outer)
@@ -730,18 +730,18 @@ def make_exploder():
         (0.05, 0.44, 0.14, 0.05), (-0.08, 0.16, 0.18, 0.06),
     ]
     for bx, by, bz, br in bulge_configs:
-        b = trimesh.creation.icosphere(subdivisions=1, radius=br)
+        b = trimesh.creation.icosphere(subdivisions=2, radius=br)
         b.apply_translation((bx, by, bz))
         cm(b, EXPLODE_MID, 0.0, 0.8)
         p.append(b)
 
     # --- 내부 발광 코어 ---
-    glow_core = trimesh.creation.icosphere(subdivisions=1, radius=0.10)
+    glow_core = trimesh.creation.icosphere(subdivisions=2, radius=0.10)
     glow_core.apply_translation((0, 0.26, 0))
     cm(glow_core, GLOW_CORE, 0.0, 0.05)
     p.append(glow_core)
     # 발광 중간층
-    glow_mid = trimesh.creation.icosphere(subdivisions=1, radius=0.15)
+    glow_mid = trimesh.creation.icosphere(subdivisions=2, radius=0.15)
     glow_mid.apply_translation((0, 0.26, 0))
     cm(glow_mid, PUSTULE_COL, 0.0, 0.15)
     p.append(glow_mid)
@@ -799,7 +799,7 @@ def make_elite_rusher():
         p.append(box((0.09, 0.05, 0.10), (sx, 0.035, 0.02), color=ELITE_MID))
 
     # --- 몸통 ---
-    body = trimesh.creation.cone(radius=0.14, height=0.26, sections=6)
+    body = trimesh.creation.cone(radius=0.14, height=0.26, sections=12)
     body.apply_transform(Rx(np.radians(-10)))
     body.apply_translation((0, 0.22, 0.01))
     cm(body, ELITE_DARK)
@@ -822,7 +822,7 @@ def make_elite_rusher():
         cm(sp, HORN_COLOR, 0.3, 0.5)
         p.append(sp)
         # 듀얼 클로 팔
-        arm = trimesh.creation.cylinder(radius=0.028, height=0.20, sections=5)
+        arm = trimesh.creation.cylinder(radius=0.028, height=0.20, sections=12)
         arm.apply_transform(Rx(np.radians(-35)))
         arm.apply_transform(Rz(sx * np.radians(35)))
         arm.apply_translation((sx*0.22, 0.22, 0.12))
@@ -895,7 +895,7 @@ def make_destroyer():
     # 흉갑 (검은 판)
     p.append(box((0.44, 0.36, 0.06), (0, 0.40, 0.22), color=DEMON_PLATE, metal=0.5, rough=0.4))
     # 흉부 문장
-    emblem = trimesh.creation.cone(radius=0.08, height=0.04, sections=6)
+    emblem = trimesh.creation.cone(radius=0.08, height=0.04, sections=12)
     emblem.apply_transform(Rx(np.pi/2))
     emblem.apply_translation((0, 0.42, 0.26))
     cm(emblem, (0.6, 0.10, 0.70), 0.5, 0.3)
@@ -923,7 +923,7 @@ def make_destroyer():
     # --- 체인 (양쪽에서 드리워짐) ---
     for sx in [-0.18, 0.18]:
         for cy_h in [0.48, 0.40, 0.32, 0.24]:
-            link = trimesh.creation.cylinder(radius=0.018, height=0.06, sections=6)
+            link = trimesh.creation.cylinder(radius=0.018, height=0.06, sections=12)
             link.apply_transform(Rx(np.pi/2 * (cy_h % 0.2 > 0.1)))
             link.apply_translation((sx*1.0, cy_h, -0.05))
             cm(link, CHAIN_COLOR, 0.4, 0.6)
@@ -948,7 +948,7 @@ def make_destroyer():
     # --- 뿔 (거대) ---
     for sx in [-1, 1]:
         # 메인 큰 뿔
-        horn_big = trimesh.creation.cone(radius=0.04, height=0.28, sections=5)
+        horn_big = trimesh.creation.cone(radius=0.04, height=0.28, sections=12)
         horn_big.apply_transform(Rz(sx * np.radians(22)))
         horn_big.apply_transform(Rx(np.radians(-8)))
         horn_big.apply_translation((sx*0.11, 0.90, 0.02))
@@ -990,12 +990,12 @@ def make_hq():
     # --- 코너 타워 (4개) ---
     for tx, tz in [(-0.45, -0.40), (0.45, -0.40), (-0.45, 0.40), (0.45, 0.40)]:
         # 타워 몸통
-        tower = trimesh.creation.cylinder(radius=0.13, height=1.10, sections=8)
+        tower = trimesh.creation.cylinder(radius=0.13, height=1.10, sections=12)
         tower.apply_translation((tx, 0.55, tz))
         cm(tower, STONE_DARK, 0.1, 0.85)
         p.append(tower)
         # 타워 꼭대기 (작은 원뿔 지붕)
-        turret_top = trimesh.creation.cone(radius=0.16, height=0.20, sections=8)
+        turret_top = trimesh.creation.cone(radius=0.16, height=0.20, sections=12)
         turret_top.apply_translation((tx, 1.15, tz))
         cm(turret_top, (0.12, 0.14, 0.28), 0.1, 0.8)
         p.append(turret_top)
@@ -1014,7 +1014,7 @@ def make_hq():
     # --- 문 (아치형) ---
     p.append(box((0.20, 0.32, 0.06), (0, 0.22, 0.48), color=LEATHER_DARK))
     # 문 아치
-    door_arch = trimesh.creation.cylinder(radius=0.10, height=0.06, sections=8)
+    door_arch = trimesh.creation.cylinder(radius=0.10, height=0.06, sections=12)
     door_arch.apply_transform(Rx(np.pi/2))
     door_arch.apply_translation((0, 0.38, 0.485))
     cm(door_arch, STONE_LIGHT, 0.1, 0.8)
@@ -1040,7 +1040,7 @@ def make_hq():
 
     # --- 마법 룬 (전면 하단) ---
     for rx_pos in [-0.35, 0, 0.35]:
-        rune = trimesh.creation.cylinder(radius=0.04, height=0.02, sections=6)
+        rune = trimesh.creation.cylinder(radius=0.04, height=0.02, sections=12)
         rune.apply_transform(Rx(np.pi/2))
         rune.apply_translation((rx_pos, 0.10, 0.48))
         cm(rune, RUNE_GLOW, 0.0, 0.1)
@@ -1064,7 +1064,7 @@ def make_tower():
     p.append(box((0.54, 0.04, 0.54), (0, 0.13, 0), color=STONE_LIGHT, metal=0.1, rough=0.9))
 
     # --- 타워 본체 ---
-    tower_body = trimesh.creation.cylinder(radius=0.22, height=0.70, sections=8)
+    tower_body = trimesh.creation.cylinder(radius=0.22, height=0.70, sections=12)
     tower_body.apply_translation((0, 0.50, 0))
     cm(tower_body, STONE_DARK, 0.1, 0.9)
     p.append(tower_body)
@@ -1090,7 +1090,7 @@ def make_tower():
         p.append(slit)
 
     # --- 상부 플랫폼 ---
-    platform = trimesh.creation.cylinder(radius=0.30, height=0.08, sections=8)
+    platform = trimesh.creation.cylinder(radius=0.30, height=0.08, sections=12)
     platform.apply_translation((0, 0.88, 0))
     cm(platform, STONE_LIGHT, 0.15, 0.85)
     p.append(platform)
@@ -1107,7 +1107,7 @@ def make_tower():
         p.append(tooth)
 
     # --- 지붕 콘 ---
-    roof = trimesh.creation.cone(radius=0.28, height=0.25, sections=8)
+    roof = trimesh.creation.cone(radius=0.28, height=0.25, sections=12)
     roof.apply_translation((0, 1.05, 0))
     cm(roof, (0.15, 0.16, 0.30), 0.1, 0.8)
     p.append(roof)
@@ -1119,24 +1119,24 @@ def make_tower_turret():
     """회전포탑: 둥근 터릿 본체, 포신 2개, 장갑 플레이트 (10 파트)"""
     p = []
     # 터릿 기저
-    base = trimesh.creation.cylinder(radius=0.13, height=0.06, sections=8)
+    base = trimesh.creation.cylinder(radius=0.13, height=0.06, sections=12)
     base.apply_translation((0, 0.03, 0))
     cm(base, STONE_DARK, 0.3, 0.6)
     p.append(base)
     # 터릿 본체
-    body = trimesh.creation.cylinder(radius=0.10, height=0.12, sections=8)
+    body = trimesh.creation.cylinder(radius=0.10, height=0.12, sections=12)
     body.apply_translation((0, 0.12, 0))
     cm(body, IRON_COLOR, 0.55, 0.45)
     p.append(body)
     # 포신 메인
-    barrel1 = trimesh.creation.cylinder(radius=0.028, height=0.24, sections=6)
+    barrel1 = trimesh.creation.cylinder(radius=0.028, height=0.24, sections=12)
     barrel1.apply_transform(Rx(np.pi/2))
     barrel1.apply_translation((0, 0.15, 0.15))
     cm(barrel1, STEEL_DARK, 0.65, 0.35)
     p.append(barrel1)
     # 포신 링 (디테일)
     for rz in [0.04, 0.18]:
-        ring = trimesh.creation.cylinder(radius=0.032, height=0.018, sections=6)
+        ring = trimesh.creation.cylinder(radius=0.032, height=0.018, sections=12)
         ring.apply_transform(Rx(np.pi/2))
         ring.apply_translation((0, 0.15, rz))
         cm(ring, STEEL_LIGHT, 0.7, 0.3)
@@ -1147,7 +1147,7 @@ def make_tower_turret():
     for sx in [-0.10, 0.10]:
         p.append(box((0.04, 0.12, 0.14), (sx, 0.14, 0.08), color=STONE_DARK, metal=0.3))
     # 포구 (원형 링)
-    muzzle = trimesh.creation.cylinder(radius=0.032, height=0.04, sections=8)
+    muzzle = trimesh.creation.cylinder(radius=0.032, height=0.04, sections=12)
     muzzle.apply_transform(Rx(np.pi/2))
     muzzle.apply_translation((0, 0.15, 0.27))
     cm(muzzle, STEEL_DARK, 0.65, 0.3)
@@ -1210,12 +1210,12 @@ def make_barracks():
         p.append(box((0.18, 0.16, 0.02), (wx, 0.30, 0.315), color=WOOD_MID))
 
     # --- 굴뚝 ---
-    chimney = trimesh.creation.cylinder(radius=0.055, height=0.30, sections=6)
+    chimney = trimesh.creation.cylinder(radius=0.055, height=0.30, sections=12)
     chimney.apply_translation((0.28, 0.82, -0.10))
     cm(chimney, STONE_MID, 0.1, 0.9)
     p.append(chimney)
     # 굴뚝 모자
-    chimney_cap = trimesh.creation.cylinder(radius=0.075, height=0.04, sections=6)
+    chimney_cap = trimesh.creation.cylinder(radius=0.075, height=0.04, sections=12)
     chimney_cap.apply_translation((0.28, 0.975, -0.10))
     cm(chimney_cap, STONE_DARK, 0.1, 0.9)
     p.append(chimney_cap)
@@ -1248,13 +1248,13 @@ def make_miner():
     # --- 지지 프레임 (A자형) ---
     for sx in [-1, 1]:
         # 경사 지지대
-        frame_leg = trimesh.creation.cylinder(radius=0.022, height=0.44, sections=5)
+        frame_leg = trimesh.creation.cylinder(radius=0.022, height=0.44, sections=12)
         frame_leg.apply_transform(Rz(sx * np.radians(20)))
         frame_leg.apply_translation((sx*0.18, 0.42, 0.06))
         cm(frame_leg, IRON_COLOR, 0.5, 0.6)
         p.append(frame_leg)
         # 수직 지지대
-        frame_v = trimesh.creation.cylinder(radius=0.018, height=0.50, sections=5)
+        frame_v = trimesh.creation.cylinder(radius=0.018, height=0.50, sections=12)
         frame_v.apply_translation((sx*0.20, 0.45, 0.06))
         cm(frame_v, IRON_COLOR, 0.5, 0.6)
         p.append(frame_v)
@@ -1277,26 +1277,26 @@ def make_miner():
             cm(tooth, STEEL_MID, 0.55, 0.45)
             p.append(tooth)
         # 기어 중심 허브
-        hub = trimesh.creation.cylinder(radius=0.03, height=0.06, sections=6)
+        hub = trimesh.creation.cylinder(radius=0.03, height=0.06, sections=12)
         hub.apply_transform(Rx(np.pi/2))
         hub.apply_translation((gx, 0.36, 0.08))
         cm(hub, STEEL_DARK, 0.65, 0.35)
         p.append(hub)
 
     # --- 드릴 암 ---
-    drill_arm = trimesh.creation.cylinder(radius=0.05, height=0.36, sections=6)
+    drill_arm = trimesh.creation.cylinder(radius=0.05, height=0.36, sections=12)
     drill_arm.apply_translation((0, 0.52, 0))
     cm(drill_arm, IRON_COLOR, 0.5, 0.55)
     p.append(drill_arm)
     # 드릴 암 링 (강화)
     for dy in [0.36, 0.50, 0.64]:
-        ring = trimesh.creation.cylinder(radius=0.056, height=0.025, sections=6)
+        ring = trimesh.creation.cylinder(radius=0.056, height=0.025, sections=12)
         ring.apply_translation((0, dy, 0))
         cm(ring, STEEL_MID, 0.6, 0.4)
         p.append(ring)
 
     # --- 드릴 비트 (나선형 콘) ---
-    bit_base = trimesh.creation.cone(radius=0.08, height=0.06, sections=8)
+    bit_base = trimesh.creation.cone(radius=0.08, height=0.06, sections=12)
     bit_base.apply_transform(Rx(np.pi))
     bit_base.apply_translation((0, 0.69, 0))
     cm(bit_base, STEEL_DARK, 0.7, 0.3)
@@ -1327,10 +1327,83 @@ def make_miner():
         cm(crystal, CRYSTAL_MID, 0.2, 0.3)
         p.append(crystal)
         # 크리스탈 베이스
-        c_base = trimesh.creation.cylinder(radius=0.05, height=0.03, sections=5)
+        c_base = trimesh.creation.cylinder(radius=0.05, height=0.03, sections=12)
         c_base.apply_translation((cx, cy + 0.015, cz))
         cm(c_base, CRYSTAL_DARK, 0.1, 0.5)
         p.append(c_base)
+
+    return combine(p)
+
+
+def make_buff_tower():
+    """골든 크리스탈 버프 타워: 중앙 오벨리스크, 4방향 버프 프리즘, 룬 베이스 (24 파트)"""
+    p = []
+
+    # --- 베이스 (팔각형) ---
+    base = trimesh.creation.cylinder(radius=0.28, height=0.10, sections=12)
+    base.apply_translation((0, 0.05, 0))
+    cm(base, STONE_DARK, 0.2, 0.8)
+    p.append(base)
+    # 베이스 장식 링
+    base_ring = trimesh.creation.cylinder(radius=0.30, height=0.03, sections=12)
+    base_ring.apply_translation((0, 0.10, 0))
+    cm(base_ring, GOLD_DARK, 0.6, 0.4)
+    p.append(base_ring)
+
+    # --- 룬 베이스 (4방향) ---
+    for a in range(4):
+        rad = a * np.pi / 2 + np.pi / 4
+        rx, rz = np.cos(rad) * 0.22, np.sin(rad) * 0.22
+        rune = trimesh.creation.cylinder(radius=0.035, height=0.02, sections=12)
+        rune.apply_transform(Rx(np.pi/2))
+        rune.apply_translation((rx, 0.06, rz))
+        cm(rune, RUNE_GLOW, 0.0, 0.1)
+        p.append(rune)
+
+    # --- 중앙 기둥 (오벨리스크) ---
+    pillar = trimesh.creation.cylinder(radius=0.06, height=0.55, sections=12)
+    pillar.apply_translation((0, 0.375, 0))
+    cm(pillar, GOLD_MID, 0.5, 0.45)
+    p.append(pillar)
+    # 기둥 장식 링 3개
+    for ry in [0.15, 0.35, 0.55]:
+        ring = trimesh.creation.cylinder(radius=0.075, height=0.025, sections=12)
+        ring.apply_translation((0, ry, 0))
+        cm(ring, GOLD_LIGHT, 0.65, 0.35)
+        p.append(ring)
+
+    # --- 꼭대기 크리스탈 (팔면체) ---
+    crystal_top = trimesh.creation.icosphere(subdivisions=1, radius=0.09)
+    crystal_top.apply_translation((0, 0.72, 0))
+    cm(crystal_top, GOLD_LIGHT, 0.3, 0.2)
+    p.append(crystal_top)
+    # 크리스탈 코어 (발광)
+    core = trimesh.creation.icosphere(subdivisions=1, radius=0.05)
+    core.apply_translation((0, 0.72, 0))
+    cm(core, (1.0, 0.85, 0.2), 0.0, 0.1)
+    p.append(core)
+
+    # --- 4방향 버프 프리즘 (떠있는 크리스탈) ---
+    for a in range(4):
+        rad = a * np.pi / 2
+        px, pz = np.cos(rad) * 0.18, np.sin(rad) * 0.18
+        # 프리즘 (다이아몬드 형태 = 위아래 콘)
+        prism_top = trimesh.creation.cone(radius=0.04, height=0.08, sections=12)
+        prism_top.apply_translation((px, 0.52, pz))
+        cm(prism_top, GOLD_LIGHT, 0.4, 0.3)
+        p.append(prism_top)
+        prism_bot = trimesh.creation.cone(radius=0.04, height=0.06, sections=12)
+        prism_bot.apply_transform(Rx(np.pi))
+        prism_bot.apply_translation((px, 0.44, pz))
+        cm(prism_bot, GOLD_MID, 0.4, 0.3)
+        p.append(prism_bot)
+
+    # --- 베이스 계단 ---
+    for sx in [-0.12, 0.12]:
+        step = trimesh.creation.box(extents=[0.08, 0.05, 0.28])
+        step.apply_translation((sx, 0.025, 0))
+        cm(step, STONE_MID, 0.1, 0.85)
+        p.append(step)
 
     return combine(p)
 
@@ -1342,14 +1415,14 @@ def make_miner():
 def make_projectile():
     """에너지 발사체: 발광 코어, 궤적 트레일 (6 파트)"""
     p = []
-    core = trimesh.creation.icosphere(subdivisions=1, radius=0.06)
+    core = trimesh.creation.icosphere(subdivisions=2, radius=0.06)
     cm(core, (1.0, 0.82, 0.28), 0.0, 0.05)
     p.append(core)
-    mid = trimesh.creation.icosphere(subdivisions=1, radius=0.04)
+    mid = trimesh.creation.icosphere(subdivisions=2, radius=0.04)
     cm(mid, (1.0, 0.95, 0.7), 0.0, 0.02)
     p.append(mid)
     # 트레일
-    trail1 = trimesh.creation.cone(radius=0.045, height=0.14, sections=6)
+    trail1 = trimesh.creation.cone(radius=0.045, height=0.14, sections=12)
     trail1.apply_translation((0, -0.09, 0))
     cm(trail1, (1.0, 0.55, 0.10), 0.0, 0.3)
     p.append(trail1)
@@ -1409,6 +1482,7 @@ GENERATORS = {
     ("buildings", "tower_turret"): make_tower_turret,
     ("buildings", "barracks"):     make_barracks,
     ("buildings", "miner"):        make_miner,
+    ("buildings", "buff_tower"):   make_buff_tower,
     ("effects",   "projectile"):   make_projectile,
     ("effects",   "mineral_orb"):  make_mineral_orb,
 }
