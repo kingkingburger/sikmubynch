@@ -257,16 +257,24 @@ func _setup_lighting() -> void:
 	# Dark environment —発光体 only
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.01, 0.01, 0.015)
+	env.background_color = Color(0.008, 0.008, 0.012)
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.22, 0.24, 0.3)
-	env.ambient_light_energy = 0.5
+	env.ambient_light_color = Color(0.18, 0.2, 0.28)
+	env.ambient_light_energy = 0.4
 	# Glow/Bloom — makes emission pop
 	env.glow_enabled = true
-	env.glow_intensity = 0.8
-	env.glow_bloom = 0.15
+	env.glow_intensity = 0.9
+	env.glow_bloom = 0.2
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
-	env.glow_hdr_threshold = 0.8
+	env.glow_hdr_threshold = 0.7
+	# Fog — distance-based atmosphere
+	env.fog_enabled = true
+	env.fog_light_color = Color(0.03, 0.035, 0.05)
+	env.fog_light_energy = 0.3
+	env.fog_density = 0.003
+	# Tonemap — cinematic contrast
+	env.tonemap_mode = Environment.TONE_MAP_FILMIC
+	env.tonemap_exposure = 0.95
 
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
@@ -281,53 +289,136 @@ func _setup_ground() -> void:
 	shader.code = """
 shader_type spatial;
 
-uniform vec3 ground_dark : source_color = vec3(0.05, 0.06, 0.04);
-uniform vec3 ground_mid : source_color = vec3(0.09, 0.1, 0.07);
-uniform vec3 grid_color : source_color = vec3(0.12, 0.14, 0.09);
-uniform vec3 chunk_color : source_color = vec3(0.16, 0.13, 0.07);
+uniform vec3 ground_dark : source_color = vec3(0.04, 0.045, 0.03);
+uniform vec3 ground_mid : source_color = vec3(0.08, 0.09, 0.06);
+uniform vec3 ground_light : source_color = vec3(0.12, 0.11, 0.07);
+uniform vec3 grid_color : source_color = vec3(0.10, 0.12, 0.07);
+uniform vec3 chunk_color : source_color = vec3(0.14, 0.11, 0.06);
+uniform vec3 crack_color : source_color = vec3(0.02, 0.02, 0.015);
+uniform vec3 moss_color : source_color = vec3(0.04, 0.08, 0.03);
+uniform vec3 hq_glow_color : source_color = vec3(0.15, 0.25, 0.5);
 uniform float map_size = 256.0;
+uniform float time_scale = 1.0;
+uniform vec2 hq_pos = vec2(128.5, 128.5);
 
+// Procedural noise functions
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
 }
 
+float hash2(vec2 p) {
+	return fract(sin(dot(p, vec2(269.5, 183.3))) * 43758.5453);
+}
+
+float value_noise(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	f = f * f * (3.0 - 2.0 * f); // smoothstep
+	float a = hash(i);
+	float b = hash(i + vec2(1.0, 0.0));
+	float c = hash(i + vec2(0.0, 1.0));
+	float d = hash(i + vec2(1.0, 1.0));
+	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
+float fbm(vec2 p, int octaves) {
+	float val = 0.0;
+	float amp = 0.5;
+	float freq = 1.0;
+	for (int i = 0; i < octaves; i++) {
+		val += amp * value_noise(p * freq);
+		amp *= 0.5;
+		freq *= 2.0;
+	}
+	return val;
+}
+
+// Voronoi for cracks/stone pattern
+float voronoi(vec2 p) {
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+	float min_dist = 1.0;
+	for (int x = -1; x <= 1; x++) {
+		for (int y = -1; y <= 1; y++) {
+			vec2 neighbor = vec2(float(x), float(y));
+			vec2 point = vec2(hash(i + neighbor), hash2(i + neighbor));
+			float d = length(neighbor + point - f);
+			min_dist = min(min_dist, d);
+		}
+	}
+	return min_dist;
+}
+
 void fragment() {
 	vec2 uv = UV * map_size;
+	vec2 world_uv = uv;
 	vec2 cell = floor(uv);
 
-	// Per-tile color variation (dirt/stone patches)
-	float h = hash(cell);
-	vec3 base = mix(ground_dark, ground_mid, h * 0.6 + 0.2);
+	// Multi-layer noise for organic terrain
+	float n1 = fbm(uv * 0.15, 4);
+	float n2 = fbm(uv * 0.4 + 50.0, 3);
+	float n3 = value_noise(uv * 0.08);
 
-	// Grid lines
+	// Base color: blend between dark/mid/light using noise
+	vec3 base = mix(ground_dark, ground_mid, n1 * 0.8 + 0.1);
+	base = mix(base, ground_light, smoothstep(0.55, 0.7, n2) * 0.4);
+
+	// Stone patches (voronoi-based)
+	float stone = voronoi(uv * 0.3);
+	float stone_edge = smoothstep(0.02, 0.06, stone);
+	base = mix(crack_color, base, stone_edge);
+
+	// Cracks (thin dark lines from voronoi)
+	float cracks = voronoi(uv * 0.12 + 100.0);
+	float crack_line = 1.0 - smoothstep(0.0, 0.03, cracks);
+	base = mix(base, crack_color, crack_line * 0.7);
+
+	// Moss patches (in low areas)
+	float moss = smoothstep(0.3, 0.5, n3) * smoothstep(0.4, 0.6, n1);
+	base = mix(base, moss_color, moss * 0.5);
+
+	// Per-tile hash variation (subtle)
+	float h = hash(cell);
+	base *= 0.9 + h * 0.2;
+
+	// Grid lines (subtle)
 	vec2 grid_uv = fract(uv);
-	float line_w = 0.03;
+	float line_w = 0.025;
 	float is_line = 0.0;
 	if (grid_uv.x < line_w || grid_uv.x > 1.0 - line_w ||
 		grid_uv.y < line_w || grid_uv.y > 1.0 - line_w) {
-		is_line = 0.4;
+		is_line = 0.3;
 	}
 
-	// 4x4 chunk borders (thicker, brighter)
+	// 4x4 chunk borders
 	vec2 chunk_uv = fract(uv / 4.0);
-	float chunk_w = 0.02;
+	float chunk_w = 0.015;
 	float is_chunk = 0.0;
 	if (chunk_uv.x < chunk_w || chunk_uv.x > 1.0 - chunk_w ||
 		chunk_uv.y < chunk_w || chunk_uv.y > 1.0 - chunk_w) {
-		is_chunk = 0.6;
+		is_chunk = 0.5;
 	}
 
-	// Vignette — darken edges
-	vec2 center_uv = UV - 0.5;
-	float vignette = 1.0 - dot(center_uv, center_uv) * 0.8;
-	vignette = clamp(vignette, 0.35, 1.0);
+	// HQ proximity glow
+	float hq_dist = length(world_uv - hq_pos);
+	float hq_glow = exp(-hq_dist * 0.08) * 0.3;
+	float hq_pulse = 1.0 + sin(TIME * time_scale * 1.5) * 0.15;
 
+	// Vignette — stronger edge darkening
+	vec2 center_uv = UV - 0.5;
+	float vignette = 1.0 - dot(center_uv, center_uv) * 1.2;
+	vignette = clamp(vignette, 0.2, 1.0);
+
+	// Compose
 	vec3 col = base;
 	col = mix(col, grid_color, is_line);
 	col = mix(col, chunk_color, is_chunk);
+	col += hq_glow_color * hq_glow * hq_pulse;
 	col *= vignette;
+
 	ALBEDO = col;
-	ROUGHNESS = 0.95;
+	ROUGHNESS = 0.92 - stone_edge * 0.15;
+	SPECULAR = 0.1 + stone_edge * 0.1;
 }
 """
 	shader_mat.shader = shader
@@ -372,6 +463,9 @@ func _setup_hq() -> void:
 			var cell := Vector2i(127 + dx, 127 + dz)
 			building_grid[cell] = _hq
 
+var _range_ring: MeshInstance3D
+var _range_shader_mat: ShaderMaterial
+
 func _setup_ghost() -> void:
 	_ghost_mesh = MeshInstance3D.new()
 	var box := BoxMesh.new()
@@ -384,6 +478,43 @@ func _setup_ghost() -> void:
 	_ghost_mesh.material_override = _ghost_mat
 	_ghost_mesh.visible = false
 	add_child(_ghost_mesh)
+	# Range indicator ring
+	_range_ring = MeshInstance3D.new()
+	var ring_plane := PlaneMesh.new()
+	ring_plane.size = Vector2(2.0, 2.0)
+	_range_ring.mesh = ring_plane
+	_range_shader_mat = ShaderMaterial.new()
+	var ring_shader := Shader.new()
+	ring_shader.code = """
+shader_type spatial;
+render_mode unshaded, cull_disabled;
+
+uniform vec4 ring_color : source_color = vec4(0.3, 0.7, 1.0, 0.5);
+uniform float ring_width = 0.04;
+uniform float pulse_speed = 2.5;
+
+void fragment() {
+	vec2 uv = UV * 2.0 - 1.0;
+	float dist = length(uv);
+	// Outer edge ring
+	float ring = smoothstep(1.0, 1.0 - ring_width, dist)
+			   - smoothstep(1.0 - ring_width, 1.0 - ring_width * 2.5, dist);
+	// Inner fill (very faint)
+	float fill = smoothstep(1.0, 0.0, dist) * 0.08;
+	// Pulse animation
+	float pulse = 0.7 + 0.3 * sin(TIME * pulse_speed);
+	// Radial scan line
+	float angle = atan(uv.y, uv.x);
+	float scan = smoothstep(0.0, 0.15, fract(angle / 6.283 + TIME * 0.3)) * 0.3;
+	float a = (ring * pulse + fill + scan * smoothstep(1.0, 0.3, dist)) * ring_color.a;
+	ALBEDO = ring_color.rgb;
+	ALPHA = a * step(dist, 1.0);
+}
+"""
+	_range_shader_mat.shader = ring_shader
+	_range_ring.material_override = _range_shader_mat
+	_range_ring.visible = false
+	add_child(_range_ring)
 
 # ---------------------------------------------------------------------------
 # UI (Diablo-style dark)
@@ -1192,6 +1323,7 @@ func _update_ghost(screen_pos: Vector2) -> void:
 	var world_pos := _screen_to_ground(screen_pos)
 	if world_pos.x < 0.0:
 		_ghost_mesh.visible = false
+		_range_ring.visible = false
 		return
 	var gx := int(floor(world_pos.x))
 	var gz := int(floor(world_pos.z))
@@ -1200,11 +1332,13 @@ func _update_ghost(screen_pos: Vector2) -> void:
 
 	if not in_bounds:
 		_ghost_mesh.visible = false
+		_range_ring.visible = false
 		return
 
 	# Hide ghost over existing buildings
 	if building_grid.has(_mouse_grid_pos):
 		_ghost_mesh.visible = false
+		_range_ring.visible = false
 		return
 
 	_ghost_mesh.visible = true
@@ -1218,12 +1352,30 @@ func _update_ghost(screen_pos: Vector2) -> void:
 	var ghost_box := _ghost_mesh.mesh as BoxMesh
 	if ghost_box:
 		ghost_box.size = Vector3(1.0, h, 1.0)
-	_ghost_mesh.position = Vector3(float(gx) + 0.5, h / 2.0, float(gz) + 0.5)
+	var center := Vector3(float(gx) + 0.5, h / 2.0, float(gz) + 0.5)
+	_ghost_mesh.position = center
 
 	if GameManager.minerals >= bd.cost:
 		_ghost_mat.albedo_color = Color(0.4, 0.85, 0.4, 0.38)
 	else:
 		_ghost_mat.albedo_color = Color(0.9, 0.2, 0.2, 0.38)
+
+	# Range indicator
+	var range_val := 0.0
+	var ring_col := Color(0.3, 0.7, 1.0, 0.5)
+	if bd.attack_range > 0.0:
+		range_val = bd.attack_range
+		ring_col = Color(1.0, 0.4, 0.2, 0.45)
+	elif bd.buff_range > 0.0:
+		range_val = bd.buff_range
+		ring_col = Color(0.9, 0.8, 0.2, 0.45)
+	if range_val > 0.0:
+		_range_ring.visible = true
+		_range_ring.position = Vector3(center.x, 0.05, center.z)
+		_range_ring.scale = Vector3(range_val, 1.0, range_val)
+		_range_shader_mat.set_shader_parameter("ring_color", ring_col)
+	else:
+		_range_ring.visible = false
 
 # ---------------------------------------------------------------------------
 # Mouse-to-ground ray
