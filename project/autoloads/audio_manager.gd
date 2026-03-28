@@ -105,7 +105,7 @@ func play_sfx_by_name(sfx_name: String, volume_offset_db: float = 0.0) -> void:
 		var base := "res://assets/audio/sfx/%s" % sfx_name
 		var stream: AudioStream = null
 		for ext in [".ogg", ".wav", ".mp3"]:
-			var path := base + ext
+			var path: String = base + ext
 			if ResourceLoader.exists(path):
 				stream = load(path)
 				break
@@ -117,7 +117,7 @@ func play_sfx_by_name(sfx_name: String, volume_offset_db: float = 0.0) -> void:
 func play_bgm_by_name(bgm_name: String) -> void:
 	var base := "res://assets/audio/bgm/%s" % bgm_name
 	for ext in [".ogg", ".wav", ".mp3"]:
-		var path := base + ext
+		var path: String = base + ext
 		if ResourceLoader.exists(path):
 			play_bgm(load(path))
 			return
