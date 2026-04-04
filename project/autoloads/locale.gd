@@ -167,11 +167,3 @@ func t_fmt(key: String, args: Array) -> String:
 func toggle_lang() -> void:
 	current_lang = Lang.EN if current_lang == Lang.KO else Lang.KO
 
-func set_lang(lang: int) -> void:
-	current_lang = lang
-
-func get_building_name(english_name: String) -> String:
-	return t(english_name)
-
-func get_trait_name(english_name: String) -> String:
-	return t(english_name)

@@ -37,7 +37,6 @@ var _canvas: CanvasLayer
 var _mineral_label: Label
 var _wave_info_label: Label
 var _hp_label: Label
-var _hotbar_label: Label
 var _game_over_panel: PanelContainer
 var _result_label: Label
 var _slot_buttons: Array = []
@@ -604,7 +603,7 @@ func _setup_ui() -> void:
 		var bd := _building_datas[i] as BuildingData
 		var btn := Button.new()
 		btn.custom_minimum_size = Vector2(60, 68)
-		var localized_name := Locale.get_building_name(bd.building_name)
+		var localized_name := Locale.t(bd.building_name)
 		btn.text = "%d\n%s\n$%d" % [i + 1, localized_name.substr(0, 4).to_upper(), bd.cost]
 		btn.add_theme_font_size_override("font_size", 9)
 		btn.add_theme_color_override("font_color", Color(0.88, 0.78, 0.4))
@@ -641,10 +640,6 @@ func _setup_ui() -> void:
 	mm_label.add_theme_font_size_override("font_size", 11)
 	mm_label.add_theme_color_override("font_color", Color(0.4, 0.45, 0.35))
 	minimap_panel.add_child(mm_label)
-
-	_hotbar_label = Label.new()
-	_hotbar_label.visible = false
-	_canvas.add_child(_hotbar_label)
 
 	_update_slot_highlight()
 
@@ -975,39 +970,6 @@ func _update_slot_highlight() -> void:
 		style.corner_radius_bottom_left = 6
 		style.corner_radius_bottom_right = 6
 		btn.add_theme_stylebox_override("normal", style)
-
-func _create_orb(bg_center: Color, bg_edge: Color, border_color: Color) -> PanelContainer:
-	var orb := PanelContainer.new()
-	orb.custom_minimum_size = Vector2(88, 88)
-	var style := StyleBoxFlat.new()
-	style.bg_color = bg_center
-	style.corner_radius_top_left = 44
-	style.corner_radius_top_right = 44
-	style.corner_radius_bottom_left = 44
-	style.corner_radius_bottom_right = 44
-	style.border_color = border_color
-	style.border_width_top = 3
-	style.border_width_bottom = 3
-	style.border_width_left = 3
-	style.border_width_right = 3
-	style.content_margin_left = 6
-	style.content_margin_right = 6
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
-	orb.add_theme_stylebox_override("panel", style)
-	var vbox := VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 2)
-	orb.add_child(vbox)
-	var lbl := Label.new()
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 10)
-	vbox.add_child(lbl)
-	var val := Label.new()
-	val.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	val.add_theme_font_size_override("font_size", 20)
-	vbox.add_child(val)
-	return orb
 
 func _create_panel_style(bg_color: Color, border_color: Color = Color.TRANSPARENT, border_width: int = 0) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -1586,8 +1548,6 @@ func _apply_card(card: RewardCard) -> void:
 		RewardCard.EffectType.UNIT_BUFF:
 			# Store as permanent bonus in EventManager
 			EventManager.add_unit_dps_perm_bonus(card.effect_value)
-		RewardCard.EffectType.STAT_BUFF:
-			pass
 
 # ---------------------------------------------------------------------------
 # Synergy bar

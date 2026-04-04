@@ -9,10 +9,6 @@ var _camera_base_pos: Vector3
 # Hit stop
 var _hitstop_timer: float = 0.0
 
-# Screen flash
-var _flash_overlay: ColorRect
-var _flash_timer: float = 0.0
-
 # Critical
 const CRIT_CHANCE := 0.10
 const CRIT_MULT := 2.0
@@ -21,15 +17,9 @@ const CRIT_MULT := 2.0
 var game_speed: float = 1.0
 var paused: bool = false
 
-func setup(camera: Camera3D, canvas: CanvasLayer) -> void:
+func setup(camera: Camera3D, _canvas: CanvasLayer) -> void:
 	_camera = camera
 	_camera_base_pos = camera.position
-
-	_flash_overlay = ColorRect.new()
-	_flash_overlay.color = Color(1.0, 1.0, 1.0, 0.0)
-	_flash_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_flash_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	canvas.add_child(_flash_overlay)
 
 func _process(delta: float) -> void:
 	# Hit stop
@@ -53,21 +43,11 @@ func _process(delta: float) -> void:
 			_camera.position = _camera_base_pos
 			_shake_intensity = 0.0
 
-	# Flash fade
-	if _flash_timer > 0.0 and _flash_overlay:
-		_flash_timer -= delta * 6.0
-		if _flash_timer < 0.0:
-			_flash_timer = 0.0
-		_flash_overlay.color.a = _flash_timer * 0.3
-
 func shake(intensity: float = 0.3) -> void:
 	_shake_intensity = maxf(_shake_intensity, intensity)
 
 func hitstop(duration: float = 0.04) -> void:
 	_hitstop_timer = duration
-
-func flash_white() -> void:
-	pass  # Disabled: full-screen flash causes eye strain
 
 func roll_critical(base_damage: float, pos: Vector3 = Vector3.ZERO) -> float:
 	if randf() < CRIT_CHANCE:
@@ -105,7 +85,6 @@ func update_camera_base(pos: Vector3) -> void:
 func reset() -> void:
 	_shake_intensity = 0.0
 	_hitstop_timer = 0.0
-	_flash_timer = 0.0
 	game_speed = 1.0
 	paused = false
 	Engine.time_scale = 1.0

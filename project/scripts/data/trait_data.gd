@@ -3,11 +3,6 @@ extends Resource
 
 enum TraitType { FIRE, ICE, POISON, ELECTRIC, FORTIFY }
 
-@export var trait_type: TraitType = TraitType.FIRE
-@export var trait_name: String = ""
-@export var color: Color = Color.RED
-@export var description: String = ""
-
 static func get_trait_name(t: TraitType) -> String:
 	match t:
 		TraitType.FIRE: return "Fire"

@@ -111,8 +111,8 @@ func _spawn_unit() -> void:
 		randf_range(-1.5, 1.5)
 	)
 	var spawn_pos := global_position + offset
-	spawn_pos.x = clampf(spawn_pos.x, 1.0, 63.0)
-	spawn_pos.z = clampf(spawn_pos.z, 1.0, 63.0)
+	spawn_pos.x = clampf(spawn_pos.x, 1.0, 255.0)
+	spawn_pos.z = clampf(spawn_pos.z, 1.0, 255.0)
 	spawn_pos.y = 0.0
 	unit.position = spawn_pos
 

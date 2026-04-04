@@ -8,7 +8,6 @@ const _enemy_scene_preload: PackedScene = preload("res://scenes/enemies/enemy.ts
 var data: EnemyData
 var current_hp: float
 var target_position: Vector3
-var flow_field: Dictionary = {}  # Legacy — enemies now use FlowField autoload directly
 
 var _dead: bool = false
 var _attack_target: BaseBuilding = null
@@ -688,7 +687,6 @@ func _spawn_splits() -> void:
 		var mini: CharacterBody3D = _enemy_scene_preload.instantiate()
 		mini.set("data", split_data)
 		mini.set("target_position", target_position)
-		mini.set("flow_field", flow_field)
 		var offset := Vector3(randf_range(-0.8, 0.8), 0.0, randf_range(-0.8, 0.8))
 		mini.position = global_position + offset
 		if parent.has_method("_on_enemy_died"):

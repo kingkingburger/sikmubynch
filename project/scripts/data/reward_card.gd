@@ -4,7 +4,7 @@ extends RefCounted
 const TraitData := preload("res://scripts/data/trait_data.gd")
 
 enum Rarity { COMMON, RARE, LEGENDARY }
-enum EffectType { TRAIT_GRANT, STAT_BUFF, MINERAL_BONUS, UNIT_BUFF, BUILDING_HEAL }
+enum EffectType { TRAIT_GRANT, MINERAL_BONUS, UNIT_BUFF, BUILDING_HEAL }
 
 var card_name: String
 var description: String

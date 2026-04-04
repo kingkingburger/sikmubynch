@@ -84,7 +84,3 @@ func recalculate(world_targets: Array) -> void:
 				best_cost = _cost_field[neighbor]
 				best_dir = Vector2(float(dir.x), float(dir.y)).normalized()
 		_field[cell] = best_dir
-
-## 하위 호환용
-func get_field() -> Dictionary:
-	return _field
