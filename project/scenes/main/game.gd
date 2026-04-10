@@ -1639,20 +1639,17 @@ func _on_esc_resume() -> void:
 		GameFeel.toggle_pause()
 	_update_hud()
 
-func _on_esc_title() -> void:
+func _reset_all_managers() -> void:
 	GameManager.reset()
 	SynergyManager.reset()
 	EventManager.reset()
 	GameFeel.reset()
-	ObjectPool.reset()
 	SpatialGrid.reset()
+
+func _on_esc_title() -> void:
+	_reset_all_managers()
 	get_tree().change_scene_to_file("res://scenes/main/title.tscn")
 
 func _on_restart() -> void:
-	GameManager.reset()
-	SynergyManager.reset()
-	EventManager.reset()
-	GameFeel.reset()
-	ObjectPool.reset()
-	SpatialGrid.reset()
+	_reset_all_managers()
 	get_tree().reload_current_scene()

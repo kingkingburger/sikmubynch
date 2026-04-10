@@ -45,9 +45,6 @@ func get_enemy_speed_mult() -> float:
 func get_enemy_dps_mult() -> float:
 	return _active_combat_effects.get("enemy_enrage", 1.0)
 
-func get_mineral_mult() -> float:
-	return _active_combat_effects.get("bonus_minerals", 1.0)
-
 func clear_combat_effects() -> void:
 	_active_combat_effects.clear()
 

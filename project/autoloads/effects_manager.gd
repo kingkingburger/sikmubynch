@@ -129,23 +129,9 @@ func spawn_synergy_effect(pos: Vector3, color: Color) -> void:
 		24, 0.8, 3.0, 6.0, 30.0, Vector3(0, 1, 0), 0.3, 0.7, 0.04, 4.0, true, 0.6)
 	_spawn_ring(pos + Vector3(0, 0.1, 0), color, 4.0, 0.5, 3.0)
 
-func spawn_wave_warning(center: Vector3, map_size: float = 256.0) -> void:
-	var warn_color := Color(1.0, 0.2, 0.1)
-	var edges := [
-		Vector3(center.x, 0.5, 0), Vector3(map_size, 0.5, center.z),
-		Vector3(center.x, 0.5, map_size), Vector3(0, 0.5, center.z)]
-	for edge_pos in edges:
-		_spawn_burst(edge_pos, warn_color,
-			20, 1.5, 1.0, 3.0, 20.0, Vector3(0, -1, 0), 0.3, 0.8, 0.05, 3.0, true, 0.3,
-			false, 3.0)
-
 func spawn_reward_sparkle(pos: Vector3) -> void:
 	_spawn_burst(pos, Color(1.0, 0.85, 0.2),
 		20, 0.7, 2.0, 5.0, 60.0, Vector3(0, -3, 0), 0.1, 0.4, 0.025, 4.0, true, 0.7)
-
-func spawn_heal_effect(pos: Vector3) -> void:
-	_spawn_burst(pos + Vector3(0, 0.3, 0), Color(0.2, 1.0, 0.4),
-		10, 0.8, 1.0, 2.5, 15.0, Vector3(0, 0.5, 0), 0.2, 0.5, 0.03, 3.0, true, 0.5)
 
 # ── Status Effects ───────────────────────────────────────────────
 

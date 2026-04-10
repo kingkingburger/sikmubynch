@@ -44,9 +44,6 @@ func get_trait_count(trait_type: int) -> int:
 func get_synergy_tier(trait_type: int) -> int:
 	return _active_synergies.get(trait_type, 0)
 
-func get_active_synergies() -> Dictionary:
-	return _active_synergies.duplicate()
-
 func get_cross_synergies() -> Array:
 	return _cross_synergies.duplicate()
 

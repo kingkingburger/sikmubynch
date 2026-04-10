@@ -24,10 +24,6 @@ func set_obstacle(world_pos: Vector2i, is_obstacle: bool) -> void:
 	else:
 		_obstacles.erase(fpos)
 
-func set_obstacles_bulk(positions: Array, is_obstacle: bool) -> void:
-	for pos in positions:
-		set_obstacle(pos, is_obstacle)
-
 ## 월드 좌표에서 이동 방향 조회
 func get_direction(world_x: float, world_z: float) -> Vector2:
 	var fx := int(world_x) / FLOW_RES
