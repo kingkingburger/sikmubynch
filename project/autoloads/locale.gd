@@ -68,41 +68,6 @@ var _strings: Dictionary = {
 	"resume": ["계속하기", "RESUME"],
 	"title_screen": ["타이틀 화면", "TITLE SCREEN"],
 
-	# Rarity
-	"Common": ["일반", "Common"],
-	"Rare": ["희귀", "Rare"],
-	"Legendary": ["전설", "Legendary"],
-
-	# Traits
-	"Fire": ["화염", "Fire"],
-	"Ice": ["빙결", "Ice"],
-	"Poison": ["맹독", "Poison"],
-	"Electric": ["전기", "Electric"],
-	"Fortify": ["강화", "Fortify"],
-
-	# Card names
-	"Mineral Cache": ["미네랄 보급", "Mineral Cache"],
-	"Mineral Vein": ["미네랄 광맥", "Mineral Vein"],
-	"Mineral Surge": ["미네랄 폭발", "Mineral Surge"],
-	"Motherlode": ["대광맥", "Motherlode"],
-	"Fortified Walls": ["강화 성벽", "Fortified Walls"],
-	"Iron Fortress": ["철벽 요새", "Iron Fortress"],
-	"Titan's Blessing": ["타이탄의 축복", "Titan's Blessing"],
-	"Sharp Blades": ["날카로운 검", "Sharp Blades"],
-	"War Drums": ["전쟁 북", "War Drums"],
-	"Berserker Rage": ["광전사의 분노", "Berserker Rage"],
-	" Essence": [" 정수", " Essence"],
-	"Grant ": ["부여: ", "Grant "],
-	" trait to a random tower": [" 특성을 랜덤 타워에 부여", " trait to a random tower"],
-
-	# Card descriptions
-	"All buildings +15% HP": ["모든 건물 체력 +15%", "All buildings +15% HP"],
-	"All buildings +30% HP": ["모든 건물 체력 +30%", "All buildings +30% HP"],
-	"All buildings +50% HP + heal": ["모든 건물 체력 +50% + 회복", "All buildings +50% HP + heal"],
-	"All units +10% DPS": ["모든 유닛 공격력 +10%", "All units +10% DPS"],
-	"All units +25% DPS": ["모든 유닛 공격력 +25%", "All units +25% DPS"],
-	"All units +50% DPS": ["모든 유닛 공격력 +50%", "All units +50% DPS"],
-
 	# Combat events
 	"Mineral Rush": ["미네랄 러시", "Mineral Rush"],
 	"Bonus +40 minerals!": ["보너스 +40 미네랄!", "Bonus +40 minerals!"],
