@@ -38,14 +38,11 @@ var _base_mesh_y: float = 0.0
 var _attack_anim: float = -1.0
 var _last_dmg_num_time: float = 0.0
 
-var _last_grid_pos: Vector3
-
 func _ready() -> void:
 	add_to_group("enemies")
 	if data:
 		current_hp = data.max_hp
 	_build_mesh()
-	_last_grid_pos = global_position
 	SpatialGrid.register(self, "enemies")
 
 func _build_mesh() -> void:
@@ -621,39 +618,9 @@ func _die() -> void:
 	tween.chain().tween_callback(queue_free)
 
 func _spawn_death_particles() -> void:
-	var particles := CPUParticles3D.new()
-	particles.emitting = true
-	particles.one_shot = true
-	particles.explosiveness = 0.9
-	particles.direction = Vector3.UP
-	particles.gravity = Vector3(0, -8, 0)
 	var is_exploder := data and data.enemy_type == EnemyData.EnemyType.EXPLODER
-	if is_exploder:
-		particles.amount = 30
-		particles.lifetime = 0.6
-		particles.spread = 180.0
-		particles.initial_velocity_min = 4.0
-		particles.initial_velocity_max = 8.0
-		particles.scale_amount_min = 1.0
-		particles.scale_amount_max = 2.0
-		particles.color = Color(1.0, 0.5, 0.1)
-	else:
-		particles.amount = 12
-		particles.lifetime = 0.4
-		particles.spread = 80.0
-		particles.initial_velocity_min = 2.0
-		particles.initial_velocity_max = 5.0
-		particles.scale_amount_min = 0.5
-		particles.scale_amount_max = 1.0
-		particles.color = data.color if data else Color.RED
-	var pmesh := SphereMesh.new()
-	pmesh.radius = 0.05
-	pmesh.height = 0.1
-	particles.mesh = pmesh
-	particles.position = global_position + Vector3(0, 0.3, 0)
-	get_parent().add_child(particles)
-	var tw := particles.create_tween()
-	tw.tween_callback(particles.queue_free).set_delay(1.5)
+	var color: Color = data.color if data else Color.RED
+	EffectsManager.spawn_enemy_death(global_position, color, is_exploder)
 
 func _spawn_damage_number(amount: float) -> void:
 	var label := Label3D.new()

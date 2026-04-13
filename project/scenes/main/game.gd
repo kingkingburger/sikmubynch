@@ -1081,7 +1081,6 @@ func _create_enemy_templates(wave_num: int) -> Array:
 	return templates
 
 var _spawn_queue: Array = []
-var _spawn_rate: float = 0.0  # enemies per second
 const SPAWN_PER_FRAME := 3  # max enemies to spawn per frame
 
 func _spawn_wave() -> void:

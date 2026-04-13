@@ -634,25 +634,5 @@ func _die() -> void:
 	tween.chain().tween_callback(queue_free)
 
 func _spawn_death_particles() -> void:
-	var particles := CPUParticles3D.new()
-	particles.emitting = true
-	particles.one_shot = true
-	particles.amount = 10
-	particles.lifetime = 0.4
-	particles.explosiveness = 0.9
-	particles.direction = Vector3.UP
-	particles.spread = 70.0
-	particles.initial_velocity_min = 2.0
-	particles.initial_velocity_max = 4.0
-	particles.gravity = Vector3(0, -8, 0)
-	particles.scale_amount_min = 0.4
-	particles.scale_amount_max = 0.8
-	particles.color = data.color if data else Color.BLUE
-	var pmesh := SphereMesh.new()
-	pmesh.radius = 0.04
-	pmesh.height = 0.08
-	particles.mesh = pmesh
-	particles.position = global_position + Vector3(0, 0.3, 0)
-	get_parent().add_child(particles)
-	var tw := particles.create_tween()
-	tw.tween_callback(particles.queue_free).set_delay(1.0)
+	var color: Color = data.color if data else Color.BLUE
+	EffectsManager.spawn_unit_death(global_position, color)

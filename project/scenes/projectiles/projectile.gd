@@ -91,8 +91,6 @@ func _on_hit() -> void:
 	if not is_instance_valid(target):
 		return
 
-	# Impact particles
-	_spawn_impact()
 	AudioManager.play_sfx_by_name("hit", -8.0)
 	EffectsManager.spawn_hit_impact(global_position)
 
@@ -119,30 +117,6 @@ func _on_hit() -> void:
 	if trait_effects.has("stun_chance") and target.has_method("apply_stun"):
 		if randf() < trait_effects["stun_chance"]:
 			target.apply_stun(0.3)
-
-func _spawn_impact() -> void:
-	var particles := CPUParticles3D.new()
-	particles.emitting = true
-	particles.one_shot = true
-	particles.amount = 8
-	particles.lifetime = 0.25
-	particles.explosiveness = 1.0
-	particles.direction = Vector3.UP
-	particles.spread = 50.0
-	particles.initial_velocity_min = 2.0
-	particles.initial_velocity_max = 4.0
-	particles.gravity = Vector3(0, -12, 0)
-	particles.scale_amount_min = 0.3
-	particles.scale_amount_max = 0.7
-	particles.color = Color(1.0, 0.8, 0.2)
-	var pmesh := SphereMesh.new()
-	pmesh.radius = 0.04
-	pmesh.height = 0.08
-	particles.mesh = pmesh
-	particles.position = global_position
-	get_parent().add_child(particles)
-	var tw := particles.create_tween()
-	tw.tween_callback(particles.queue_free).set_delay(0.8)
 
 func _chain_lightning(count: int, chain_dmg: float) -> void:
 	var hit_targets: Array = [target]

@@ -152,3 +152,20 @@ func spawn_poison_tick(pos: Vector3) -> void:
 func spawn_freeze_effect(pos: Vector3) -> void:
 	_spawn_status_tick(pos + Vector3(0, 0.3, 0), Color(0.4, 0.8, 1.0),
 		8, 0.5, 40.0, 1.0, 2.5, Vector3(0, -2, 0), true)
+
+# ── Death Effects ────────────────────────────────────────────────
+
+func spawn_enemy_death(pos: Vector3, color: Color, is_exploder: bool = false) -> void:
+	if is_exploder:
+		_spawn_burst(pos + Vector3(0, 0.3, 0), Color(1.0, 0.5, 0.1),
+			30, 0.6, 4.0, 8.0, 180.0, Vector3(0, -8, 0), 1.0, 2.0, 0.05, 3.0,
+			false, 0.9, false, 1.5)
+	else:
+		_spawn_burst(pos + Vector3(0, 0.3, 0), color,
+			12, 0.4, 2.0, 5.0, 80.0, Vector3(0, -8, 0), 0.5, 1.0, 0.05, 3.0,
+			false, 0.9, false, 1.5)
+
+func spawn_unit_death(pos: Vector3, color: Color) -> void:
+	_spawn_burst(pos + Vector3(0, 0.3, 0), color,
+		10, 0.4, 2.0, 4.0, 70.0, Vector3(0, -8, 0), 0.4, 0.8, 0.04, 3.0,
+		false, 0.9, false, 1.0)
