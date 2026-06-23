@@ -67,7 +67,8 @@ project/
 │   ├── buildings/      # 건물 (HQ, Barricade, Tower)
 │   ├── enemies/        # 적 유닛
 │   └── projectiles/    # 발사체
-├── scripts/data/       # 데이터 클래스 (Resource)
+├── scripts/            # 게임플레이 helper + 데이터 클래스
+│   └── data/           # Resource 데이터 정의
 └── assets/             # 에셋
 docs/ouroboros/         # Ouroboros 프로세스 문서
 ```

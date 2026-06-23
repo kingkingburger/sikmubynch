@@ -39,7 +39,8 @@ project/                                # Godot 4 프로젝트
     units/                              #   아군 유닛 씬 (4종)
     projectiles/                        #   발사체 씬
     effects/                            #   이펙트 씬 (미네랄 오브)
-  scripts/data/                         # 데이터 정의 (Resource 클래스)
+  scripts/                              # 게임플레이 helper (building_catalog, threat_radar, wave_director)
+    data/                               # 데이터 정의 (Resource 클래스)
   assets/                               # 스프라이트, 사운드
     models/                             #   GLB 3D 모델 17종 (buildings/5, enemies/6, units/4, effects/2)
     audio/                              #   BGM + SFX (bgm/, sfx/)

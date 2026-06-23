@@ -1,14 +1,14 @@
 extends Node3D
 
 const RewardCard := preload("res://scripts/data/reward_card.gd")
-const TraitData := preload("res://scripts/data/trait_data.gd")
+const BuildingCatalog := preload("res://scripts/building_catalog.gd")
+const GameUiController := preload("res://scripts/game_ui_controller.gd")
+const WaveDirector := preload("res://scripts/wave_director.gd")
 
 const MAP_SIZE := 256
 const WAVE_INTERVAL := 10.0
 const HQ_CENTER := Vector2(128.5, 128.5)
 const HQ_WORLD_POS := Vector3(128.5, 0.0, 128.5)
-const MINIMAP_PIXELS := 112
-const MINIMAP_UPDATE_INTERVAL := 0.25
 
 # Scenes
 var barricade_scene: PackedScene
@@ -37,31 +37,10 @@ var _camera: Camera3D
 var _hq: BaseBuilding
 
 # UI
-var _canvas: CanvasLayer
-var _mineral_label: Label
-var _wave_info_label: Label
-var _hp_label: Label
-var _game_over_panel: PanelContainer
-var _result_label: Label
-var _slot_buttons: Array = []
-var _minimap_rect: TextureRect
-var _minimap_timer: float = 0.0
+var _ui
 
 # Reward card UI
-var _card_panel: PanelContainer
-var _card_buttons: Array = []
-var _card_skip_btn: Button
 var _pending_cards: Array = []
-
-# Synergy bar UI
-var _synergy_label: Label
-
-# Event UI
-var _event_label: Label
-var _event_timer: float = 0.0
-var _choice_panel: PanelContainer
-var _choice_buttons: Array = []
-var _choice_label: Label
 
 # Pause during card/choice selection
 var _awaiting_card: bool = false
@@ -82,15 +61,10 @@ const CAM_DIST := 50.0
 var _dragging: bool = false
 var _drag_last_grid: Vector2i = Vector2i(-999, -999)
 
-# Speed label
-var _speed_label: Label
-
 # ESC menu
-var _esc_panel: PanelContainer
 var _esc_visible: bool = false
 
 # Debug overlay
-var _debug_label: Label
 var _debug_visible: bool = false
 
 # Ghost
@@ -121,58 +95,14 @@ func _ready() -> void:
 	EventManager.combat_event_triggered.connect(_on_combat_event)
 	EventManager.choice_event_triggered.connect(_on_choice_event)
 	SynergyManager.synergy_changed.connect(_update_synergy_bar)
-	GameFeel.setup(_camera, _canvas)
+	GameFeel.setup(_camera, _ui.get_canvas())
 	_recalculate_flow_field()
 	# Battle BGM
 	AudioManager.play_bgm_by_name("battle")
 	_spawn_wave()
 
 func _init_building_data() -> void:
-	var barr := BuildingData.new()
-	barr.building_name = "Barricade"
-	barr.cost = 10
-	barr.max_hp = 80.0
-	barr.size = Vector2i(1, 1)
-	barr.color = Color(0.55, 0.55, 0.58)
-	_building_datas.append(barr)
-
-	var twr := BuildingData.new()
-	twr.building_name = "Tower"
-	twr.cost = 50
-	twr.max_hp = 100.0
-	twr.size = Vector2i(1, 1)
-	twr.color = Color(0.35, 0.55, 0.75)
-	twr.dps = 15.0
-	twr.attack_range = 7.0
-	twr.attack_speed = 1.0
-	_building_datas.append(twr)
-
-	var brk := BuildingData.new()
-	brk.building_name = "Barracks"
-	brk.cost = 100
-	brk.max_hp = 200.0
-	brk.size = Vector2i(1, 1)
-	brk.color = Color(0.25, 0.4, 0.7)
-	_building_datas.append(brk)
-
-	var mnr := BuildingData.new()
-	mnr.building_name = "Miner"
-	mnr.cost = 80
-	mnr.max_hp = 60.0
-	mnr.size = Vector2i(1, 1)
-	mnr.color = Color(0.2, 0.7, 0.8)
-	mnr.mineral_per_sec = 2.0
-	_building_datas.append(mnr)
-
-	var buf := BuildingData.new()
-	buf.building_name = "Buff Tower"
-	buf.cost = 120
-	buf.max_hp = 100.0
-	buf.size = Vector2i(1, 1)
-	buf.color = Color(0.9, 0.8, 0.2)
-	buf.buff_range = 3.5
-	buf.buff_dps_mult = 0.2
-	_building_datas.append(buf)
+	_building_datas = BuildingCatalog.create()
 
 func _process(delta: float) -> void:
 	if GameManager.is_game_over:
@@ -190,21 +120,19 @@ func _process(delta: float) -> void:
 		_cam_center.x = clampf(_cam_center.x, pad, float(MAP_SIZE) - pad)
 		_cam_center.y = clampf(_cam_center.y, pad, float(MAP_SIZE) - pad)
 		_update_camera_position()
-	# Debug overlay — uses cached counters, no tree scan
-	if _debug_visible and _debug_label:
-		_debug_label.text = "FPS: %d\nEnemies: %d\nUnits: %d\nBuildings: %d\nSpeed: %.1fx" % [
-			Engine.get_frames_per_second(), enemies_alive, _units_alive, _buildings_count, GameFeel.game_speed
-		]
-	# Fade event notification
-	if _event_timer > 0.0:
-		_event_timer -= delta
-		if _event_timer <= 0.0 and _event_label:
-			_event_label.visible = false
-	if _minimap_rect:
-		_minimap_timer -= delta
-		if _minimap_timer <= 0.0:
-			_minimap_timer = MINIMAP_UPDATE_INTERVAL
-			_update_minimap()
+	if _ui:
+		_ui.tick(
+			delta,
+			MAP_SIZE,
+			get_tree().get_nodes_in_group("buildings"),
+			get_tree().get_nodes_in_group("enemies"),
+			_hq,
+			_debug_visible,
+			enemies_alive,
+			_units_alive,
+			_buildings_count,
+			GameFeel.game_speed
+		)
 	# Deferred FlowField recalculation (avoid lag on build)
 	if _flow_dirty:
 		_flow_timer += delta
@@ -523,594 +451,35 @@ void fragment() {
 # ---------------------------------------------------------------------------
 
 func _setup_ui() -> void:
-	_canvas = CanvasLayer.new()
-	add_child(_canvas)
-
-	# --- Top center: Mineral (big, prominent) ---
-	_mineral_label = Label.new()
-	_mineral_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_mineral_label.offset_top = 6.0
-	_mineral_label.offset_left = -80.0
-	_mineral_label.offset_right = 80.0
-	_mineral_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_mineral_label.add_theme_font_size_override("font_size", 26)
-	_mineral_label.add_theme_color_override("font_color", Color(0.4, 0.95, 0.95))
-	_canvas.add_child(_mineral_label)
-
-	# --- Top right: Wave / Kills / Time ---
-	var tr_panel := PanelContainer.new()
-	tr_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	tr_panel.offset_left = -220.0
-	tr_panel.offset_top = 6.0
-	tr_panel.offset_right = -8.0
-	tr_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.06, 0.06, 0.08, 0.85), Color(0.3, 0.25, 0.15, 0.4), 1))
-	_canvas.add_child(tr_panel)
-	_wave_info_label = Label.new()
-	_wave_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_wave_info_label.add_theme_font_size_override("font_size", 13)
-	_wave_info_label.add_theme_color_override("font_color", Color(0.85, 0.78, 0.5))
-	tr_panel.add_child(_wave_info_label)
-
-	# --- Bottom panel (StarCraft style: portrait | build | minimap) ---
-	var bottom := PanelContainer.new()
-	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bottom.custom_minimum_size = Vector2(0, 150)
-	bottom.offset_top = -150.0
-	bottom.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.08, 0.07, 0.06, 0.97), Color(0.35, 0.28, 0.15, 0.6), 2))
-	_canvas.add_child(bottom)
-
-	var grid := HBoxContainer.new()
-	grid.set_anchors_preset(Control.PRESET_FULL_RECT)
-	grid.add_theme_constant_override("separation", 0)
-	bottom.add_child(grid)
-
-	# --- Left: Portrait area ---
-	var portrait := PanelContainer.new()
-	portrait.custom_minimum_size = Vector2(160, 0)
-	portrait.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.05, 0.04, 0.03, 0.9), Color(0.3, 0.25, 0.15, 0.4), 1))
-	grid.add_child(portrait)
-	var port_vbox := VBoxContainer.new()
-	port_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	portrait.add_child(port_vbox)
-	var port_title := Label.new()
-	port_title.text = "SELECTED"
-	port_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	port_title.add_theme_font_size_override("font_size", 9)
-	port_title.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35))
-	port_vbox.add_child(port_title)
-	_hp_label = Label.new()
-	_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hp_label.add_theme_font_size_override("font_size", 18)
-	_hp_label.add_theme_color_override("font_color", Color(0.5, 0.75, 1.0))
-	port_vbox.add_child(_hp_label)
-	var hp_sub := Label.new()
-	hp_sub.text = "HQ HP"
-	hp_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hp_sub.add_theme_font_size_override("font_size", 10)
-	hp_sub.add_theme_color_override("font_color", Color(0.4, 0.5, 0.65))
-	port_vbox.add_child(hp_sub)
-
-	# --- Center: Build slots ---
-	var center := VBoxContainer.new()
-	center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center.add_theme_constant_override("separation", 4)
-	grid.add_child(center)
-
-	# Wave info bar
-	var wave_bar := HBoxContainer.new()
-	wave_bar.alignment = BoxContainer.ALIGNMENT_CENTER
-	center.add_child(wave_bar)
-
-	# Build buttons
-	var build_hbox := HBoxContainer.new()
-	build_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	build_hbox.add_theme_constant_override("separation", 3)
-	center.add_child(build_hbox)
-
-	for i in _building_datas.size():
-		var bd := _building_datas[i] as BuildingData
-		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(60, 68)
-		var localized_name := Locale.t(bd.building_name)
-		btn.text = "%d\n%s\n$%d" % [i + 1, localized_name.substr(0, 4).to_upper(), bd.cost]
-		btn.add_theme_font_size_override("font_size", 9)
-		btn.add_theme_color_override("font_color", Color(0.88, 0.78, 0.4))
-		var ns := _create_panel_style(
-			Color(0.1, 0.09, 0.07, 0.85), Color(0.3, 0.25, 0.15, 0.5), 2)
-		ns.corner_radius_top_left = 4
-		ns.corner_radius_top_right = 4
-		ns.corner_radius_bottom_left = 4
-		ns.corner_radius_bottom_right = 4
-		btn.add_theme_stylebox_override("normal", ns)
-		var hs := _create_panel_style(
-			Color(0.18, 0.15, 0.08, 0.9), Color(0.9, 0.75, 0.25), 2)
-		hs.corner_radius_top_left = 4
-		hs.corner_radius_top_right = 4
-		hs.corner_radius_bottom_left = 4
-		hs.corner_radius_bottom_right = 4
-		btn.add_theme_stylebox_override("hover", hs)
-		btn.add_theme_stylebox_override("pressed", hs)
-		btn.add_theme_stylebox_override("focus", ns)
-		btn.pressed.connect(_on_slot_pressed.bind(i))
-		build_hbox.add_child(btn)
-		_slot_buttons.append(btn)
-
-	# --- Right: threat radar ---
-	var minimap_panel := PanelContainer.new()
-	minimap_panel.custom_minimum_size = Vector2(170, 0)
-	minimap_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.04, 0.05, 0.03, 0.9), Color(0.3, 0.25, 0.15, 0.4), 1))
-	grid.add_child(minimap_panel)
-	var mm_vbox := VBoxContainer.new()
-	mm_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	mm_vbox.add_theme_constant_override("separation", 4)
-	minimap_panel.add_child(mm_vbox)
-	var mm_label := Label.new()
-	mm_label.text = "THREAT RADAR"
-	mm_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mm_label.add_theme_font_size_override("font_size", 10)
-	mm_label.add_theme_color_override("font_color", Color(0.5, 0.75, 0.65))
-	mm_vbox.add_child(mm_label)
-	_minimap_rect = TextureRect.new()
-	_minimap_rect.custom_minimum_size = Vector2(124, 96)
-	_minimap_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_minimap_rect.stretch_mode = TextureRect.STRETCH_SCALE
-	mm_vbox.add_child(_minimap_rect)
-
+	_ui = GameUiController.new()
+	_ui.slot_pressed.connect(_on_slot_pressed)
+	_ui.card_selected.connect(_on_card_selected)
+	_ui.card_skipped.connect(_on_card_skip)
+	_ui.choice_selected.connect(_on_choice_selected)
+	_ui.resume_requested.connect(_on_esc_resume)
+	_ui.restart_requested.connect(_on_restart)
+	_ui.title_requested.connect(_on_esc_title)
+	_ui.setup(self, _building_datas)
 	_update_slot_highlight()
-
-	# --- Game Over panel ---
-	_game_over_panel = PanelContainer.new()
-	_game_over_panel.visible = false
-	_game_over_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_game_over_panel.custom_minimum_size = Vector2(460, 280)
-	_game_over_panel.offset_left = -230.0
-	_game_over_panel.offset_top = -140.0
-	_game_over_panel.offset_right = 230.0
-	_game_over_panel.offset_bottom = 140.0
-	_game_over_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.04, 0.03, 0.06, 0.96), Color(0.6, 0.5, 0.2), 3))
-	_canvas.add_child(_game_over_panel)
-
-	var vbox := VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 18)
-	_game_over_panel.add_child(vbox)
-
-	var go_title := Label.new()
-	go_title.text = Locale.t("game_over")
-	go_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	go_title.add_theme_font_size_override("font_size", 40)
-	go_title.add_theme_color_override("font_color", Color(0.95, 0.75, 0.2))
-	vbox.add_child(go_title)
-
-	_result_label = Label.new()
-	_result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_result_label.add_theme_font_size_override("font_size", 17)
-	_result_label.add_theme_color_override("font_color", Color(0.85, 0.78, 0.55))
-	vbox.add_child(_result_label)
-
-	var restart_btn := Button.new()
-	restart_btn.text = Locale.t("restart")
-	restart_btn.custom_minimum_size = Vector2(150, 46)
-	var rb_style := _create_panel_style(
-		Color(0.08, 0.06, 0.04, 0.95), Color(0.7, 0.55, 0.2), 2)
-	restart_btn.add_theme_stylebox_override("normal", rb_style)
-	restart_btn.add_theme_stylebox_override("hover", _create_panel_style(
-		Color(0.16, 0.12, 0.05, 0.95), Color(0.9, 0.75, 0.3), 2))
-	restart_btn.add_theme_stylebox_override("pressed", rb_style)
-	restart_btn.add_theme_stylebox_override("focus", rb_style)
-	restart_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
-	restart_btn.add_theme_font_size_override("font_size", 17)
-	restart_btn.pressed.connect(_on_restart)
-	var rb_center := CenterContainer.new()
-	rb_center.add_child(restart_btn)
-	vbox.add_child(rb_center)
-
 	_update_hud()
-	_setup_card_ui()
-	_setup_synergy_bar()
-	_setup_event_ui()
-	_setup_choice_ui()
-	_setup_speed_label()
-	_setup_esc_menu()
-	_setup_debug_overlay()
-
-func _setup_card_ui() -> void:
-	_card_panel = PanelContainer.new()
-	_card_panel.visible = false
-	_card_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_card_panel.custom_minimum_size = Vector2(700, 320)
-	_card_panel.offset_left = -350.0
-	_card_panel.offset_top = -160.0
-	_card_panel.offset_right = 350.0
-	_card_panel.offset_bottom = 160.0
-	_card_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.03, 0.03, 0.06, 0.96), Color(0.7, 0.55, 0.15), 3))
-	_canvas.add_child(_card_panel)
-
-	var vbox := VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 12)
-	_card_panel.add_child(vbox)
-
-	var title := Label.new()
-	title.text = Locale.t("choose_reward")
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", Color(0.95, 0.85, 0.3))
-	vbox.add_child(title)
-
-	var hbox := HBoxContainer.new()
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_theme_constant_override("separation", 12)
-	vbox.add_child(hbox)
-
-	for i in 3:
-		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(200, 150)
-		btn.add_theme_font_size_override("font_size", 13)
-		btn.add_theme_color_override("font_color", Color(0.95, 0.9, 0.7))
-		var card_normal := _create_panel_style(
-			Color(0.07, 0.05, 0.03, 0.95), Color(0.5, 0.4, 0.2), 2)
-		card_normal.corner_radius_top_left = 8
-		card_normal.corner_radius_top_right = 8
-		card_normal.corner_radius_bottom_left = 8
-		card_normal.corner_radius_bottom_right = 8
-		btn.add_theme_stylebox_override("normal", card_normal)
-		var card_hover := _create_panel_style(
-			Color(0.14, 0.11, 0.06, 0.95), Color(0.95, 0.8, 0.3), 3)
-		card_hover.corner_radius_top_left = 8
-		card_hover.corner_radius_top_right = 8
-		card_hover.corner_radius_bottom_left = 8
-		card_hover.corner_radius_bottom_right = 8
-		btn.add_theme_stylebox_override("hover", card_hover)
-		btn.add_theme_stylebox_override("pressed", card_hover)
-		btn.pressed.connect(_on_card_selected.bind(i))
-		hbox.add_child(btn)
-		_card_buttons.append(btn)
-
-	_card_skip_btn = Button.new()
-	_card_skip_btn.text = Locale.t("skip")
-	_card_skip_btn.custom_minimum_size = Vector2(100, 36)
-	_card_skip_btn.add_theme_font_size_override("font_size", 14)
-	_card_skip_btn.add_theme_color_override("font_color", Color(0.7, 0.65, 0.5))
-	_card_skip_btn.add_theme_stylebox_override("normal", _create_panel_style(
-		Color(0.06, 0.05, 0.04, 0.9), Color(0.4, 0.35, 0.2), 1))
-	_card_skip_btn.pressed.connect(_on_card_skip)
-	var skip_center := CenterContainer.new()
-	skip_center.add_child(_card_skip_btn)
-	vbox.add_child(skip_center)
-
-func _setup_synergy_bar() -> void:
-	var syn_panel := PanelContainer.new()
-	syn_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	syn_panel.offset_left = 6.0
-	syn_panel.offset_top = 40.0
-	syn_panel.custom_minimum_size = Vector2(140, 0)
-	syn_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.04, 0.04, 0.05, 0.7), Color(0.25, 0.22, 0.15, 0.3), 1))
-	_canvas.add_child(syn_panel)
-	_synergy_label = Label.new()
-	_synergy_label.add_theme_font_size_override("font_size", 11)
-	_synergy_label.add_theme_color_override("font_color", Color(0.85, 0.78, 0.5))
-	syn_panel.add_child(_synergy_label)
 	_update_synergy_bar()
 
-func _setup_event_ui() -> void:
-	_event_label = Label.new()
-	_event_label.visible = false
-	_event_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_event_label.offset_top = 50.0
-	_event_label.offset_left = -200.0
-	_event_label.offset_right = 200.0
-	_event_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_event_label.add_theme_font_size_override("font_size", 20)
-	_event_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
-	_canvas.add_child(_event_label)
-
-func _setup_choice_ui() -> void:
-	_choice_panel = PanelContainer.new()
-	_choice_panel.visible = false
-	_choice_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_choice_panel.custom_minimum_size = Vector2(440, 200)
-	_choice_panel.offset_left = -220.0
-	_choice_panel.offset_top = -100.0
-	_choice_panel.offset_right = 220.0
-	_choice_panel.offset_bottom = 100.0
-	_choice_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.04, 0.03, 0.06, 0.96), Color(0.5, 0.7, 0.3), 3))
-	_canvas.add_child(_choice_panel)
-
-	var vbox := VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 14)
-	_choice_panel.add_child(vbox)
-
-	_choice_label = Label.new()
-	_choice_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_choice_label.add_theme_font_size_override("font_size", 17)
-	_choice_label.add_theme_color_override("font_color", Color(0.9, 0.85, 0.6))
-	_choice_label.autowrap_mode = TextServer.AUTOWRAP_WORD
-	vbox.add_child(_choice_label)
-
-	var hbox := HBoxContainer.new()
-	hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_theme_constant_override("separation", 12)
-	vbox.add_child(hbox)
-
-	for i in 2:
-		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(190, 44)
-		btn.add_theme_font_size_override("font_size", 13)
-		btn.add_theme_color_override("font_color", Color(0.95, 0.9, 0.7))
-		btn.add_theme_stylebox_override("normal", _create_panel_style(
-			Color(0.08, 0.06, 0.04, 0.95), Color(0.5, 0.6, 0.3), 2))
-		btn.add_theme_stylebox_override("hover", _create_panel_style(
-			Color(0.14, 0.12, 0.06, 0.95), Color(0.7, 0.8, 0.3), 2))
-		btn.pressed.connect(_on_choice_selected.bind(i))
-		hbox.add_child(btn)
-		_choice_buttons.append(btn)
-
-func _setup_speed_label() -> void:
-	_speed_label = Label.new()
-	_speed_label.visible = false
-	_speed_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_speed_label.offset_left = -60.0
-	_speed_label.offset_top = 50.0
-	_speed_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_speed_label.add_theme_font_size_override("font_size", 22)
-	_speed_label.add_theme_color_override("font_color", Color(0.95, 0.85, 0.3))
-	_canvas.add_child(_speed_label)
-
-func _setup_esc_menu() -> void:
-	_esc_panel = PanelContainer.new()
-	_esc_panel.visible = false
-	_esc_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_esc_panel.custom_minimum_size = Vector2(320, 380)
-	_esc_panel.offset_left = -160.0
-	_esc_panel.offset_top = -190.0
-	_esc_panel.offset_right = 160.0
-	_esc_panel.offset_bottom = 190.0
-	_esc_panel.add_theme_stylebox_override("panel", _create_panel_style(
-		Color(0.04, 0.03, 0.06, 0.96), Color(0.6, 0.5, 0.2), 3))
-	_canvas.add_child(_esc_panel)
-
-	var vbox := VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 14)
-	_esc_panel.add_child(vbox)
-
-	var title := Label.new()
-	title.text = Locale.t("paused")
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 30)
-	title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.2))
-	vbox.add_child(title)
-
-	var btn_style := _create_panel_style(
-		Color(0.08, 0.06, 0.04, 0.95), Color(0.6, 0.5, 0.2), 2)
-	var btn_hover := _create_panel_style(
-		Color(0.14, 0.11, 0.06, 0.95), Color(0.85, 0.72, 0.3), 2)
-
-	var resume_btn := Button.new()
-	resume_btn.text = Locale.t("resume")
-	resume_btn.custom_minimum_size = Vector2(200, 40)
-	resume_btn.add_theme_font_size_override("font_size", 16)
-	resume_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
-	resume_btn.add_theme_stylebox_override("normal", btn_style)
-	resume_btn.add_theme_stylebox_override("hover", btn_hover)
-	resume_btn.pressed.connect(_on_esc_resume)
-	var c1 := CenterContainer.new()
-	c1.add_child(resume_btn)
-	vbox.add_child(c1)
-
-	var restart_btn := Button.new()
-	restart_btn.text = Locale.t("restart")
-	restart_btn.custom_minimum_size = Vector2(200, 40)
-	restart_btn.add_theme_font_size_override("font_size", 16)
-	restart_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
-	restart_btn.add_theme_stylebox_override("normal", btn_style)
-	restart_btn.add_theme_stylebox_override("hover", btn_hover)
-	restart_btn.pressed.connect(_on_restart)
-	var c2 := CenterContainer.new()
-	c2.add_child(restart_btn)
-	vbox.add_child(c2)
-
-	var title_btn := Button.new()
-	title_btn.text = Locale.t("title_screen")
-	title_btn.custom_minimum_size = Vector2(200, 40)
-	title_btn.add_theme_font_size_override("font_size", 16)
-	title_btn.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
-	title_btn.add_theme_stylebox_override("normal", btn_style)
-	title_btn.add_theme_stylebox_override("hover", btn_hover)
-	title_btn.pressed.connect(_on_esc_title)
-	var c3 := CenterContainer.new()
-	c3.add_child(title_btn)
-	vbox.add_child(c3)
-
-	# --- Volume sliders ---
-	var vol_label_color := Color(0.75, 0.68, 0.4)
-	var slider_names := ["Master", "Music", "SFX"]
-	var slider_defaults := [AudioManager.master_volume, AudioManager.music_volume, AudioManager.sfx_volume]
-	for i in 3:
-		var row := HBoxContainer.new()
-		row.custom_minimum_size = Vector2(260, 28)
-		row.add_theme_constant_override("separation", 8)
-		var lbl := Label.new()
-		lbl.text = slider_names[i]
-		lbl.custom_minimum_size = Vector2(55, 0)
-		lbl.add_theme_font_size_override("font_size", 13)
-		lbl.add_theme_color_override("font_color", vol_label_color)
-		row.add_child(lbl)
-		var slider := HSlider.new()
-		slider.min_value = 0.0
-		slider.max_value = 1.0
-		slider.step = 0.05
-		slider.value = slider_defaults[i]
-		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var idx := i
-		slider.value_changed.connect(func(val: float) -> void:
-			match idx:
-				0: AudioManager.master_volume = val
-				1: AudioManager.music_volume = val
-				2: AudioManager.sfx_volume = val
-		)
-		row.add_child(slider)
-		var cc := CenterContainer.new()
-		cc.add_child(row)
-		vbox.add_child(cc)
-
-func _setup_debug_overlay() -> void:
-	_debug_label = Label.new()
-	_debug_label.visible = false
-	_debug_label.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	_debug_label.offset_left = 8.0
-	_debug_label.offset_top = 180.0
-	_debug_label.add_theme_font_size_override("font_size", 12)
-	_debug_label.add_theme_color_override("font_color", Color(0.5, 1.0, 0.5))
-	_canvas.add_child(_debug_label)
-
 func _update_slot_highlight() -> void:
-	for i in _slot_buttons.size():
-		var btn: Button = _slot_buttons[i]
-		var style: StyleBoxFlat
-		if i == _selected_slot:
-			style = _create_panel_style(
-				Color(0.18, 0.14, 0.06, 0.95), Color(1.0, 0.85, 0.25), 3)
-		else:
-			style = _create_panel_style(
-				Color(0.12, 0.1, 0.07, 0.75), Color(0.4, 0.3, 0.18, 0.5), 2)
-		style.corner_radius_top_left = 6
-		style.corner_radius_top_right = 6
-		style.corner_radius_bottom_left = 6
-		style.corner_radius_bottom_right = 6
-		btn.add_theme_stylebox_override("normal", style)
-
-func _create_panel_style(bg_color: Color, border_color: Color = Color.TRANSPARENT, border_width: int = 0) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = bg_color
-	style.corner_radius_top_left = 4
-	style.corner_radius_top_right = 4
-	style.corner_radius_bottom_left = 4
-	style.corner_radius_bottom_right = 4
-	if border_color != Color.TRANSPARENT:
-		style.border_color = border_color
-		style.border_width_bottom = border_width
-		style.border_width_top = border_width
-		style.border_width_left = border_width
-		style.border_width_right = border_width
-	style.content_margin_left = 14
-	style.content_margin_right = 14
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	return style
+	if _ui:
+		_ui.update_slot_highlight(_selected_slot)
 
 # ---------------------------------------------------------------------------
 # Wave system
 # ---------------------------------------------------------------------------
-
-func _create_enemy_templates(wave_num: int) -> Array:
-	# Exponential HP scaling: 1.30^(wave-1) — wave 3=1.69x, wave 5=2.86x, wave 7=4.83x
-	var hp_scale := pow(1.30, wave_num - 1)
-	var speed_scale := 1.0 + (wave_num - 1) * 0.03
-	var dps_scale := 1.0 + (wave_num - 1) * 0.10
-	var templates: Array = []
-
-	# Rusher — always present
-	var rusher := EnemyData.new()
-	rusher.enemy_name = "Rusher"
-	rusher.enemy_type = EnemyData.EnemyType.RUSHER
-	rusher.max_hp = 25.0 * hp_scale
-	rusher.dps = 8.0 * dps_scale
-	rusher.speed = 3.5 * speed_scale
-	rusher.mineral_reward = 3
-	rusher.color = Color(0.85, 0.2, 0.15)
-	templates.append(rusher)
-
-	# Wave 2+: Splitter
-	if wave_num >= 2:
-		var splitter := EnemyData.new()
-		splitter.enemy_name = "Splitter"
-		splitter.enemy_type = EnemyData.EnemyType.SPLITTER
-		splitter.max_hp = 40.0 * hp_scale
-		splitter.dps = 6.0 * dps_scale
-		splitter.speed = 3.0 * speed_scale
-		splitter.mineral_reward = 5
-		splitter.color = Color(0.6, 0.85, 0.2)
-		splitter.split_count = 2
-		templates.append(splitter)
-
-	# Wave 3+: Tank
-	if wave_num >= 3:
-		var tank := EnemyData.new()
-		tank.enemy_name = "Tank"
-		tank.enemy_type = EnemyData.EnemyType.TANK
-		tank.max_hp = 120.0 * hp_scale
-		tank.dps = 14.0 * dps_scale
-		tank.speed = 1.8 * speed_scale
-		tank.mineral_reward = 8
-		tank.color = Color(0.5, 0.35, 0.6)
-		tank.scale_factor = 1.4
-		templates.append(tank)
-
-	# Wave 4+: Exploder
-	if wave_num >= 4:
-		var exploder := EnemyData.new()
-		exploder.enemy_name = "Exploder"
-		exploder.enemy_type = EnemyData.EnemyType.EXPLODER
-		exploder.max_hp = 20.0 * hp_scale
-		exploder.dps = 4.0 * dps_scale
-		exploder.speed = 4.5 * speed_scale
-		exploder.mineral_reward = 4
-		exploder.color = Color(1.0, 0.6, 0.1)
-		exploder.explode_radius = 2.5
-		exploder.explode_damage = 35.0 + wave_num * 8.0
-		templates.append(exploder)
-
-	# Wave 5+: Elite Rusher
-	if wave_num >= 5:
-		var elite := EnemyData.new()
-		elite.enemy_name = "Elite Rusher"
-		elite.enemy_type = EnemyData.EnemyType.ELITE_RUSHER
-		elite.max_hp = 60.0 * hp_scale
-		elite.dps = 18.0 * dps_scale
-		elite.speed = 4.5 * speed_scale
-		elite.mineral_reward = 6
-		elite.color = Color(0.95, 0.15, 0.3)
-		elite.scale_factor = 1.15
-		templates.append(elite)
-
-	# Wave 6+: Destroyer
-	if wave_num >= 6:
-		var destroyer := EnemyData.new()
-		destroyer.enemy_name = "Destroyer"
-		destroyer.enemy_type = EnemyData.EnemyType.DESTROYER
-		destroyer.max_hp = 180.0 * hp_scale
-		destroyer.dps = 25.0 * dps_scale
-		destroyer.speed = 1.5 * speed_scale
-		destroyer.mineral_reward = 12
-		destroyer.color = Color(0.3, 0.1, 0.4)
-		destroyer.scale_factor = 1.6
-		templates.append(destroyer)
-
-	return templates
 
 var _spawn_queue: Array = []
 const SPAWN_PER_FRAME := 3  # max enemies to spawn per frame
 
 func _spawn_wave() -> void:
 	var wave_num := GameManager.wave_number
-	# Tidal pattern: calm → storm cycle every 3 waves
-	var cycle_pos := (wave_num - 1) % 3  # 0=calm, 1=rising, 2=storm
-	var base_count := 30 + (wave_num - 1) * 8
-	var count_multiplier: float = [0.7, 1.0, 1.4][cycle_pos]
-	var enemy_count := int(base_count * count_multiplier * EventManager.get_challenge_enemy_mult())
+	var enemy_count := WaveDirector.enemy_count(wave_num, EventManager.get_challenge_enemy_mult())
 
-	var templates := _create_enemy_templates(wave_num)
+	var templates := WaveDirector.create_enemy_templates(wave_num)
 
 	# Queue enemies for gradual spawning instead of all at once
 	for i in enemy_count:
@@ -1118,7 +487,7 @@ func _spawn_wave() -> void:
 		_spawn_queue.append({
 			"template": template,
 			"hq_pos": HQ_WORLD_POS,
-			"edge": _wave_spawn_position(wave_num),
+			"edge": WaveDirector.spawn_position(wave_num, MAP_SIZE, HQ_CENTER),
 		})
 
 	_wave_active = true
@@ -1162,26 +531,6 @@ func _on_wave_cleared() -> void:
 	# 25% chance of choice event between waves (wave 3+)
 	if GameManager.wave_number >= 3 and randf() < 0.25:
 		EventManager.trigger_random_choice_event()
-
-func _random_edge_position() -> Vector2:
-	var side := randi() % 4
-	match side:
-		0: return Vector2(randf_range(1.0, MAP_SIZE - 1.0), -1.0)
-		1: return Vector2(float(MAP_SIZE) + 1.0, randf_range(1.0, MAP_SIZE - 1.0))
-		2: return Vector2(randf_range(1.0, MAP_SIZE - 1.0), float(MAP_SIZE) + 1.0)
-		3: return Vector2(-1.0, randf_range(1.0, MAP_SIZE - 1.0))
-	return Vector2.ZERO
-
-func _wave_spawn_position(wave_num: int) -> Vector2:
-	if wave_num <= 3:
-		var radius := 20.0 + float(wave_num - 1) * 10.0 + randf_range(-4.0, 5.0)
-		var angle := randf() * TAU
-		var pos := HQ_CENTER + Vector2(cos(angle), sin(angle)) * radius
-		return Vector2(
-			clampf(pos.x, 4.0, float(MAP_SIZE) - 4.0),
-			clampf(pos.y, 4.0, float(MAP_SIZE) - 4.0)
-		)
-	return _random_edge_position()
 
 # ---------------------------------------------------------------------------
 # Input
@@ -1245,15 +594,14 @@ func _input(event: InputEvent) -> void:
 				_update_hud()
 			KEY_F:
 				var spd := GameFeel.cycle_speed()
-				if _speed_label:
-					_speed_label.text = "%dx" % [int(spd)]
-					_speed_label.visible = spd > 1.0
+				if _ui:
+					_ui.set_speed_label(spd)
 			KEY_ESCAPE:
 				_toggle_esc_menu()
 			KEY_F3:
 				_debug_visible = not _debug_visible
-				if _debug_label:
-					_debug_label.visible = _debug_visible
+				if _ui:
+					_ui.set_debug_visible(_debug_visible)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if GameManager.is_game_over:
@@ -1500,69 +848,30 @@ func _on_slot_pressed(slot_index: int) -> void:
 	_update_slot_highlight()
 
 func _update_hud() -> void:
-	if _mineral_label:
-		_mineral_label.text = "$%d" % GameManager.minerals
-	if _wave_info_label:
-		var next := ""
-		if _between_waves:
-			next = "  |  Next: %ds" % int(ceil(_wave_countdown))
-		var pause := "  ||" if GameFeel.paused else ""
-		_wave_info_label.text = "W%d  K:%d  E:%d%s%s" % [
-			GameManager.wave_number, GameManager.kill_count, enemies_alive, next, pause]
-	if _hp_label and _hq:
-		var hp := int(_hq.current_hp) if is_instance_valid(_hq) else 0
-		_hp_label.text = "%d" % hp
-
-func _update_minimap() -> void:
-	if not _minimap_rect:
+	if not _ui:
 		return
-	var img := Image.create(MINIMAP_PIXELS, MINIMAP_PIXELS, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0.015, 0.02, 0.015, 1.0))
-	for x in range(0, MINIMAP_PIXELS, 16):
-		for y in MINIMAP_PIXELS:
-			img.set_pixel(x, y, Color(0.08, 0.12, 0.08, 1.0))
-	for y in range(0, MINIMAP_PIXELS, 16):
-		for x in MINIMAP_PIXELS:
-			img.set_pixel(x, y, Color(0.08, 0.12, 0.08, 1.0))
-
-	var buildings := get_tree().get_nodes_in_group("buildings")
-	for b in buildings:
-		if is_instance_valid(b):
-			_draw_minimap_dot(img, b.global_position, Color(0.25, 0.65, 1.0), 1)
-	if is_instance_valid(_hq):
-		_draw_minimap_dot(img, _hq.global_position, Color(0.45, 1.0, 1.0), 3)
-
-	var drawn_enemies := 0
-	for enemy in get_tree().get_nodes_in_group("enemies"):
-		if not is_instance_valid(enemy):
-			continue
-		_draw_minimap_dot(img, enemy.global_position, Color(1.0, 0.18, 0.12), 1)
-		drawn_enemies += 1
-		if drawn_enemies >= 180:
-			break
-	_minimap_rect.texture = ImageTexture.create_from_image(img)
-
-func _draw_minimap_dot(img: Image, pos: Vector3, color: Color, radius: int) -> void:
-	var px := clampi(int(pos.x / float(MAP_SIZE) * float(MINIMAP_PIXELS - 1)), 0, MINIMAP_PIXELS - 1)
-	var py := clampi(int(pos.z / float(MAP_SIZE) * float(MINIMAP_PIXELS - 1)), 0, MINIMAP_PIXELS - 1)
-	for dx in range(-radius, radius + 1):
-		for dy in range(-radius, radius + 1):
-			if dx * dx + dy * dy > radius * radius:
-				continue
-			var x := px + dx
-			var y := py + dy
-			if x >= 0 and x < MINIMAP_PIXELS and y >= 0 and y < MINIMAP_PIXELS:
-				img.set_pixel(x, y, color)
+	var hp := int(_hq.current_hp) if _hq and is_instance_valid(_hq) else 0
+	_ui.update_hud(
+		GameManager.minerals,
+		GameManager.wave_number,
+		GameManager.kill_count,
+		enemies_alive,
+		_between_waves,
+		_wave_countdown,
+		GameFeel.paused,
+		hp
+	)
 
 func _on_game_over() -> void:
 	AudioManager.stop_bgm()
 	AudioManager.play_sfx_by_name("destroy", 3.0)
-	_game_over_panel.visible = true
 	_ghost_mesh.visible = false
 	var secs := int(GameManager.game_time)
-	_result_label.text = Locale.t_fmt("result_format", [
+	var result_text := Locale.t_fmt("result_format", [
 		GameManager.wave_number, GameManager.kill_count, secs / 60, secs % 60
 	])
+	if _ui:
+		_ui.show_game_over(result_text)
 
 # ---------------------------------------------------------------------------
 # Reward cards
@@ -1572,19 +881,8 @@ func _show_reward_cards() -> void:
 	_pending_cards = RewardCard.pick_cards(GameManager.wave_number)
 	if _pending_cards.is_empty():
 		return
-	for i in 3:
-		if i < _pending_cards.size():
-			var card: RewardCard = _pending_cards[i]
-			_card_buttons[i].text = "[%s]\n%s\n%s" % [card.get_rarity_name(), card.card_name, card.description]
-			_card_buttons[i].visible = true
-			var rcolor: Color = card.get_rarity_color()
-			_card_buttons[i].add_theme_stylebox_override("normal", _create_panel_style(
-				Color(0.08, 0.06, 0.04, 0.95), rcolor * 0.6, 2))
-			_card_buttons[i].add_theme_stylebox_override("hover", _create_panel_style(
-				Color(0.14, 0.11, 0.06, 0.95), rcolor, 3))
-		else:
-			_card_buttons[i].visible = false
-	_card_panel.visible = true
+	if _ui:
+		_ui.show_reward_cards(_pending_cards)
 	_awaiting_card = true
 
 func _on_card_selected(index: int) -> void:
@@ -1594,11 +892,13 @@ func _on_card_selected(index: int) -> void:
 	EffectsManager.spawn_reward_sparkle(Vector3(128.5, 1.0, 128.5))
 	var card: RewardCard = _pending_cards[index]
 	_apply_card(card)
-	_card_panel.visible = false
+	if _ui:
+		_ui.hide_reward_cards()
 	_awaiting_card = false
 
 func _on_card_skip() -> void:
-	_card_panel.visible = false
+	if _ui:
+		_ui.hide_reward_cards()
 	_awaiting_card = false
 
 func _apply_card(card: RewardCard) -> void:
@@ -1623,56 +923,23 @@ func _apply_card(card: RewardCard) -> void:
 # ---------------------------------------------------------------------------
 
 func _update_synergy_bar() -> void:
-	if not _synergy_label:
-		return
-	var _trait_icons := {
-		TraitData.TraitType.FIRE: "F",
-		TraitData.TraitType.ICE: "I",
-		TraitData.TraitType.POISON: "P",
-		TraitData.TraitType.ELECTRIC: "E",
-		TraitData.TraitType.FORTIFY: "D",
-	}
-	var text := ""
-	for t in [TraitData.TraitType.FIRE, TraitData.TraitType.ICE, TraitData.TraitType.POISON,
-			TraitData.TraitType.ELECTRIC, TraitData.TraitType.FORTIFY]:
-		var count := SynergyManager.get_trait_count(t)
-		if count > 0:
-			var tier := SynergyManager.get_synergy_tier(t)
-			var tier_mark := ""
-			if tier >= 2:
-				tier_mark = " **"
-			elif tier >= 1:
-				tier_mark = " *"
-			var icon: String = _trait_icons.get(t, "?")
-			text += "[%s] %s x%d%s\n" % [icon, TraitData.get_trait_name(t), count, tier_mark]
-	var cross := SynergyManager.get_cross_synergies()
-	for c in cross:
-		text += ">> %s\n" % c.to_upper()
-	_synergy_label.text = text
+	if _ui:
+		_ui.update_synergy_bar()
 
 # ---------------------------------------------------------------------------
 # Events
 # ---------------------------------------------------------------------------
 
 func _on_combat_event(event_name: String, description: String) -> void:
-	if _event_label:
-		_event_label.text = "%s: %s" % [Locale.t(event_name), Locale.t(description)]
-		_event_label.visible = true
-		_event_timer = 4.0
+	if _ui:
+		_ui.show_combat_event(event_name, description)
 
 var _pending_choices: Array = []
 
 func _on_choice_event(event_name: String, description: String, choices: Array) -> void:
 	_pending_choices = choices
-	if _choice_label:
-		_choice_label.text = "%s\n%s" % [Locale.t(event_name), Locale.t(description)]
-	for i in _choice_buttons.size():
-		if i < choices.size():
-			_choice_buttons[i].text = Locale.t(choices[i]["label"])
-			_choice_buttons[i].visible = true
-		else:
-			_choice_buttons[i].visible = false
-	_choice_panel.visible = true
+	if _ui:
+		_ui.show_choice_event(event_name, description, choices)
 	_awaiting_choice = true
 
 func _on_choice_selected(index: int) -> void:
@@ -1681,17 +948,16 @@ func _on_choice_selected(index: int) -> void:
 	AudioManager.play_sfx_by_name("ui_click")
 	var choice_id: String = _pending_choices[index]["id"]
 	var result := EventManager.resolve_choice(choice_id)
-	_choice_panel.visible = false
+	if _ui:
+		_ui.hide_choice_panel()
 	_awaiting_choice = false
-	# Show result as event notification
-	if _event_label and result != "":
-		_event_label.text = result
-		_event_label.visible = true
-		_event_timer = 3.0
+	if _ui:
+		_ui.show_event_result(result)
 
 func _toggle_esc_menu() -> void:
 	_esc_visible = not _esc_visible
-	_esc_panel.visible = _esc_visible
+	if _ui:
+		_ui.set_esc_visible(_esc_visible)
 	if _esc_visible:
 		GameFeel.toggle_pause()
 		if not GameFeel.paused:
@@ -1703,7 +969,8 @@ func _toggle_esc_menu() -> void:
 
 func _on_esc_resume() -> void:
 	_esc_visible = false
-	_esc_panel.visible = false
+	if _ui:
+		_ui.set_esc_visible(false)
 	if GameFeel.paused:
 		GameFeel.toggle_pause()
 	_update_hud()
