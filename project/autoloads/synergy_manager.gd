@@ -10,9 +10,9 @@ var _active_synergies: Dictionary = {}  # TraitData.TraitType -> tier (1-3)
 var _cross_synergies: Array = []  # ["elemental_master", "elemental_lord"]
 
 # Synergy thresholds
-const TIER_1_COUNT := 2
-const TIER_2_COUNT := 4
-const TIER_3_COUNT := 6
+const TIER_1_COUNT := 1
+const TIER_2_COUNT := 3
+const TIER_3_COUNT := 5
 
 # Synergy bonuses
 const TIER_1_BONUS := 0.2   # +20%
@@ -46,6 +46,21 @@ func get_synergy_tier(trait_type: int) -> int:
 
 func get_cross_synergies() -> Array:
 	return _cross_synergies.duplicate()
+
+func get_primary_attack_trait() -> int:
+	var best_trait := -1
+	var best_count := 0
+	var best_tier := -1
+	for trait_type in _trait_counts:
+		if trait_type == TraitData.TraitType.FORTIFY:
+			continue
+		var count: int = _trait_counts[trait_type]
+		var tier := get_synergy_tier(trait_type)
+		if tier > best_tier or (tier == best_tier and count > best_count):
+			best_trait = trait_type
+			best_count = count
+			best_tier = tier
+	return best_trait
 
 func get_dps_multiplier(trait_type: int) -> float:
 	var tier := get_synergy_tier(trait_type)

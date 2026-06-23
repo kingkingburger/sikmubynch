@@ -5,6 +5,10 @@ const TraitData := preload("res://scripts/data/trait_data.gd")
 
 const MAP_SIZE := 256
 const WAVE_INTERVAL := 10.0
+const HQ_CENTER := Vector2(128.5, 128.5)
+const HQ_WORLD_POS := Vector3(128.5, 0.0, 128.5)
+const MINIMAP_PIXELS := 112
+const MINIMAP_UPDATE_INTERVAL := 0.25
 
 # Scenes
 var barricade_scene: PackedScene
@@ -40,6 +44,8 @@ var _hp_label: Label
 var _game_over_panel: PanelContainer
 var _result_label: Label
 var _slot_buttons: Array = []
+var _minimap_rect: TextureRect
+var _minimap_timer: float = 0.0
 
 # Reward card UI
 var _card_panel: PanelContainer
@@ -63,13 +69,13 @@ var _awaiting_choice: bool = false
 
 # Camera control
 var _cam_center := Vector2(128.0, 128.0)
-var _cam_zoom: float = 22.0
+var _cam_zoom: float = 18.0
 const CAM_SPEED := 35.0
 var _right_dragging: bool = false
 var _flow_dirty: bool = false
 var _flow_timer: float = 0.0
-const CAM_ZOOM_MIN := 18.0
-const CAM_ZOOM_MAX := 120.0
+const CAM_ZOOM_MIN := 14.0
+const CAM_ZOOM_MAX := 90.0
 const CAM_DIST := 50.0
 
 # Drag build
@@ -194,6 +200,11 @@ func _process(delta: float) -> void:
 		_event_timer -= delta
 		if _event_timer <= 0.0 and _event_label:
 			_event_label.visible = false
+	if _minimap_rect:
+		_minimap_timer -= delta
+		if _minimap_timer <= 0.0:
+			_minimap_timer = MINIMAP_UPDATE_INTERVAL
+			_update_minimap()
 	# Deferred FlowField recalculation (avoid lag on build)
 	if _flow_dirty:
 		_flow_timer += delta
@@ -445,7 +456,7 @@ func _add_border() -> void:
 func _setup_hq() -> void:
 	var hq_scene := load("res://scenes/buildings/hq.tscn") as PackedScene
 	_hq = hq_scene.instantiate() as BaseBuilding
-	_hq.position = Vector3(128.5, 0.0, 128.5)
+	_hq.position = HQ_WORLD_POS
 	_hq.add_to_group("buildings")
 	add_child(_hq)
 
@@ -627,19 +638,27 @@ func _setup_ui() -> void:
 		build_hbox.add_child(btn)
 		_slot_buttons.append(btn)
 
-	# --- Right: Minimap placeholder ---
+	# --- Right: threat radar ---
 	var minimap_panel := PanelContainer.new()
 	minimap_panel.custom_minimum_size = Vector2(170, 0)
 	minimap_panel.add_theme_stylebox_override("panel", _create_panel_style(
 		Color(0.04, 0.05, 0.03, 0.9), Color(0.3, 0.25, 0.15, 0.4), 1))
 	grid.add_child(minimap_panel)
+	var mm_vbox := VBoxContainer.new()
+	mm_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	mm_vbox.add_theme_constant_override("separation", 4)
+	minimap_panel.add_child(mm_vbox)
 	var mm_label := Label.new()
-	mm_label.text = "MINIMAP\n256x256"
+	mm_label.text = "THREAT RADAR"
 	mm_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	mm_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	mm_label.add_theme_font_size_override("font_size", 11)
-	mm_label.add_theme_color_override("font_color", Color(0.4, 0.45, 0.35))
-	minimap_panel.add_child(mm_label)
+	mm_label.add_theme_font_size_override("font_size", 10)
+	mm_label.add_theme_color_override("font_color", Color(0.5, 0.75, 0.65))
+	mm_vbox.add_child(mm_label)
+	_minimap_rect = TextureRect.new()
+	_minimap_rect.custom_minimum_size = Vector2(124, 96)
+	_minimap_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_minimap_rect.stretch_mode = TextureRect.STRETCH_SCALE
+	mm_vbox.add_child(_minimap_rect)
 
 	_update_slot_highlight()
 
@@ -1092,15 +1111,14 @@ func _spawn_wave() -> void:
 	var enemy_count := int(base_count * count_multiplier * EventManager.get_challenge_enemy_mult())
 
 	var templates := _create_enemy_templates(wave_num)
-	var hq_pos := Vector3(128.5, 0.0, 128.5)
 
 	# Queue enemies for gradual spawning instead of all at once
 	for i in enemy_count:
 		var template: EnemyData = templates[randi() % templates.size()]
 		_spawn_queue.append({
 			"template": template,
-			"hq_pos": hq_pos,
-			"edge": _random_edge_position(),
+			"hq_pos": HQ_WORLD_POS,
+			"edge": _wave_spawn_position(wave_num),
 		})
 
 	_wave_active = true
@@ -1153,6 +1171,17 @@ func _random_edge_position() -> Vector2:
 		2: return Vector2(randf_range(1.0, MAP_SIZE - 1.0), float(MAP_SIZE) + 1.0)
 		3: return Vector2(-1.0, randf_range(1.0, MAP_SIZE - 1.0))
 	return Vector2.ZERO
+
+func _wave_spawn_position(wave_num: int) -> Vector2:
+	if wave_num <= 3:
+		var radius := 20.0 + float(wave_num - 1) * 10.0 + randf_range(-4.0, 5.0)
+		var angle := randf() * TAU
+		var pos := HQ_CENTER + Vector2(cos(angle), sin(angle)) * radius
+		return Vector2(
+			clampf(pos.x, 4.0, float(MAP_SIZE) - 4.0),
+			clampf(pos.y, 4.0, float(MAP_SIZE) - 4.0)
+		)
+	return _random_edge_position()
 
 # ---------------------------------------------------------------------------
 # Input
@@ -1483,6 +1512,47 @@ func _update_hud() -> void:
 	if _hp_label and _hq:
 		var hp := int(_hq.current_hp) if is_instance_valid(_hq) else 0
 		_hp_label.text = "%d" % hp
+
+func _update_minimap() -> void:
+	if not _minimap_rect:
+		return
+	var img := Image.create(MINIMAP_PIXELS, MINIMAP_PIXELS, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0.015, 0.02, 0.015, 1.0))
+	for x in range(0, MINIMAP_PIXELS, 16):
+		for y in MINIMAP_PIXELS:
+			img.set_pixel(x, y, Color(0.08, 0.12, 0.08, 1.0))
+	for y in range(0, MINIMAP_PIXELS, 16):
+		for x in MINIMAP_PIXELS:
+			img.set_pixel(x, y, Color(0.08, 0.12, 0.08, 1.0))
+
+	var buildings := get_tree().get_nodes_in_group("buildings")
+	for b in buildings:
+		if is_instance_valid(b):
+			_draw_minimap_dot(img, b.global_position, Color(0.25, 0.65, 1.0), 1)
+	if is_instance_valid(_hq):
+		_draw_minimap_dot(img, _hq.global_position, Color(0.45, 1.0, 1.0), 3)
+
+	var drawn_enemies := 0
+	for enemy in get_tree().get_nodes_in_group("enemies"):
+		if not is_instance_valid(enemy):
+			continue
+		_draw_minimap_dot(img, enemy.global_position, Color(1.0, 0.18, 0.12), 1)
+		drawn_enemies += 1
+		if drawn_enemies >= 180:
+			break
+	_minimap_rect.texture = ImageTexture.create_from_image(img)
+
+func _draw_minimap_dot(img: Image, pos: Vector3, color: Color, radius: int) -> void:
+	var px := clampi(int(pos.x / float(MAP_SIZE) * float(MINIMAP_PIXELS - 1)), 0, MINIMAP_PIXELS - 1)
+	var py := clampi(int(pos.z / float(MAP_SIZE) * float(MINIMAP_PIXELS - 1)), 0, MINIMAP_PIXELS - 1)
+	for dx in range(-radius, radius + 1):
+		for dy in range(-radius, radius + 1):
+			if dx * dx + dy * dy > radius * radius:
+				continue
+			var x := px + dx
+			var y := py + dy
+			if x >= 0 and x < MINIMAP_PIXELS and y >= 0 and y < MINIMAP_PIXELS:
+				img.set_pixel(x, y, color)
 
 func _on_game_over() -> void:
 	AudioManager.stop_bgm()

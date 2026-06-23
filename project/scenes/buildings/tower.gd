@@ -96,18 +96,26 @@ func _fire_at(target: Node3D) -> void:
 	projectile.target = target
 	projectile.damage = GameFeel.roll_critical(_get_buffed_dps(), global_position)
 	# Pass synergy effects to projectile
-	if data and data.trait_type >= 0:
-		projectile.set("trait_effects", SynergyManager.get_special_effects(data.trait_type))
+	var attack_trait := _get_attack_trait()
+	if attack_trait >= 0:
+		projectile.set("trait_effects", SynergyManager.get_special_effects(attack_trait))
+		projectile.set("trait_color", TraitData.get_trait_color(attack_trait))
 	get_parent().add_child(projectile)
 
 func _get_buffed_dps() -> float:
 	var base_dps := get_effective_dps()
 	# Synergy bonus
-	if data and data.trait_type >= 0:
-		base_dps *= SynergyManager.get_dps_multiplier(data.trait_type)
+	var attack_trait := _get_attack_trait()
+	if attack_trait >= 0:
+		base_dps *= SynergyManager.get_dps_multiplier(attack_trait)
 	# Buff tower bonus — use cached value
 	base_dps *= _cached_buff_mult
 	return base_dps
+
+func _get_attack_trait() -> int:
+	if data and data.trait_type >= 0:
+		return data.trait_type
+	return SynergyManager.get_primary_attack_trait()
 
 func _calculate_buff_mult() -> float:
 	var mult := 1.0

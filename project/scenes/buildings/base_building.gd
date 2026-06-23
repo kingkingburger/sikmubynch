@@ -240,6 +240,8 @@ func level_up() -> bool:
 	level += 1
 	current_hp = get_effective_max_hp()
 	_update_level_visual()
+	AudioManager.play_sfx_by_name("levelup", -2.0)
+	EffectsManager.spawn_synergy_effect(global_position + Vector3(0.0, 0.5, 0.0), _get_base_color())
 	return true
 
 func demolish() -> void:

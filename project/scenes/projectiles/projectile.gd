@@ -4,6 +4,7 @@ var target: Node3D
 var damage: float = 0.0
 var speed: float = 25.0
 var trait_effects: Dictionary = {}
+var trait_color: Color = Color(1.0, 0.8, 0.2)
 
 var _trail_mesh: MeshInstance3D
 
@@ -19,9 +20,9 @@ func _ready() -> void:
 		sphere.height = 0.5
 		mesh.mesh = sphere
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.9, 0.3)
+	mat.albedo_color = trait_color.lightened(0.15)
 	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.8, 0.2)
+	mat.emission = trait_color
 	mat.emission_energy_multiplier = 4.0
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mesh.material_override = mat
@@ -35,9 +36,9 @@ func _ready() -> void:
 	trail.height = 0.6
 	_trail_mesh.mesh = trail
 	var trail_mat := StandardMaterial3D.new()
-	trail_mat.albedo_color = Color(1.0, 0.7, 0.1, 0.6)
+	trail_mat.albedo_color = Color(trait_color.r, trait_color.g, trait_color.b, 0.6)
 	trail_mat.emission_enabled = true
-	trail_mat.emission = Color(1.0, 0.6, 0.1)
+	trail_mat.emission = trait_color
 	trail_mat.emission_energy_multiplier = 2.0
 	trail_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	trail_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -57,7 +58,7 @@ func _ready() -> void:
 	trail_particles.gravity = Vector3.ZERO
 	trail_particles.scale_amount_min = 0.3
 	trail_particles.scale_amount_max = 0.6
-	trail_particles.color = Color(1.0, 0.6, 0.1, 0.6)
+	trail_particles.color = Color(trait_color.r, trait_color.g, trait_color.b, 0.6)
 	var tmesh := SphereMesh.new()
 	tmesh.radius = 0.03
 	tmesh.height = 0.06
@@ -92,7 +93,7 @@ func _on_hit() -> void:
 		return
 
 	AudioManager.play_sfx_by_name("hit", -8.0)
-	EffectsManager.spawn_hit_impact(global_position)
+	EffectsManager.spawn_hit_impact(global_position, trait_color)
 
 	# Apply damage
 	if target.has_method("take_damage"):

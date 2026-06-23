@@ -31,6 +31,7 @@ var _hp_bar_fill: MeshInstance3D
 var _hp_bar_bg: MeshInstance3D
 var _shadow: MeshInstance3D
 var _attack_flash: float = 0.0
+var _last_hit_feedback_time: float = -1.0
 
 # Animation
 var _anim_time: float = 0.0
@@ -551,6 +552,12 @@ func take_damage(amount: float) -> void:
 	_update_hp_bar()
 	if amount > 1.0:
 		var now := Time.get_ticks_msec() * 0.001
+		if now - _last_hit_feedback_time > 0.08:
+			_last_hit_feedback_time = now
+			_attack_flash = 1.0
+			_update_flash()
+			if amount >= 8.0:
+				GameFeel.hitstop(0.018)
 		if now - _last_dmg_num_time > 0.25:
 			_last_dmg_num_time = now
 			_spawn_damage_number(amount)
