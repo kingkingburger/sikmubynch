@@ -33,6 +33,7 @@ SIKMUBYNCH는 플레이어가 한 런 동안 본진을 지키며 전투 중 건�
 - [기술 설계](docs/technical-design.md): Godot 구조, 주요 매니저, 성능 설계, 데이터 경계
 - [제작 로드맵](docs/production-roadmap.md): 상용화를 향한 단계별 개발 우선순위
 - [검증 계획](docs/quality-plan.md): 플레이 감각, 시스템, 성능, 출시 준비 검증 기준
+- [미완성 작업 목록](docs/unfinished-work.md): 코드·실행 대조 결과, 남은 기능, 오류, 검증 항목과 우선순위
 - [3D 모델링 가이드](docs/3d-modeling-guide.md): 모델 제작 및 교체 파이프라인
 - [사운드 가이드](docs/sound-guide.md): BGM/SFX 제작 및 적용 기준
 
