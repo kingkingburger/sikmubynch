@@ -47,7 +47,7 @@ func _setup_aura() -> void:
 
 func _process(delta: float) -> void:
 	super._process(delta)
-	if GameManager.is_game_over or not data:
+	if GameManager.is_game_over or GameFeel.paused or not data:
 		return
 
 	# Pulse animation

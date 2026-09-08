@@ -15,14 +15,29 @@ const DIRECTIONS := [
 var _field: Dictionary = {}
 var _cost_field: Dictionary = {}
 var _obstacles: Dictionary = {}
+var _world_obstacles: Dictionary = {}
+
+func reset() -> void:
+	_field.clear()
+	_cost_field.clear()
+	_obstacles.clear()
+	_world_obstacles.clear()
 
 ## 월드 좌표로 장애물 설정
 func set_obstacle(world_pos: Vector2i, is_obstacle: bool) -> void:
+	if _world_obstacles.has(world_pos) == is_obstacle:
+		return
 	var fpos := Vector2i(world_pos.x / FLOW_RES, world_pos.y / FLOW_RES)
 	if is_obstacle:
-		_obstacles[fpos] = true
+		_world_obstacles[world_pos] = true
+		_obstacles[fpos] = int(_obstacles.get(fpos, 0)) + 1
 	else:
-		_obstacles.erase(fpos)
+		_world_obstacles.erase(world_pos)
+		var remaining := int(_obstacles[fpos]) - 1
+		if remaining > 0:
+			_obstacles[fpos] = remaining
+		else:
+			_obstacles.erase(fpos)
 
 ## 월드 좌표에서 이동 방향 조회
 func get_direction(world_x: float, world_z: float) -> Vector2:

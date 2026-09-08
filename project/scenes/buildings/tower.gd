@@ -57,7 +57,7 @@ func _setup_turret() -> void:
 
 func _process(delta: float) -> void:
 	super._process(delta)
-	if GameManager.is_game_over:
+	if GameManager.is_game_over or GameFeel.paused:
 		return
 
 	# Muzzle flash fade

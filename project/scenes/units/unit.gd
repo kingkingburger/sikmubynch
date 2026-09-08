@@ -327,7 +327,7 @@ func _build_weapon(unit_type: int) -> void:
 # ---------------------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
-	if GameManager.is_game_over or _state == State.DEAD:
+	if GameManager.is_game_over or GameFeel.paused or _state == State.DEAD:
 		return
 
 	if _flash > 0.0:
@@ -339,6 +339,7 @@ func _physics_process(delta: float) -> void:
 		elif Engine.get_physics_frames() % 3 == 0:
 			_update_flash()
 
+	var old_pos := global_position
 	match _state:
 		State.PATROL:
 			_process_patrol(delta)
@@ -347,6 +348,8 @@ func _physics_process(delta: float) -> void:
 		State.ATTACK:
 			_process_attack(delta)
 
+	if _state != State.DEAD:
+		SpatialGrid.update_position(self, old_pos, "units")
 	_animate(delta)
 
 # -- State: PATROL --
@@ -415,7 +418,7 @@ func _perform_attack() -> void:
 	_update_flash()
 	_attack_anim = 0.0
 
-	var dmg := data.dps * (1.0 + EventManager.get_unit_dps_perm_bonus())
+	var dmg := _get_attack_damage()
 	if data.unit_type == UnitData.UnitType.ARCHER:
 		_fire_projectile(dmg)
 	else:
@@ -435,8 +438,11 @@ func _bomber_explode() -> void:
 	var nearby := SpatialGrid.find_in_range(global_position, "enemies", BOMBER_AOE_RADIUS)
 	for enemy in nearby:
 		if enemy.has_method("take_damage"):
-			enemy.take_damage(data.dps)
+			enemy.take_damage(_get_attack_damage())
 	_die()
+
+func _get_attack_damage() -> float:
+	return data.dps * (1.0 + EventManager.get_unit_dps_perm_bonus())
 
 # ---------------------------------------------------------------------------
 # Animation

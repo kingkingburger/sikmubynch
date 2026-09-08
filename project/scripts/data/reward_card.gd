@@ -4,13 +4,14 @@ extends RefCounted
 const TraitData := preload("res://scripts/data/trait_data.gd")
 
 enum Rarity { COMMON, RARE, LEGENDARY }
-enum EffectType { TRAIT_GRANT, MINERAL_BONUS, UNIT_BUFF, BUILDING_HEAL }
+enum EffectType { TRAIT_GRANT, MINERAL_BONUS, UNIT_BUFF, BUILDING_HP }
 
 var card_name: String
 var description: String
 var rarity: Rarity
 var effect_type: EffectType
 var effect_value: float
+var heal_fraction: float = 0.0
 var trait_type: int = -1  # For TRAIT_GRANT
 
 func get_rarity_color() -> Color:
@@ -33,7 +34,7 @@ static func generate_pool(wave: int) -> Array:
 	# Common cards
 	pool.append(_make_mineral("card_mineral_cache", 35, Rarity.COMMON))
 	pool.append(_make_mineral("card_mineral_vein", 55, Rarity.COMMON))
-	pool.append(_make_stat("card_fortified_walls", "card_building_hp", EffectType.BUILDING_HEAL, 0.10, Rarity.COMMON, 10))
+	pool.append(_make_stat("card_fortified_walls", "card_building_hp", EffectType.BUILDING_HP, 0.10, Rarity.COMMON, 10))
 	pool.append(_make_stat("card_sharp_blades", "card_unit_dps", EffectType.UNIT_BUFF, 0.08, Rarity.COMMON, 8))
 
 	# Trait cards (common)
@@ -59,13 +60,13 @@ static func generate_pool(wave: int) -> Array:
 	# Rare cards (wave 3+)
 	if wave >= 3:
 		pool.append(_make_mineral("card_mineral_surge", 90, Rarity.RARE))
-		pool.append(_make_stat("card_iron_fortress", "card_building_hp", EffectType.BUILDING_HEAL, 0.20, Rarity.RARE, 20))
+		pool.append(_make_stat("card_iron_fortress", "card_building_hp", EffectType.BUILDING_HP, 0.20, Rarity.RARE, 20))
 		pool.append(_make_stat("card_war_drums", "card_unit_dps", EffectType.UNIT_BUFF, 0.15, Rarity.RARE, 15))
 
 	# Legendary cards (wave 5+)
 	if wave >= 5:
 		pool.append(_make_mineral("card_motherlode", 180, Rarity.LEGENDARY))
-		pool.append(_make_stat("card_titans_blessing", "card_building_hp_heal", EffectType.BUILDING_HEAL, 0.35, Rarity.LEGENDARY, 35))
+		pool.append(_make_stat("card_titans_blessing", "card_building_hp_heal", EffectType.BUILDING_HP, 0.35, Rarity.LEGENDARY, 35, 0.35))
 		pool.append(_make_stat("card_berserker_rage", "card_unit_dps", EffectType.UNIT_BUFF, 0.30, Rarity.LEGENDARY, 30))
 
 	return pool
@@ -106,11 +107,12 @@ static func _make_mineral(name_key: String, amount: float, r: Rarity) -> RewardC
 	card.effect_value = amount
 	return card
 
-static func _make_stat(name_key: String, desc_key: String, etype: EffectType, val: float, r: Rarity, pct: int = 0) -> RewardCard:
+static func _make_stat(name_key: String, desc_key: String, etype: EffectType, val: float, r: Rarity, pct: int = 0, heal: float = 0.0) -> RewardCard:
 	var card := RewardCard.new()
 	card.card_name = Locale.t(name_key)
 	card.description = Locale.t_fmt(desc_key, [pct])
 	card.rarity = r
 	card.effect_type = etype
 	card.effect_value = val
+	card.heal_fraction = heal
 	return card

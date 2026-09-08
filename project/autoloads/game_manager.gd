@@ -10,7 +10,7 @@ var game_time: float = 0.0
 var is_game_over: bool = false
 
 func _process(delta: float) -> void:
-	if not is_game_over:
+	if not is_game_over and not GameFeel.paused:
 		game_time += delta
 
 func add_minerals(amount: int) -> void:

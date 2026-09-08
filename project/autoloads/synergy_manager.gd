@@ -64,12 +64,12 @@ func get_primary_attack_trait() -> int:
 
 func get_dps_multiplier(trait_type: int) -> float:
 	var tier := get_synergy_tier(trait_type)
-	match tier:
-		1: return 1.0 + TIER_1_BONUS
-		2: return 1.0 + TIER_2_BONUS
-		3: return 1.0 + TIER_3_BONUS
-	# Cross synergy bonus
 	var bonus := 1.0
+	match tier:
+		1: bonus += TIER_1_BONUS
+		2: bonus += TIER_2_BONUS
+		3: bonus += TIER_3_BONUS
+	# Cross synergy bonus
 	if "elemental_master" in _cross_synergies:
 		bonus += 0.15
 	if "elemental_lord" in _cross_synergies:

@@ -22,7 +22,7 @@ var _destroyed: bool = false
 
 func _ready() -> void:
 	if data:
-		current_hp = data.max_hp
+		current_hp = get_effective_max_hp()
 	_build_mesh()
 	_add_building_light()
 	SpatialGrid.register(self, "buildings")
@@ -68,6 +68,7 @@ func get_effective_max_hp() -> float:
 	if not data:
 		return 100.0
 	var base := data.max_hp * (1.0 + LEVEL_BONUS * (level - 1))
+	base *= 1.0 + EventManager.get_building_hp_perm_bonus()
 	# Fortify synergy HP bonus
 	var fortify_effects := SynergyManager.get_special_effects(TraitData.TraitType.FORTIFY)
 	if fortify_effects.has("hp_bonus"):
@@ -157,6 +158,8 @@ func _get_height() -> float:
 	return 0.4
 
 func _process(delta: float) -> void:
+	if GameFeel.paused:
+		return
 	if _damage_flash > 0.0:
 		_damage_flash -= delta * 4.0
 		if _damage_flash < 0.0:

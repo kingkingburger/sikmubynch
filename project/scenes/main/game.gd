@@ -45,6 +45,7 @@ var _pending_cards: Array = []
 # Pause during card/choice selection
 var _awaiting_card: bool = false
 var _awaiting_choice: bool = false
+var _queued_choice_event: Dictionary = {}
 
 # Camera control
 var _cam_center := Vector2(128.0, 128.0)
@@ -73,6 +74,7 @@ var _ghost_mesh: MeshInstance3D
 var _ghost_mat: StandardMaterial3D
 
 func _ready() -> void:
+	_reset_all_managers()
 	barricade_scene = load("res://scenes/buildings/barricade.tscn")
 	tower_scene = load("res://scenes/buildings/tower.tscn")
 	barracks_scene = load("res://scenes/buildings/barracks.tscn")
@@ -105,7 +107,7 @@ func _init_building_data() -> void:
 	_building_datas = BuildingCatalog.create()
 
 func _process(delta: float) -> void:
-	if GameManager.is_game_over:
+	if GameManager.is_game_over or GameFeel.paused:
 		return
 	# Camera WASD
 	var cam_dir := Vector2.ZERO
@@ -143,7 +145,7 @@ func _process(delta: float) -> void:
 	# Gradual enemy spawning
 	_process_spawn_queue()
 	# Pause wave countdown during card/choice selection
-	if _between_waves and not _awaiting_choice:
+	if _between_waves and not _awaiting_card and not _awaiting_choice:
 		_wave_countdown -= delta
 		_update_hud()
 		if _wave_countdown <= 0.0:
@@ -484,25 +486,25 @@ func _spawn_wave() -> void:
 	# Queue enemies for gradual spawning instead of all at once
 	for i in enemy_count:
 		var template: EnemyData = templates[randi() % templates.size()]
-		_spawn_queue.append({
-			"template": template,
-			"hq_pos": HQ_WORLD_POS,
-			"edge": WaveDirector.spawn_position(wave_num, MAP_SIZE, HQ_CENTER),
-		})
+		var edge := WaveDirector.spawn_position(wave_num, MAP_SIZE, HQ_CENTER)
+		queue_enemy_spawn(template, Vector3(edge.x, 0.0, edge.y))
 
 	_wave_active = true
 	_update_hud()
 
+func queue_enemy_spawn(template: EnemyData, spawn_pos: Vector3) -> void:
+	_spawn_queue.append({"template": template, "position": spawn_pos})
+
 func _process_spawn_queue() -> void:
-	if _spawn_queue.is_empty():
+	if GameManager.is_game_over or GameFeel.paused or _spawn_queue.is_empty():
 		return
 	var count := mini(SPAWN_PER_FRAME, _spawn_queue.size())
 	for i in count:
 		var info: Dictionary = _spawn_queue.pop_front()
 		var enemy: Node3D = enemy_scene.instantiate()
 		enemy.set("data", info["template"])
-		enemy.set("target_position", info["hq_pos"])
-		enemy.position = Vector3(info["edge"].x, 0.0, info["edge"].y)
+		enemy.set("target_position", HQ_WORLD_POS)
+		enemy.position = info["position"]
 		enemy.connect("died", _on_enemy_died)
 		if enemy.has_signal("drop_mineral"):
 			enemy.connect("drop_mineral", _on_enemy_drop_mineral)
@@ -537,7 +539,34 @@ func _on_wave_cleared() -> void:
 # ---------------------------------------------------------------------------
 
 func _input(event: InputEvent) -> void:
+	# Releases must cancel gestures even when a modal has opened since the press.
+	if event is InputEventMouseButton and not event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			_dragging = false
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			_right_dragging = false
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F3:
+			_debug_visible = not _debug_visible
+			if _ui:
+				_ui.set_debug_visible(_debug_visible)
+			return
+		if event.keycode == KEY_ESCAPE:
+			if not GameManager.is_game_over:
+				_toggle_esc_menu()
+			return
+		if event.keycode == KEY_SPACE:
+			if not _is_world_input_blocked():
+				GameFeel.toggle_pause()
+				_update_hud()
+			return
+	if _is_world_input_blocked():
+		_cancel_world_drag()
+		return
 	if event is InputEventMouseMotion:
+		if get_viewport().gui_get_hovered_control() != null:
+			_cancel_world_drag()
+			return
 		_update_ghost(event.position)
 		# Right-click drag camera (StarCraft style)
 		if _right_dragging:
@@ -561,18 +590,7 @@ func _input(event: InputEvent) -> void:
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
 			_cam_zoom = minf(_cam_zoom + 3.0, CAM_ZOOM_MAX)
 			_update_camera_position()
-		# Right-click drag
-		if event.button_index == MOUSE_BUTTON_RIGHT:
-			_right_dragging = event.pressed
-		# Drag start/stop
-		if event.button_index == MOUSE_BUTTON_LEFT:
-			if event.pressed:
-				_dragging = true
-				_drag_last_grid = Vector2i(-999, -999)
-			else:
-				_dragging = false
-
-	if event is InputEventKey and event.pressed:
+	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_1:
 				_selected_slot = 0
@@ -589,30 +607,35 @@ func _input(event: InputEvent) -> void:
 			KEY_5:
 				_selected_slot = 4
 				_update_slot_highlight()
-			KEY_SPACE:
-				GameFeel.toggle_pause()
-				_update_hud()
 			KEY_F:
 				var spd := GameFeel.cycle_speed()
 				if _ui:
 					_ui.set_speed_label(spd)
-			KEY_ESCAPE:
-				_toggle_esc_menu()
-			KEY_F3:
-				_debug_visible = not _debug_visible
-				if _ui:
-					_ui.set_debug_visible(_debug_visible)
+
+func _is_world_input_blocked() -> bool:
+	return GameManager.is_game_over or _esc_visible or _awaiting_card or _awaiting_choice
+
+func _cancel_world_drag() -> void:
+	_dragging = false
+	_right_dragging = false
+	_ghost_mesh.visible = false
+	_range_ring.visible = false
 
 func _unhandled_input(event: InputEvent) -> void:
-	if GameManager.is_game_over:
+	if _is_world_input_blocked():
 		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
+			_dragging = true
+			_drag_last_grid = Vector2i(-999, -999)
 			_handle_left_click(event.position)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			_right_dragging = true
 			_handle_right_click(event.position)
 
 func _handle_left_click(screen_pos: Vector2) -> void:
+	if _is_world_input_blocked():
+		return
 	var world_pos := _screen_to_ground(screen_pos)
 	if world_pos.x < 0.0:
 		return
@@ -667,6 +690,8 @@ func _handle_left_click(screen_pos: Vector2) -> void:
 		SynergyManager.add_trait(bd.trait_type)
 
 func _handle_right_click(screen_pos: Vector2) -> void:
+	if _is_world_input_blocked():
+		return
 	var world_pos := _screen_to_ground(screen_pos)
 	if world_pos.x < 0.0:
 		return
@@ -756,6 +781,8 @@ func _screen_to_ground(screen_pos: Vector2) -> Vector3:
 # ---------------------------------------------------------------------------
 
 func _try_drag_build(screen_pos: Vector2) -> void:
+	if _is_world_input_blocked():
+		return
 	var world_pos := _screen_to_ground(screen_pos)
 	if world_pos.x < 0.0:
 		return
@@ -811,7 +838,7 @@ func _on_enemy_died() -> void:
 	enemies_alive -= 1
 	GameFeel.shake(0.12)
 	AudioManager.play_sfx_by_name("death", -6.0)
-	# Check for split spawns — recount from group after a frame
+	# Split children enter the same queue before the parent's death signal.
 	_check_wave_completion.call_deferred()
 	_update_hud()
 
@@ -843,6 +870,8 @@ func _recalculate_flow_field() -> void:
 	FlowField.recalculate(targets)
 
 func _on_slot_pressed(slot_index: int) -> void:
+	if _is_world_input_blocked():
+		return
 	AudioManager.play_sfx_by_name("ui_click", -3.0)
 	_selected_slot = slot_index
 	_update_slot_highlight()
@@ -863,6 +892,14 @@ func _update_hud() -> void:
 	)
 
 func _on_game_over() -> void:
+	GameFeel.set_pause_reason("game_over", true)
+	_cancel_world_drag()
+	_awaiting_card = false
+	_awaiting_choice = false
+	_pending_cards.clear()
+	_pending_choices.clear()
+	_queued_choice_event.clear()
+	_esc_visible = false
 	AudioManager.stop_bgm()
 	AudioManager.play_sfx_by_name("destroy", 3.0)
 	_ghost_mesh.visible = false
@@ -871,6 +908,9 @@ func _on_game_over() -> void:
 		GameManager.wave_number, GameManager.kill_count, secs / 60, secs % 60
 	])
 	if _ui:
+		_ui.hide_reward_cards()
+		_ui.hide_choice_panel()
+		_ui.set_esc_visible(false)
 		_ui.show_game_over(result_text)
 
 # ---------------------------------------------------------------------------
@@ -884,22 +924,34 @@ func _show_reward_cards() -> void:
 	if _ui:
 		_ui.show_reward_cards(_pending_cards)
 	_awaiting_card = true
+	GameFeel.set_pause_reason("reward", true)
+	_cancel_world_drag()
 
 func _on_card_selected(index: int) -> void:
-	if index >= _pending_cards.size():
+	if GameManager.is_game_over or _esc_visible or not _awaiting_card or index < 0 or index >= _pending_cards.size():
 		return
 	AudioManager.play_sfx_by_name("reward")
 	EffectsManager.spawn_reward_sparkle(Vector3(128.5, 1.0, 128.5))
 	var card: RewardCard = _pending_cards[index]
 	_apply_card(card)
-	if _ui:
-		_ui.hide_reward_cards()
-	_awaiting_card = false
+	_finish_reward()
 
 func _on_card_skip() -> void:
+	if GameManager.is_game_over or _esc_visible or not _awaiting_card:
+		return
+	_finish_reward()
+
+func _finish_reward() -> void:
 	if _ui:
 		_ui.hide_reward_cards()
 	_awaiting_card = false
+	_pending_cards.clear()
+	if not _queued_choice_event.is_empty():
+		var queued := _queued_choice_event.duplicate()
+		_queued_choice_event.clear()
+		_on_choice_event(queued["name"], queued["description"], queued["choices"])
+	GameFeel.set_pause_reason("reward", false)
+	_update_hud()
 
 func _apply_card(card: RewardCard) -> void:
 	match card.effect_type:
@@ -908,12 +960,19 @@ func _apply_card(card: RewardCard) -> void:
 		RewardCard.EffectType.TRAIT_GRANT:
 			if card.trait_type >= 0:
 				SynergyManager.add_trait(card.trait_type)
-		RewardCard.EffectType.BUILDING_HEAL:
+		RewardCard.EffectType.BUILDING_HP:
 			var buildings := get_tree().get_nodes_in_group("buildings")
+			var old_max_hp: Dictionary = {}
+			for b in buildings:
+				if is_instance_valid(b) and b is BaseBuilding:
+					old_max_hp[b] = b.get_effective_max_hp()
+			EventManager.add_building_hp_perm_bonus(card.effect_value)
 			for b in buildings:
 				if is_instance_valid(b) and b is BaseBuilding:
 					var max_hp: float = b.get_effective_max_hp()
-					b.current_hp = minf(b.current_hp + max_hp * card.effect_value, max_hp)
+					var increase: float = max_hp - old_max_hp[b]
+					b.current_hp = minf(b.current_hp + increase + max_hp * card.heal_fraction, max_hp)
+					b._update_hp_bar()
 		RewardCard.EffectType.UNIT_BUFF:
 			# Store as permanent bonus in EventManager
 			EventManager.add_unit_dps_perm_bonus(card.effect_value)
@@ -937,13 +996,18 @@ func _on_combat_event(event_name: String, description: String) -> void:
 var _pending_choices: Array = []
 
 func _on_choice_event(event_name: String, description: String, choices: Array) -> void:
+	if _awaiting_card:
+		_queued_choice_event = {"name": event_name, "description": description, "choices": choices}
+		return
 	_pending_choices = choices
 	if _ui:
 		_ui.show_choice_event(event_name, description, choices)
 	_awaiting_choice = true
+	GameFeel.set_pause_reason("choice", true)
+	_cancel_world_drag()
 
 func _on_choice_selected(index: int) -> void:
-	if index >= _pending_choices.size():
+	if GameManager.is_game_over or _esc_visible or not _awaiting_choice or index < 0 or index >= _pending_choices.size():
 		return
 	AudioManager.play_sfx_by_name("ui_click")
 	var choice_id: String = _pending_choices[index]["id"]
@@ -951,6 +1015,8 @@ func _on_choice_selected(index: int) -> void:
 	if _ui:
 		_ui.hide_choice_panel()
 	_awaiting_choice = false
+	_pending_choices.clear()
+	GameFeel.set_pause_reason("choice", false)
 	if _ui:
 		_ui.show_event_result(result)
 
@@ -958,21 +1024,15 @@ func _toggle_esc_menu() -> void:
 	_esc_visible = not _esc_visible
 	if _ui:
 		_ui.set_esc_visible(_esc_visible)
-	if _esc_visible:
-		GameFeel.toggle_pause()
-		if not GameFeel.paused:
-			GameFeel.toggle_pause()
-	else:
-		if GameFeel.paused:
-			GameFeel.toggle_pause()
+	GameFeel.set_pause_reason("esc", _esc_visible)
+	_cancel_world_drag()
 	_update_hud()
 
 func _on_esc_resume() -> void:
 	_esc_visible = false
 	if _ui:
 		_ui.set_esc_visible(false)
-	if GameFeel.paused:
-		GameFeel.toggle_pause()
+	GameFeel.set_pause_reason("esc", false)
 	_update_hud()
 
 func _reset_all_managers() -> void:
@@ -981,6 +1041,7 @@ func _reset_all_managers() -> void:
 	EventManager.reset()
 	GameFeel.reset()
 	SpatialGrid.reset()
+	FlowField.reset()
 
 func _on_esc_title() -> void:
 	_reset_all_managers()

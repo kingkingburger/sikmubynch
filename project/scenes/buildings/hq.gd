@@ -26,8 +26,10 @@ func _setup_emission() -> void:
 		_damage_mat = _emission_mat
 
 func _process(delta: float) -> void:
+	if GameFeel.paused:
+		return
 	if not GameManager.is_game_over:
-		current_hp = min(current_hp + delta, data.max_hp)
+		current_hp = minf(current_hp + delta, get_effective_max_hp())
 
 	super._process(delta)
 

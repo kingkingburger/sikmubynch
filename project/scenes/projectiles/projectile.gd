@@ -66,6 +66,8 @@ func _ready() -> void:
 	add_child(trail_particles)
 
 func _process(delta: float) -> void:
+	if GameFeel.paused:
+		return
 	if not is_instance_valid(target):
 		queue_free()
 		return
@@ -95,14 +97,7 @@ func _on_hit() -> void:
 	AudioManager.play_sfx_by_name("hit", -8.0)
 	EffectsManager.spawn_hit_impact(global_position, trait_color)
 
-	# Apply damage
-	if target.has_method("take_damage"):
-		target.take_damage(damage)
-
-	# Apply synergy status effects
-	if trait_effects.is_empty():
-		return
-
+	# Apply statuses first so a lethal poison hit retains its death-spread effect.
 	if trait_effects.has("burn_dps") and target.has_method("apply_burn"):
 		target.apply_burn(trait_effects["burn_dps"])
 	if trait_effects.has("slow_percent") and target.has_method("apply_slow"):
@@ -111,13 +106,14 @@ func _on_hit() -> void:
 		if randf() < trait_effects["freeze_chance"]:
 			target.apply_stun(1.0)
 	if trait_effects.has("poison_dps") and target.has_method("apply_poison"):
-		target.apply_poison(trait_effects["poison_dps"])
-	if trait_effects.has("chain_count"):
-		var chain_count: int = trait_effects["chain_count"]
-		_chain_lightning(chain_count, damage * 0.5)
+		target.apply_poison(trait_effects["poison_dps"], 4.0, trait_effects.get("spread_on_death", false))
 	if trait_effects.has("stun_chance") and target.has_method("apply_stun"):
 		if randf() < trait_effects["stun_chance"]:
 			target.apply_stun(0.3)
+	if target.has_method("take_damage"):
+		target.take_damage(damage)
+	if is_instance_valid(target) and trait_effects.has("chain_count"):
+		_chain_lightning(trait_effects["chain_count"], damage * 0.5)
 
 func _chain_lightning(count: int, chain_dmg: float) -> void:
 	var hit_targets: Array = [target]

@@ -90,7 +90,7 @@ func _setup_banner() -> void:
 
 func _process(delta: float) -> void:
 	super._process(delta)
-	if GameManager.is_game_over:
+	if GameManager.is_game_over or GameFeel.paused:
 		return
 
 	var effective_interval := SPAWN_INTERVAL / (1.0 + BaseBuilding.LEVEL_BONUS * (level - 1))

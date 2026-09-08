@@ -41,6 +41,14 @@ SIKMUBYNCH는 플레이어가 한 런 동안 본진을 지키며 전투 중 건�
 
 Godot 에디터에서 `project/` 폴더를 열고 F5로 실행한다.
 
+회귀 검증은 PowerShell에서 Godot 실행 파일 경로를 지정해 실행한다.
+
+```powershell
+./tools/run-gameplay-tests.ps1 -GodotPath 'D:/Godot_v4.6.1-stable_win64.exe/Godot_v4.6.1-stable_win64_console.exe'
+```
+
+분열 적, 길찾기, 재시작, 일시정지, 보상 선택, 시너지·영구 보너스를 검증하며 실패 시 nonzero로 종료한다. 상세 실행·플레이 결과는 [런 안정화 검증 기록](docs/verification/2026-09-08-run-stability.md)에 남긴다.
+
 ## 조작
 
 | 키 | 동작 |

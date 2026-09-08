@@ -16,18 +16,19 @@ const CRIT_MULT := 2.0
 # Game speed
 var game_speed: float = 1.0
 var paused: bool = false
+var _pause_reasons: Dictionary = {}
 
 func setup(camera: Camera3D, _canvas: CanvasLayer) -> void:
 	_camera = camera
 	_camera_base_pos = camera.position
 
 func _process(delta: float) -> void:
+	if paused:
+		return
 	# Hit stop
 	if _hitstop_timer > 0.0:
 		_hitstop_timer -= delta
-		Engine.time_scale = 0.05
-		if _hitstop_timer <= 0.0:
-			Engine.time_scale = game_speed if not paused else 0.0
+		_apply_time_scale()
 		return
 
 	# Camera shake
@@ -59,12 +60,21 @@ func roll_critical(base_damage: float, pos: Vector3 = Vector3.ZERO) -> float:
 
 func set_game_speed(speed: float) -> void:
 	game_speed = speed
-	if not paused:
-		Engine.time_scale = speed
+	_apply_time_scale()
 
 func toggle_pause() -> void:
-	paused = not paused
-	Engine.time_scale = 0.0 if paused else game_speed
+	set_pause_reason("manual", not _pause_reasons.has("manual"))
+
+func set_pause_reason(reason: String, enabled: bool) -> void:
+	if enabled:
+		_pause_reasons[reason] = true
+	else:
+		_pause_reasons.erase(reason)
+	paused = not _pause_reasons.is_empty()
+	_apply_time_scale()
+
+func _apply_time_scale() -> void:
+	Engine.time_scale = 0.0 if paused else (0.05 if _hitstop_timer > 0.0 else game_speed)
 
 func cycle_speed() -> float:
 	if game_speed < 1.5:
@@ -86,5 +96,6 @@ func reset() -> void:
 	_shake_intensity = 0.0
 	_hitstop_timer = 0.0
 	game_speed = 1.0
+	_pause_reasons.clear()
 	paused = false
 	Engine.time_scale = 1.0

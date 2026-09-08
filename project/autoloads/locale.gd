@@ -51,10 +51,10 @@ var _strings: Dictionary = {
 	"card_war_drums": ["전쟁 북소리", "War Drums"],
 	"card_berserker_rage": ["광전사의 분노", "Berserker Rage"],
 	"card_essence_suffix": ["의 정수", " Essence"],
-	"card_trait_desc": ["%s 특성을 랜덤 타워에 부여", "Grant %s trait to a random tower"],
+	"card_trait_desc": ["이번 런 %s 정수 +1\n최다 정수 속성을 타워에 적용", "+1 %s essence this run\nTowers use the leading element"],
 	"card_mineral_desc": ["+%d 미네랄", "+%d minerals"],
-	"card_building_hp": ["전체 건물 +%d%% 체력", "All buildings +%d%% HP"],
-	"card_building_hp_heal": ["전체 건물 +%d%% 체력 + 회복", "All buildings +%d%% HP + heal"],
+	"card_building_hp": ["이번 런 건물 최대 체력 +%d%%", "Buildings +%d%% max HP this run"],
+	"card_building_hp_heal": ["이번 런 건물 최대 체력 +%d%%\n증가 후 최대 체력의 35%% 회복", "Buildings +%d%% max HP this run\nHeal 35%% of the new max HP"],
 	"card_unit_dps": ["전체 유닛 +%d%% 공격력", "All units +%d%% DPS"],
 
 	# Trait names

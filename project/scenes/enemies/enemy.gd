@@ -3,8 +3,6 @@ extends CharacterBody3D
 signal died()
 signal drop_mineral(pos: Vector3, amount: int)
 
-const _enemy_scene_preload: PackedScene = preload("res://scenes/enemies/enemy.tscn")
-
 var data: EnemyData
 var current_hp: float
 var target_position: Vector3
@@ -19,6 +17,7 @@ var _burn_timer: float = 0.0
 var _slow_mult: float = 1.0
 var _slow_timer: float = 0.0
 var _poison_dps: float = 0.0
+var _poison_spreads: bool = false
 var _poison_timer: float = 0.0
 var _stun_timer: float = 0.0
 
@@ -313,7 +312,7 @@ func _build_detail(etype: int, sf: float) -> void:
 # ---------------------------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
-	if GameManager.is_game_over or _dead:
+	if GameManager.is_game_over or GameFeel.paused or _dead:
 		return
 
 	if _attack_flash > 0.0:
@@ -336,6 +335,7 @@ func _physics_process(delta: float) -> void:
 		take_damage(_poison_dps * delta)
 		if _poison_timer <= 0.0:
 			_poison_dps = 0.0
+			_poison_spreads = false
 	if _slow_timer > 0.0:
 		_slow_timer -= delta
 		if _slow_timer <= 0.0:
@@ -532,10 +532,11 @@ func apply_slow(mult: float, duration: float = 2.0) -> void:
 	_slow_mult = minf(_slow_mult, 1.0 - mult)
 	_slow_timer = maxf(_slow_timer, duration)
 
-func apply_poison(dps: float, duration: float = 4.0) -> void:
+func apply_poison(dps: float, duration: float = 4.0, spread_on_death: bool = false) -> void:
 	var is_new := _poison_timer <= 0.0
 	_poison_dps = maxf(_poison_dps, dps)
 	_poison_timer = maxf(_poison_timer, duration)
+	_poison_spreads = _poison_spreads or spread_on_death
 	if is_new:
 		EffectsManager.spawn_poison_tick(global_position)
 
@@ -574,18 +575,18 @@ func _die() -> void:
 		AudioManager.play_sfx_by_name("explosion", -3.0)
 		EffectsManager.spawn_explosion_effect(global_position, data.explode_radius)
 
-	if _poison_dps > 0.0 and _poison_timer > 0.0:
+	if _poison_spreads and _poison_dps > 0.0 and _poison_timer > 0.0:
 		var nearby := SpatialGrid.find_in_range(global_position, "enemies", 3.0)
 		for enemy in nearby:
 			if enemy == self:
 				continue
 			if enemy.has_method("apply_poison"):
-				enemy.apply_poison(_poison_dps * 0.6, 3.0)
+				enemy.apply_poison(_poison_dps * 0.6, 3.0, true)
 
 	if data and data.enemy_type == EnemyData.EnemyType.SPLITTER:
 		_spawn_splits()
 
-	var reward := data.mineral_reward if data else 3
+	var reward := EventManager.get_enemy_mineral_reward(data.mineral_reward if data else 3)
 	if drop_mineral.get_connections().is_empty():
 		GameManager.add_minerals(reward)
 	else:
@@ -658,13 +659,5 @@ func _spawn_splits() -> void:
 
 	var parent := get_parent()
 	for i in data.split_count:
-		var mini: CharacterBody3D = _enemy_scene_preload.instantiate()
-		mini.set("data", split_data)
-		mini.set("target_position", target_position)
 		var offset := Vector3(randf_range(-0.8, 0.8), 0.0, randf_range(-0.8, 0.8))
-		mini.position = global_position + offset
-		if parent.has_method("_on_enemy_died"):
-			mini.connect("died", parent._on_enemy_died)
-		if parent.has_method("_on_enemy_drop_mineral") and mini.has_signal("drop_mineral"):
-			mini.connect("drop_mineral", parent._on_enemy_drop_mineral)
-		parent.call_deferred("add_child", mini)
+		parent.queue_enemy_spawn(split_data, global_position + offset)

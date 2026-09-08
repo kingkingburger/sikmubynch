@@ -62,7 +62,7 @@ func _build_mesh() -> void:
 	add_child(_mesh)
 
 func _process(delta: float) -> void:
-	if _collected:
+	if _collected or GameFeel.paused:
 		return
 
 	_elapsed += delta

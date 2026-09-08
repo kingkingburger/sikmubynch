@@ -9,6 +9,8 @@ signal choice_event_triggered(event_name: String, description: String, choices: 
 enum CombatEvent { MINERAL_RUSH, SPEED_SURGE, ENEMY_ENRAGE, BUILDING_REGEN, BONUS_WAVE }
 
 var _active_combat_effects: Dictionary = {}
+var _unit_dps_perm_bonus: float = 0.0
+var _building_hp_perm_bonus: float = 0.0
 
 func trigger_random_combat_event() -> void:
 	var events := [
@@ -125,7 +127,7 @@ func resolve_choice(choice_id: String) -> String:
 			return "Buildings preserved."
 		"empower_accept":
 			if GameManager.spend_minerals(80):
-				_active_combat_effects["unit_dps_perm"] = _active_combat_effects.get("unit_dps_perm", 0.0) + 0.3
+				add_unit_dps_perm_bonus(0.3)
 				return "Units empowered! +30% DPS"
 			return "Not enough minerals!"
 		"empower_pass":
@@ -147,10 +149,20 @@ func resolve_choice(choice_id: String) -> String:
 	return ""
 
 func get_unit_dps_perm_bonus() -> float:
-	return _active_combat_effects.get("unit_dps_perm", 0.0)
+	return _unit_dps_perm_bonus
 
 func add_unit_dps_perm_bonus(amount: float) -> void:
-	_active_combat_effects["unit_dps_perm"] = get_unit_dps_perm_bonus() + amount
+	_unit_dps_perm_bonus += amount
+
+func get_building_hp_perm_bonus() -> float:
+	return _building_hp_perm_bonus
+
+func add_building_hp_perm_bonus(amount: float) -> void:
+	_building_hp_perm_bonus += amount
+
+func get_enemy_mineral_reward(base_reward: int) -> int:
+	var multiplier: float = _active_combat_effects.get("bonus_minerals", 1.0)
+	return int(base_reward * multiplier * get_challenge_reward_mult())
 
 func get_challenge_enemy_mult() -> float:
 	return _active_combat_effects.get("challenge_enemy_mult", 1.0)
@@ -164,3 +176,5 @@ func clear_challenge() -> void:
 
 func reset() -> void:
 	_active_combat_effects.clear()
+	_unit_dps_perm_bonus = 0.0
+	_building_hp_perm_bonus = 0.0
