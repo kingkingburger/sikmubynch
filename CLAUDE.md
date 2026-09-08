@@ -2,107 +2,97 @@
 
 ## 프로젝트 개요
 
-대규모 웨이브 디펜스 + 오토배틀 + 로그라이크. They Are Billions 스타일 실시간 건설+전투 + 롤토체스 시너지 시스템.
+데아빌식 대규모 웨이브 압박과 시너지 빌드업을 얹은 3D 이소메트릭 호드 서바이벌 로그라이트.
+
+플레이어는 한 런 동안 본진을 지키며 전투 중 건설, 자동전투 유닛 생산, 보상 카드 선택, 특성 시너지 빌드업을 반복한다. 게임의 기준은 “웨이브를 막았다”가 아니라 “방어선이 계속 밀리고, 선택한 시너지가 그 압박을 뒤집는가”이다.
+
+## 핵심 가치
+
+1. **압박감** — 초반부터 적 무리가 시야에 들어오고, 중후반에는 수백 단위의 호드가 방어선을 밀어붙인다.
+2. **빌드업** — 보상, 건물, 유닛, 특성 태그가 누적되어 다음 전투 양상을 바꾼다.
+3. **전투 피드백** — 대량 처치, 정예 처치, 방어선 붕괴, 시너지 발동이 즉시 보이고 들려야 한다.
+4. **반복성** — 실패 후 바로 다른 시너지 경로와 배치 전략을 시도하고 싶어야 한다.
+
+## 기준 문서
+
+문서 변경은 아래 파일을 기준으로 한다. 새 기획을 만들 때 특정 제작 도구나 내부 프로세스 이름을 문서 구조에 넣지 않는다.
+
+- `docs/product-brief.md`: 외부 설명과 포지셔닝
+- `docs/game-design.md`: 게임 시스템과 콘텐츠 기준
+- `docs/technical-design.md`: 구현 구조와 성능 경계
+- `docs/production-roadmap.md`: 상용화 로드맵
+- `docs/quality-plan.md`: 검증 기준과 플레이테스트 절차
+- `docs/3d-modeling-guide.md`: 3D 모델 제작 및 교체 기준
+- `docs/sound-guide.md`: 사운드 제작 및 적용 기준
 
 ## 기술 스택
 
 - Godot 4 + GDScript
-- 3D 이소메트릭 (스타크래프트 스타일 UI), GL Compatibility 렌더러
-- 비주얼: 다크 판타지 + 밀리터리, 로우폴리 스타일리쉬 모델 + Glow/Bloom
-- 로컬라이제이션: 한글(기본) + 영문 토글 (Locale autoload)
-- PC 전용 (키보드 + 마우스 + 우클릭 드래그 카메라)
-
-## 핵심 가치
-
-1. **타격감** — 화면 흔들림, 히트스톱, 파티클. 대량 적 처치 시 쾌감
-2. **대규모 전투** — 첫 웨이브부터 압도적 물량. 500+ 동시 적
-3. **"한 판 더"** — 시너지 조합 + 랜덤 맵/보상으로 매 런이 다름
-
-## 개발 방식
-
-- Ouroboros 프로세스로 요구사항/설계/검증 문서화 (`docs/ouroboros/`)
-- 프로토타입 우선: 구현 → 플레이 → 피드백 → 반복
-- 기술 결정은 자율적으로, 게임 경험 관련만 사용자 확인
-- **비주얼 작업은 반드시 HTML 목업 → 승인 → 구현** 순서
+- 3D 이소메트릭 정사영 카메라
+- GL Compatibility 렌더러
+- PC 전용 키보드/마우스 조작
+- 한국어 기본, 영어 전환 가능
 
 ## 프로젝트 구조
 
-```
+```text
 project/                                # Godot 4 프로젝트
   project.godot                         # 엔진 설정
-  autoloads/                            # 싱글톤 매니저 (Locale, GameManager, FlowField, SynergyManager, EventManager, GameFeel, ObjectPool, AudioManager, SpatialGrid)
+  autoloads/                            # Locale, GameManager, FlowField, SynergyManager, EventManager, GameFeel, ObjectPool, AudioManager, SpatialGrid
   export_presets.cfg                    # Windows Desktop export 설정
-  scenes/                               # 씬 파일 (.tscn)
-    main/                               #   메인 게임 씬
-    buildings/                          #   건물 씬 (HQ, Barricade, Tower, Barracks)
-    enemies/                            #   적 유닛 씬 (6종)
-    units/                              #   아군 유닛 씬 (4종)
-    projectiles/                        #   발사체 씬
-    effects/                            #   이펙트 씬 (미네랄 오브)
-  scripts/                              # 게임플레이 helper (building_catalog, threat_radar, wave_director)
-    data/                               # 데이터 정의 (Resource 클래스)
-  assets/                               # 스프라이트, 사운드
-    models/                             #   GLB 3D 모델 17종 (buildings/5, enemies/6, units/4, effects/2)
-    audio/                              #   BGM + SFX (bgm/, sfx/)
-tools/                                  # 3D 모델 생성 도구
-  create_models.py                      #   trimesh 로우폴리 GLB 생성 (17종)
-  generate_models.py                    #   Hunyuan3D-2 AI 모델 자동 생성
-  start_hunyuan.bat                     #   Hunyuan3D-2 서버 시작 스크립트
-  pyproject.toml                        #   uv 프로젝트 설정 (trimesh, numpy)
-docs/ouroboros/{date}-{slug}/           # Ouroboros 프로세스 문서
-  01-requirements.md                    # Phase 1: 요구사항
-  02-design.md                          # Phase 2: 설계
-  03-verification.md                    # Phase 3: 검증
-docs/3d-modeling-guide.md               # 3D 모델링 가이드 (Hunyuan3D-2 파이프라인)
-docs/sound-guide.md                     # 사운드 제작 가이드
-docs/ui-starcraft-mockup-v2.html        # UI 레이아웃 목업 (스타크래프트 스타일)
-docs/visual-style-comparison.html       # 비주얼 스타일 4종 비교 목업
-mockup.html                             # 초기 UI/레이아웃 목업
-build.sh                                # Windows exe 빌드 스크립트
-build/                                  # 빌드 출력 (git-ignored)
+  scenes/                               # 씬 파일
+    main/                               # 메인 게임 씬
+    buildings/                          # HQ, Barricade, Tower, Barracks
+    enemies/                            # 적 유닛
+    units/                              # 아군 유닛
+    projectiles/                        # 발사체
+    effects/                            # 이펙트
+  scripts/                              # 게임플레이 helper와 데이터 클래스
+    data/                               # Resource 데이터 정의
+  assets/                               # 모델, 사운드, 이펙트
+
+docs/                                  # 보편적인 제품/설계/검증 문서
+tools/                                 # 에셋 제작 보조 도구
+build.sh                               # Windows exe 빌드 스크립트
+build/                                 # 빌드 출력, git ignored
 ```
 
 ## 현재 상태
 
-기능 범위는 M7/Post-M7까지 들어가 있지만, 현재 상태를 완성품으로 보지 않는다. 상업 출시 기준으로는 전투 리듬, 시너지 체감, 타격감, UI 완성도, 밸런스 검증이 아직 부족한 프로토타입이다.
+현재 상태는 상용 출시용 완성본이 아니라 핵심 전투 감각을 검증하는 프로토타입이다. 기능 범위는 넓지만, 품질 판단은 기능 수가 아니라 플레이 약속 달성 여부로 한다.
+
 - M1 코어 루프: 3D 이소메트릭, 건설, 적 스폰, 게임오버
-- M2 전투 기반: 타워 + 발사체 + 레벨업 + 멀티웨이브
-- M3 유닛 시스템: 배럭 + 4종 유닛 (솔저/아처/탱커/폭탄병) + 오토배틀 AI
-- M4 웨이브 + 적 다양성: 적 6종 + Flow Field 길찾기 + 파도형 난이도 + 미네랄 오브
-- M5 메타 시스템: 5종 특성 시너지 + 보상 카드 3택 + 이벤트 10종 + 채굴기/버프 타워
-- M6 게임 필: 타격감(쉐이크/히트스톱/크리티컬) + WASD 카메라 + 줌 + 속도 조절 + 드래그 배치
-- M7 폴리시: 시작 화면 + ESC 메뉴 + 디버그 오버레이(F3) + 비주얼 오버홀(그림자/지형 셰이더/모델) + 로컬라이제이션(한/영)
-- Post-M7: 맵 64→256 확장 + 다크 판타지 조명(Glow/Bloom/OmniLight) + StarCraft UI + trimesh GLB 모델 17종 + FlowField 반해상도 최적화 + 프로시저럴 애니메이션 + 파티클 이펙트
+- M2 전투 기반: 타워, 발사체, 레벨업, 멀티웨이브
+- M3 유닛 시스템: 배럭, 4종 유닛, 자동전투 AI
+- M4 웨이브와 적 다양성: 적 6종, Flow Field, 파도형 난이도, 미네랄 오브
+- M5 메타 시스템: 5종 특성 시너지, 보상 카드, 이벤트, 채굴기, 버프 타워
+- M6 게임 필: 쉐이크, 히트스톱, 크리티컬, 카메라, 드래그 배치
+- M7 이후: 시작 화면, ESC 메뉴, 디버그 오버레이, 256 맵, StarCraft식 UI, GLB 모델, 파티클
 
-### 현재 우선순위
+## 현재 우선순위
 
-- 첫 10초 안에 위협과 목표가 보이게 만드는 초반 전투 리듬
-- 보상 카드와 특성 시너지가 실제 공격 성능/이펙트로 연결되는 체감
-- 히트 플래시, 히트스톱, 발사체 색상, 레벨업 이펙트 같은 즉시 피드백
-- 플레이스홀더처럼 보이는 UI/미니맵/사운드 기본값 제거
+- 첫 10초 안에 적 규모와 본진 위험이 보이게 만든다.
+- 시너지 선택이 실제 DPS, 범위, 상태 이상, 생존력 차이로 드러나게 만든다.
+- 웨이브가 단순 숫자 증가가 아니라 방향, 밀도, 정예, 이벤트 조합으로 압박을 만든다.
+- UI, 사운드, 이펙트가 플레이스홀더처럼 보이는 구간을 줄인다.
+- 500+ 적이 보이는 상황에서도 평균 60fps 목표를 유지한다.
 
-## 출시 목표
+## 개발 원칙
 
-- Steam Early Access (무료 + 후원 DLC 모델), 2026년 하반기
-- 3D 모델링: trimesh GLB 17종 생성 완료 (tools/create_models.py), Hunyuan3D-2 고품질 교체 대기
-- 사운드: AI 생성 (Udio BGM + ElevenLabs SFX, AudioManager 코드 준비 완료)
-- Ouroboros 문서: `docs/ouroboros/2026-03-24-steam-release/`, `docs/ouroboros/2026-03-24-3d-modeling/`, `docs/ouroboros/2026-03-25-map-expansion/`, `docs/ouroboros/2026-03-25-visual-atmosphere/`
+- 게임 경험이 바뀌는 결정은 문서에 먼저 반영한다.
+- 기술 리팩터링은 현재 플레이 약속을 더 안정적으로 만들 때만 한다.
+- 비주얼 작업은 목업 또는 스크린샷 기준을 먼저 정하고 구현한다.
+- 문서에는 개인 작업 방식이나 특정 내부 도구 이름을 남기지 않는다.
+- 검증 없이 완료로 보지 않는다. 코드 변경은 실제 Godot 실행 또는 대응 가능한 스모크 테스트로 확인한다.
 
 ## 주요 시스템
 
-- **Locale**: 다국어 (한글/영문), 타이틀 화면에서 전환
-- **GameManager**: 게임 상태 (미네랄, 웨이브, 킬 카운트)
-- **FlowField**: BFS 기반 적 집단 길찾기, 반해상도 128x128 (MAP_SIZE 256, FLOW_RES 2)
-- **SynergyManager**: 5종 특성 시너지 계산 + 보너스
-- **EventManager**: 전투/선택 이벤트 시스템
-- **GameFeel**: 화면 흔들림, 히트스톱, 게임 속도 관리
-- **ObjectPool**: 발사체/이펙트 재사용 풀
-- **AudioManager**: BGM 크로스페이드 + SFX 풀링(8개) + 볼륨 제어
-- **SpatialGrid**: 공간 분할 그리드 (8.0셀, 32x32), O(N) 근접 탐색
-
-## 주요 상수
-
-- **MAP_SIZE**: 256 (game.gd, flow_field.gd)
-- **FLOW_RES**: 2 (flow_field.gd — 128x128 반해상도 BFS)
-- **CELL_SIZE**: 8.0, **GRID_W**: 32 (spatial_grid.gd)
-- **CAM_ZOOM**: 14~90, **CAM_SPEED**: 35 (game.gd)
+- **GameManager**: 런 상태, 미네랄, 웨이브, 킬 카운트
+- **WaveDirector**: 웨이브 규모, 스폰 위치, 적 템플릿 계산
+- **FlowField**: 대규모 적 이동 경로
+- **SpatialGrid**: 근접 탐색과 성능 보호
+- **SynergyManager**: 특성 카운트와 시너지 보너스 계산
+- **EventManager**: 전투 변수와 선택 이벤트
+- **RewardCard**: 보상 카드 풀과 희귀도
+- **GameFeel**: 화면 흔들림, 히트스톱, 타격 피드백
+- **AudioManager**: BGM, SFX, 볼륨 제어
