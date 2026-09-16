@@ -165,4 +165,4 @@ BGM을 Freesound/Pixabay CC0에서 검색:
 
 또는 로컬 AI 도구 **YuE** (Apache 2.0, 상업 가능):
 - https://github.com/multimodal-art-projection/YuE
-- GPU 8GB+ 필요, Hunyuan3D-2와 같은 PC에서 실행 가능
+- GPU 8GB+ 필요

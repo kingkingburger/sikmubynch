@@ -2,6 +2,8 @@
 
 작성일: 2026-06-23
 
+> 2026-09-16 추가: 이 문서는 3D 프로토타입의 파일 경계 정리를 다룬다. 이후 2D 쿼터뷰 전환과 시뮬레이션/렌더러 분리가 결정되어, 적·유닛·발사체 관련 항목(enemy.gd, unit.gd 분리, Wave Runtime/Enemy Spawner 추출)은 이 문서의 방식이 아니라 `../technical-design.md`의 Enemy Sim·Combat Sim·Wave Sim 구조로 대체한다. game.gd coordinator, UI controller, Building Placement 항목은 여전히 유효하다.
+
 ## 배경
 
 현재 `project/scenes/main/game.gd`는 메인 씬 초기화, 카메라, 조명, 지면 셰이더, UI 생성, 입력 처리, 건물 배치, 웨이브 스폰, 보상 카드, 이벤트 선택, ESC 메뉴, 디버그 오버레이를 한 파일에서 처리한다. 이미 `building_catalog.gd`, `threat_radar.gd`, `wave_director.gd` 추출이 시작되었지만, `game.gd`는 여전히 1,300줄 이상이며 다음 기능 추가 때 다시 비대해질 가능성이 높다.

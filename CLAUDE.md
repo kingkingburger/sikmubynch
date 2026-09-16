@@ -2,16 +2,23 @@
 
 ## 프로젝트 개요
 
-데아빌식 대규모 웨이브 압박과 시너지 빌드업을 얹은 3D 이소메트릭 호드 서바이벌 로그라이트.
+데아빌식 대규모 웨이브 압박과 시너지 빌드업을 얹은 2D 쿼터뷰 호드 서바이벌 로그라이트.
 
 플레이어는 한 런 동안 본진을 지키며 전투 중 건설, 자동전투 유닛 생산, 보상 카드 선택, 특성 시너지 빌드업을 반복한다. 게임의 기준은 “웨이브를 막았다”가 아니라 “방어선이 계속 밀리고, 선택한 시너지가 그 압박을 뒤집는가”이다.
 
 ## 핵심 가치
 
-1. **압박감** — 초반부터 적 무리가 시야에 들어오고, 중후반에는 수백 단위의 호드가 방어선을 밀어붙인다.
+1. **압박감** — 초반부터 적 무리가 시야에 들어오고, 중후반에는 수천 단위의 호드가 방어선을 밀어붙인다.
 2. **빌드업** — 보상, 건물, 유닛, 특성 태그가 누적되어 다음 전투 양상을 바꾼다.
 3. **전투 피드백** — 대량 처치, 정예 처치, 방어선 붕괴, 시너지 발동이 즉시 보이고 들려야 한다.
 4. **반복성** — 실패 후 바로 다른 시너지 경로와 배치 전략을 시도하고 싶어야 한다.
+
+## 기술 결정 (2026-09-16)
+
+- **게임 방향은 유지한다.** 엄청난 물량이 몰려오고, 플레이어가 건설과 배치로 방어선을 유지한다.
+- **3D를 버리고 2D 쿼터뷰로 간다.** 중요한 것은 모델 디테일이 아니라 “어디서 얼마나 몰려오는가”와 “방어선이 어디서 무너지는가”의 가독성이다. 1만 단위 물량을 목표로 하면 3D는 부담이 더 크다. 단, 평면 탑다운이 아니라 이소메트릭 시점의 쿼터뷰다.
+- **Godot은 그대로 쓴다.** 엔진을 갈아타지 않는다. 대신 “모든 것을 Node로 만드는 엔진”처럼 쓰지 않는다. 적·유닛·발사체·이펙트는 Node가 아니라 시뮬레이션 배열이고, Node는 건물·HQ·UI에만 쓴다.
+- **시뮬레이션과 렌더러를 분리한다.** 구조는 `docs/technical-design.md`를 따른다.
 
 ## 기준 문서
 
@@ -22,37 +29,41 @@
 - `docs/technical-design.md`: 구현 구조와 성능 경계
 - `docs/production-roadmap.md`: 상용화 로드맵
 - `docs/quality-plan.md`: 검증 기준과 플레이테스트 절차
-- `docs/3d-modeling-guide.md`: 3D 모델 제작 및 교체 기준
+- `docs/2d-art-guide.md`: 쿼터뷰 스프라이트 제작 및 교체 기준
 - `docs/sound-guide.md`: 사운드 제작 및 적용 기준
 
 ## 기술 스택
 
 - Godot 4 + GDScript
-- 3D 이소메트릭 정사영 카메라
+- 2D 쿼터뷰 (2:1 이소메트릭 타일, Camera2D)
+- 시뮬레이션은 Node 없는 PackedArray 기반, 렌더링은 MultiMesh 2D 배칭
 - GL Compatibility 렌더러
 - PC 전용 키보드/마우스 조작
 - 한국어 기본, 영어 전환 가능
 
 ## 프로젝트 구조
 
+아래는 2D 전환 후 목표 구조다. 현재 코드는 아직 3D 프로토타입이며, 전환 순서는 `docs/technical-design.md`의 “3D에서 2D로 전환하는 순서”를 따른다.
+
 ```text
 project/                                # Godot 4 프로젝트
   project.godot                         # 엔진 설정
-  autoloads/                            # Locale, GameManager, FlowField, SynergyManager, EventManager, GameFeel, ObjectPool, AudioManager, SpatialGrid
+  autoloads/                            # Locale, GameManager, SynergyManager, EventManager, GameFeel, AudioManager, EffectsManager
+  sim/                                  # Node 없는 시뮬레이션: GameSimulation, EnemySim, CombatSim, WaveSim, FlowField, SpatialGrid, Spawner
+  render/                               # 시뮬레이션 상태를 2D로 그리는 렌더러 (적·유닛·발사체·이펙트 MultiMesh)
   export_presets.cfg                    # Windows Desktop export 설정
-  scenes/                               # 씬 파일
-    main/                               # 메인 게임 씬
-    buildings/                          # HQ, Barricade, Tower, Barracks
-    enemies/                            # 적 유닛
-    units/                              # 아군 유닛
-    projectiles/                        # 발사체
-    effects/                            # 이펙트
+  scenes/                               # 씬 파일 (Node 허용 범위)
+    main/                               # 타이틀, 메인 게임 씬(코디네이터)
+    buildings/                          # HQ, Barricade, Tower, Barracks, Miner, BuffTower
+    ui/                                 # HUD, 보상 카드, 메뉴, 위협 레이더
   scripts/                              # 게임플레이 helper와 데이터 클래스
     data/                               # Resource 데이터 정의
-  assets/                               # 모델, 사운드, 이펙트
+  assets/
+    sprites/                            # 쿼터뷰 스프라이트와 카테고리 아틀라스
+    audio/                              # BGM, SFX
 
 docs/                                  # 보편적인 제품/설계/검증 문서
-tools/                                 # 에셋 제작 보조 도구
+tools/                                 # 에셋 제작 보조 도구, 회귀 검증 실행기
 build.sh                               # Windows exe 빌드 스크립트
 build/                                 # 빌드 출력, git ignored
 ```
@@ -68,29 +79,36 @@ build/                                 # 빌드 출력, git ignored
 - M5 메타 시스템: 5종 특성 시너지, 보상 카드, 이벤트, 채굴기, 버프 타워
 - M6 게임 필: 쉐이크, 히트스톱, 크리티컬, 카메라, 드래그 배치
 - M7 이후: 시작 화면, ESC 메뉴, 디버그 오버레이, 256 맵, StarCraft식 UI, GLB 모델, 파티클
+- 2026-09-16 방향 전환: 3D → 2D 쿼터뷰, 시뮬레이션/렌더러 분리 결정. 코드 전환은 로드맵 단계 B에서 진행한다.
 
 ## 현재 우선순위
 
+- 2D 쿼터뷰 전환과 시뮬레이션/렌더러 분리를 끝내 5,000마리가 움직이는 기반을 만든다. 전환 중에는 새 게임플레이 기능을 추가하지 않는다.
 - 첫 10초 안에 적 규모와 본진 위험이 보이게 만든다.
 - 시너지 선택이 실제 DPS, 범위, 상태 이상, 생존력 차이로 드러나게 만든다.
 - 웨이브가 단순 숫자 증가가 아니라 방향, 밀도, 정예, 이벤트 조합으로 압박을 만든다.
 - UI, 사운드, 이펙트가 플레이스홀더처럼 보이는 구간을 줄인다.
-- 500+ 적이 보이는 상황에서도 평균 60fps 목표를 유지한다.
+- 2,000+ 적이 보이는 상황에서도 평균 60fps 목표를 유지한다.
 
 ## 개발 원칙
 
 - 게임 경험이 바뀌는 결정은 문서에 먼저 반영한다.
 - 기술 리팩터링은 현재 플레이 약속을 더 안정적으로 만들 때만 한다.
+- 적·유닛·발사체·이펙트는 Node로 만들지 않는다. 시뮬레이션 코드는 Node를 참조하지 않는다.
 - 비주얼 작업은 목업 또는 스크린샷 기준을 먼저 정하고 구현한다.
 - 문서에는 개인 작업 방식이나 특정 내부 도구 이름을 남기지 않는다.
 - 검증 없이 완료로 보지 않는다. 코드 변경은 실제 Godot 실행 또는 대응 가능한 스모크 테스트로 확인한다.
 
 ## 주요 시스템
 
-- **GameManager**: 런 상태, 미네랄, 웨이브, 킬 카운트
-- **WaveDirector**: 웨이브 규모, 스폰 위치, 적 템플릿 계산
+- **GameSimulation**: 고정 틱 진행, 하위 Sim 호출 순서, 런 상태 스냅샷, 정지·배속
+- **EnemySim**: 적 위치·HP·상태 이상 배열, Flow Field 이동, 건물 접촉
+- **CombatSim**: 타워·유닛 타겟팅, 발사체, 피해, 상태 이상, 시너지 배율 적용
+- **WaveSim**: 웨이브 규모, 스폰 방향·밀도, 적 템플릿, 스폰 큐
 - **FlowField**: 대규모 적 이동 경로
 - **SpatialGrid**: 근접 탐색과 성능 보호
+- **Renderer**: 시뮬레이션 상태를 MultiMesh 2D로 배칭 그리기, 보간, 피격·처치 피드백
+- **GameManager**: 런 상태, 미네랄, 웨이브, 킬 카운트
 - **SynergyManager**: 특성 카운트와 시너지 보너스 계산
 - **EventManager**: 전투 변수와 선택 이벤트
 - **RewardCard**: 보상 카드 풀과 희귀도
