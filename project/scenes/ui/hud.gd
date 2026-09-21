@@ -47,8 +47,6 @@ var _selected_slot: int = 0
 var _threat_radar
 var _banner_label: Label
 var _banner_timer: float = 0.0
-var _stream_label: Label
-var _stream_timer: float = 0.0
 var _speed_label: Label
 var _esc_panel: PanelContainer
 var _debug_label: Label
@@ -81,10 +79,6 @@ func tick(delta: float, sim, debug_visible: bool, debug_text: String) -> void:
 		_banner_timer -= delta
 		if _banner_timer <= 0.0 and _banner_label:
 			_banner_label.visible = false
-	if _stream_timer > 0.0:
-		_stream_timer -= delta
-		if _stream_timer <= 0.0 and _stream_label:
-			_stream_label.visible = false
 	if _hq_warn_timer > 0.0:
 		_hq_warn_timer -= delta
 		if _hq_warn_timer <= 0.0 and _hq_warn_label:
@@ -92,7 +86,7 @@ func tick(delta: float, sim, debug_visible: bool, debug_text: String) -> void:
 	if debug_visible and _debug_label:
 		_debug_label.text = debug_text
 	if _threat_radar:
-		_threat_radar.tick(delta, sim, sim.waves.spawn_sides if sim.waves.active else 0, sim.waves.stream_sides)
+		_threat_radar.tick(delta, sim, sim.waves.spawn_sides if sim.waves.active else 0)
 	_tick_money(delta)
 
 ## 이번 틱에 얻은 미네랄 (게임 씬이 틱마다 호출)
@@ -250,13 +244,6 @@ func show_wave_banner(wave_number: int, wave_type: int, sides: int, count: int) 
 	_banner_label.visible = true
 	_banner_timer = 3.0
 
-func show_stream_shift(sides: int) -> void:
-	if not _stream_label:
-		return
-	_stream_label.text = Locale.t_fmt("stream_shift", [_side_text(sides)])
-	_stream_label.visible = true
-	_stream_timer = 2.5
-
 func _side_text(sides: int) -> String:
 	if sides == 0xF:
 		return Locale.t("side_all")
@@ -385,20 +372,6 @@ func _setup_hud(building_datas: Array) -> void:
 	_hq_warn_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	_hq_warn_label.add_theme_constant_override("outline_size", 4)
 	_canvas.add_child(_hq_warn_label)
-
-	# 스트림 방향 전환 알림 (본진 경고 아래, 작게)
-	_stream_label = Label.new()
-	_stream_label.visible = false
-	_stream_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_stream_label.offset_top = 44.0
-	_stream_label.offset_left = -220.0
-	_stream_label.offset_right = 220.0
-	_stream_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_stream_label.add_theme_font_size_override("font_size", 14)
-	_stream_label.add_theme_color_override("font_color", Color(1.0, 0.7, 0.35))
-	_stream_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	_stream_label.add_theme_constant_override("outline_size", 3)
-	_canvas.add_child(_stream_label)
 
 	var bottom := PanelContainer.new()
 	bottom.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)

@@ -54,7 +54,6 @@ var _strings: Dictionary = {
 	"wave_density": ["밀도 급증", "Density Surge"],
 	"wave_breach": ["돌파 급증", "Breach Surge"],
 	"wave_storm": ["폭풍 급증", "Storm Surge"],
-	"stream_shift": ["스트림 방향 변경: %s", "Stream shifts: %s"],
 	"side_north": ["북", "N"],
 	"side_east": ["동", "E"],
 	"side_south": ["남", "S"],

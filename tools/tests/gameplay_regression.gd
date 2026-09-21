@@ -204,6 +204,14 @@ func test_pressure_never_rests() -> void:
 	check(sim.waves.wave_number >= 3, "at least 3 surges in 120 seconds (%d)" % sim.waves.wave_number)
 	check(sim.waves.stream_spawned > 60, "stream alone spawned a crowd (%d)" % sim.waves.stream_spawned)
 	check(not sim.game_over, "strong defense survives 2 minutes")
+	# 스트림은 항상 사방: 어느 변도 전체의 15% 아래로 떨어지지 않는다
+	var total_sides := 0
+	for c in sim.waves.stream_side_counts:
+		total_sides += c
+	var min_share := 1.0
+	for c in sim.waves.stream_side_counts:
+		min_share = minf(min_share, float(c) / maxf(float(total_sides), 1.0))
+	check(min_share >= 0.15, "stream comes from all four sides (min share %.2f, counts %s)" % [min_share, str(sim.waves.stream_side_counts)])
 
 func test_surge_schedule_and_scaling() -> void:
 	check(WaveSim.type_for_surge(1) == WaveSim.WaveType.DENSITY, "surge 1 is density")

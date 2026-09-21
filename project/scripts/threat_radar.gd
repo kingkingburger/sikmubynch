@@ -40,17 +40,17 @@ func _init(parent: Control, title: String) -> void:
 	_tex = ImageTexture.create_from_image(_img)
 	_texture_rect.texture = _tex
 
-## spawn_sides: 진행 중인 급증의 변(붉게), stream_sides: 현재 스트림 변(주황)
-func tick(delta: float, sim, spawn_sides: int, stream_sides: int = 0) -> void:
+## spawn_sides: 진행 중인 급증의 변(붉게). 스트림은 항상 사방이라 따로 표시하지 않는다
+func tick(delta: float, sim, spawn_sides: int) -> void:
 	if not _texture_rect:
 		return
 	_timer -= delta
 	if _timer > 0.0:
 		return
 	_timer = UPDATE_INTERVAL
-	_render(sim, spawn_sides, stream_sides)
+	_render(sim, spawn_sides)
 
-func _render(sim, spawn_sides: int, stream_sides: int) -> void:
+func _render(sim, spawn_sides: int) -> void:
 	var map_size: int = sim.buildings.SIZE
 	_img.fill(Color(0.015, 0.02, 0.015, 1.0))
 	# 마름모 배경
@@ -59,12 +59,8 @@ func _render(sim, spawn_sides: int, stream_sides: int) -> void:
 		for x in range(PIXELS):
 			if absf(x - c) + absf(y - c) * 2.0 <= c:
 				_img.set_pixel(x, y, Color(0.05, 0.07, 0.05, 1.0))
-	# 스폰 변 경고: 스트림은 주황, 급증은 붉게 (급증이 덮어쓴다)
-	var stream_col := Color(0.85, 0.5, 0.15, 1.0)
+	# 급증 변 경고 (붉게)
 	var warn := Color(0.95, 0.2, 0.15, 1.0)
-	for side in range(4):
-		if stream_sides & (1 << side):
-			_edge(side, stream_col, map_size)
 	for side in range(4):
 		if spawn_sides & (1 << side):
 			_edge(side, warn, map_size)

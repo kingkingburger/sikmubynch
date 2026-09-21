@@ -1,7 +1,8 @@
 extends RefCounted
 
 ## Wave Sim — 끊기지 않는 압박. 두 층으로 이루어진다.
-##  - 스트림: 런 시작부터 항상 흐르는 스폰. 초당 스폰 수가 경과 시간에 따라 오른다. 방향은 주기적으로 바뀐다.
+##  - 스트림: 런 시작부터 항상 흐르는 스폰. 초당 스폰 수가 경과 시간에 따라 오른다. 항상 사방에서 온다.
+##    변마다 진입로 몇 개가 천천히 옮겨가며, 스폰은 진입로 근처에 모여 기둥처럼 보인다.
 ##  - 급증: 주기적으로 스트림 위에 겹치는 큰 덩어리(밀도·돌파·폭풍). 규모는 횟수에 따라 2차 곡선.
 ## 웨이브 라운드·휴식 카운트다운·클리어 판정은 없다. 배율은 웨이브 번호가 아니라 경과 시간으로 오른다.
 ## 개체 추가는 drain_spawns()가 Enemy Sim에 넘긴다.
@@ -14,14 +15,14 @@ enum Side { NORTH, EAST, SOUTH, WEST }
 const SURGE_FIRST_AT := 15.0          # 첫 급증까지
 const SURGE_INTERVAL := 35.0          # 급증 간격
 const SURGE_SPREAD_SECONDS := 6.0     # 급증 스폰을 펼치는 시간
-const STREAM_SHIFT_INTERVAL := 30.0   # 스트림 방향 전환 주기
 const EARLY_RING_SECONDS := 120.0     # 이 시간 전에는 본진 주변 링에서 스폰 (첫 10초 안에 보이게)
 const RING_RADIUS_MIN := 24.0
 const RING_RADIUS_GROWTH := 0.15      # 초당 링 반지름 증가
 const STREAM_INITIAL_BURST := 64.0    # 첫 틱에 바로 보이는 적 수 (시작부터 무리가 보여야 한다)
 const INITIAL_RING_RADIUS := 17.0     # 첫 무리는 더 가까이
-const LANE_SHIFT_INTERVAL := 12.0     # 스트림 진입로(변마다 하나)가 옮겨가는 주기
-const LANE_SPREAD := 0.14             # 진입로 각도 폭 (라디안). 좁을수록 기둥처럼 몰려온다
+const LANES_PER_SIDE := 3             # 변마다 진입로 수. 스트림은 항상 사방 12갈래에서 온다
+const LANE_SHIFT_INTERVAL := 4.0      # 이 주기마다 진입로 하나가 옮겨간다
+const LANE_SPREAD := 0.12             # 진입로 각도 폭 (라디안). 좁을수록 기둥처럼 몰려온다
 const SIZE := SimConfig.MAP_SIZE
 
 var enabled: bool = true              # false면 스폰하지 않는다 (테스트용)
@@ -32,12 +33,11 @@ var active: bool = false              # 급증 스폰 진행 중
 var wave_time: float = 0.0            # 현재 급증 시작 후 경과
 var surge_countdown: float = SURGE_FIRST_AT
 var spawn_sides: int = 0              # 현재(마지막) 급증의 변 비트마스크
-var stream_sides: int = 0xF           # 현재 스트림 변 비트마스크
-var stream_timer: float = 0.0
-var stream_shift_flag: bool = false   # 이번 틱 스트림 방향이 바뀜
 var total_planned: int = 0            # 마지막 급증 규모
 var spawned_this_wave: int = 0
 var stream_spawned: int = 0
+var stream_side_counts: PackedInt32Array   # 변별 스트림 스폰 수 (사방 분포 검증용)
+var _last_side: int = 0
 var wave_started_flag: bool = false   # 이번 틱 급증 시작 (배너용)
 
 # 급증 스폰 큐 (병렬 배열)
@@ -48,7 +48,7 @@ var q_head: int = 0
 var _surge_accum: float = 0.0
 var _surge_per_second: float = 0.0
 var _stream_accum: float = 0.0
-# 스트림 진입로: 변마다 각도(링 스폰) 또는 위치(가장자리 스폰) 하나. 스트림이 점이 아니라 기둥으로 보이게 한다
+# 스트림 진입로: 변마다 LANES_PER_SIDE개, 각도(링 스폰)와 위치(가장자리 스폰). 스트림이 점이 아니라 기둥으로 보이게 한다
 var _lane_angle: PackedFloat32Array
 var _lane_along: PackedFloat32Array
 var _lane_timer: float = 0.0
@@ -65,16 +65,22 @@ func clear_all() -> void:
 	wave_time = 0.0
 	surge_countdown = SURGE_FIRST_AT
 	spawn_sides = 0
-	stream_sides = 0xF
-	stream_timer = STREAM_SHIFT_INTERVAL
-	stream_shift_flag = false
 	total_planned = 0
 	spawned_this_wave = 0
 	stream_spawned = 0
+	stream_side_counts = PackedInt32Array([0, 0, 0, 0])
 	wave_started_flag = false
 	_stream_accum = STREAM_INITIAL_BURST
-	_lane_angle = PackedFloat32Array([-PI * 0.5, 0.0, PI * 0.5, PI])
-	_lane_along = PackedFloat32Array([float(SIZE) * 0.5, float(SIZE) * 0.5, float(SIZE) * 0.5, float(SIZE) * 0.5])
+	_lane_angle = PackedFloat32Array()
+	_lane_angle.resize(4 * LANES_PER_SIDE)
+	_lane_along = PackedFloat32Array()
+	_lane_along.resize(4 * LANES_PER_SIDE)
+	for side in range(4):
+		for k in range(LANES_PER_SIDE):
+			# 처음에는 변을 고르게 나눈 진입로. 이후 하나씩 무작위로 옮겨간다
+			var frac := (float(k) + 0.5) / float(LANES_PER_SIDE)
+			_lane_angle[side * LANES_PER_SIDE + k] = _side_base_angle(side) + (frac - 0.5) * PI * 0.44
+			_lane_along[side * LANES_PER_SIDE + k] = float(SIZE) * (0.2 + 0.6 * frac)
 	_lane_timer = LANE_SHIFT_INTERVAL
 	_clear_queue()
 
@@ -91,7 +97,6 @@ func queue_size() -> int:
 
 func clear_tick_flags() -> void:
 	wave_started_flag = false
-	stream_shift_flag = false
 
 # ---------------------------------------------------------------------------
 # 수식 (모두 경과 시간 기반)
@@ -199,25 +204,19 @@ func _pick_surge_sides(rng: RandomNumberGenerator) -> int:
 			var b := 1 << rng.randi_range(0, 3)
 			return a | b
 
-func _shift_stream(rng: RandomNumberGenerator) -> void:
-	var a := 1 << rng.randi_range(0, 3)
-	var b := 1 << rng.randi_range(0, 3)
-	var sides := a | b
-	if sides == stream_sides:
-		sides = 1 << ((rng.randi_range(0, 3) + 1) % 4)
-	stream_sides = sides
-	stream_shift_flag = true
+static func _side_base_angle(side: int) -> float:
+	match side:
+		Side.NORTH: return -PI * 0.5
+		Side.EAST: return 0.0
+		Side.SOUTH: return PI * 0.5
+	return PI
 
-func _shift_lanes(rng: RandomNumberGenerator) -> void:
-	for side in range(4):
-		var base := 0.0
-		match side:
-			Side.NORTH: base = -PI * 0.5
-			Side.EAST: base = 0.0
-			Side.SOUTH: base = PI * 0.5
-			_: base = PI
-		_lane_angle[side] = base + rng.randf_range(-PI * 0.22, PI * 0.22)
-		_lane_along[side] = rng.randf_range(float(SIZE) * 0.2, float(SIZE) * 0.8)
+## 진입로 하나를 무작위로 골라 옮긴다. 전부 한꺼번에 바꾸지 않아 사방의 흐름이 끊기지 않는다.
+func _shift_one_lane(rng: RandomNumberGenerator) -> void:
+	var lane := rng.randi_range(0, 4 * LANES_PER_SIDE - 1)
+	var side := lane / LANES_PER_SIDE
+	_lane_angle[lane] = _side_base_angle(side) + rng.randf_range(-PI * 0.22, PI * 0.22)
+	_lane_along[lane] = rng.randf_range(float(SIZE) * 0.2, float(SIZE) * 0.8)
 
 ## 변 비트마스크 중 하나를 골라 스폰 위치. 초반에는 본진 주변 링, 이후에는 맵 가장자리.
 ## laned=true(스트림)면 변마다 하나뿐인 진입로 근처에 모아 기둥처럼 몰려오게 한다.
@@ -229,6 +228,7 @@ func _side_position(rng: RandomNumberGenerator, sides: int, focused: bool, laned
 	if list.is_empty():
 		list = [0, 1, 2, 3]
 	var side: int = list[rng.randi_range(0, list.size() - 1)]
+	_last_side = side
 	var hq := SimConfig.HQ_CENTER
 	if time < EARLY_RING_SECONDS:
 		var radius := RING_RADIUS_MIN + time * RING_RADIUS_GROWTH + rng.randf_range(-3.0, 3.0)
@@ -242,7 +242,8 @@ func _side_position(rng: RandomNumberGenerator, sides: int, focused: bool, laned
 			_: base = PI
 		var angle := 0.0
 		if laned:
-			angle = _lane_angle[side] + rng.randf_range(-LANE_SPREAD, LANE_SPREAD)
+			var lane := side * LANES_PER_SIDE + rng.randi_range(0, LANES_PER_SIDE - 1)
+			angle = _lane_angle[lane] + rng.randf_range(-LANE_SPREAD, LANE_SPREAD)
 		else:
 			var spread := PI * 0.125 if focused else PI * 0.25
 			angle = base + rng.randf_range(-spread, spread)
@@ -255,7 +256,8 @@ func _side_position(rng: RandomNumberGenerator, sides: int, focused: bool, laned
 		span_max = float(SIZE) * 0.7
 	var along := rng.randf_range(span_min, span_max)
 	if laned:
-		along = clampf(_lane_along[side] + rng.randf_range(-6.0, 6.0), 1.0, float(SIZE) - 1.0)
+		var lane := side * LANES_PER_SIDE + rng.randi_range(0, LANES_PER_SIDE - 1)
+		along = clampf(_lane_along[lane] + rng.randf_range(-5.0, 5.0), 1.0, float(SIZE) - 1.0)
 	match side:
 		Side.NORTH: return Vector2(along, 0.6)
 		Side.EAST: return Vector2(float(SIZE) - 0.6, along)
@@ -277,11 +279,12 @@ func drain_spawns(dt: float, enemies, rng: RandomNumberGenerator) -> int:
 		_stream_accum -= float(n)
 		var comp := composition(time, WaveType.SCOUT)
 		for i in range(n):
-			var pos := _side_position(rng, stream_sides, false, true)
+			var pos := _side_position(rng, 0xF, false, true)   # 스트림은 항상 사방
 			if enemies.spawn(_roll_type(rng, comp), pos.x, pos.y, hs, ds, ss) < 0:
 				break
 			spawned += 1
 			stream_spawned += 1
+			stream_side_counts[_last_side] += 1
 	# 급증 큐
 	if q_head < q_type.size():
 		_surge_accum += _surge_per_second * dt
@@ -307,14 +310,10 @@ func tick(dt: float, _enemies_alive: int, rng: RandomNumberGenerator) -> void:
 	time += dt
 	if active:
 		wave_time += dt
-	stream_timer -= dt
-	if stream_timer <= 0.0:
-		stream_timer = STREAM_SHIFT_INTERVAL
-		_shift_stream(rng)
 	_lane_timer -= dt
 	if _lane_timer <= 0.0:
 		_lane_timer = LANE_SHIFT_INTERVAL
-		_shift_lanes(rng)
+		_shift_one_lane(rng)
 	surge_countdown -= dt
 	if surge_countdown <= 0.0:
 		start_surge(rng)

@@ -228,8 +228,6 @@ func _consume_tick_events() -> void:
 		_hud.show_wave_banner(sim.waves.wave_number, sim.waves.wave_type, sim.waves.spawn_sides, sim.waves.total_planned)
 		AudioManager.play_sfx_by_name("wave_start")
 		GameFeel.shake(2.5)
-	if sim.waves.stream_shift_flag:
-		_hud.show_stream_shift(sim.waves.stream_sides)
 
 # ---------------------------------------------------------------------------
 # 건물 표현
