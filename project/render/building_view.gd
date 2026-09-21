@@ -196,7 +196,7 @@ func _draw_sprite() -> void:
 	var rect := Rect2(bottom_b.x - w * 0.5, bottom_b.y - h, w, h)
 	var tint := Color.WHITE
 	if _flash > 0.0:
-		tint = Color(1.0, 1.0 - 0.6 * _flash, 1.0 - 0.6 * _flash)
+		tint = Color(1.0, 1.0 - 0.3 * _flash, 1.0 - 0.3 * _flash)   # 밝은 스프라이트가 분홍이 되지 않게 약하게
 	if data.building_type == BuildingData.BuildingType.HQ:
 		var p := (sin(_pulse) + 1.0) * 0.5
 		tint = tint.lightened(0.08 * p)

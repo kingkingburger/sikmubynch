@@ -15,6 +15,7 @@
 import sys
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageFilter
 
 ROOT = Path(__file__).parent.parent
@@ -26,7 +27,7 @@ OUT = ROOT / "project" / "assets" / "sprites"
 #   building: width = 스프라이트 가로 폭(1칸 = 64px 마름모보다 조금 넓게), tiles = 발자국 한 변
 #   ground:   seamless 1024×1024
 SPEC = {
-    "rusher":   {"cat": "enemy", "size": 34},
+    "rusher":   {"cat": "enemy", "size": 38},
     "mini":     {"cat": "enemy", "size": 22},
     "splitter": {"cat": "enemy", "size": 42},
     "tank":     {"cat": "enemy", "size": 58},
@@ -45,6 +46,8 @@ SPEC = {
 CHROMA_TOLERANCE = 60      # 배경색과의 거리(0~441). 크면 더 많이 뺀다
 EDGE_SOFTEN = 1.0          # 키잉 후 가장자리 부드럽게
 SHADOW_ALPHA = 0.45
+ENEMY_MIN_MEAN_LUM = 80.0  # 적 몸통 평균 밝기 하한(0~255). 어두운 지면에 묻히지 않게 끌어올린다
+ENEMY_MAX_GAIN = 1.8
 
 
 def find_source(name: str) -> Path | None:
@@ -64,30 +67,26 @@ def has_real_alpha(img: Image.Image) -> bool:
 
 
 def chroma_key(img: Image.Image) -> Image.Image:
-    """모서리 4곳의 평균색을 배경으로 보고 거리 기반 알파를 만든다."""
-    rgb = img.convert("RGB")
-    w, h = rgb.size
-    px = rgb.load()
-    corners = [px[0, 0], px[w - 1, 0], px[0, h - 1], px[w - 1, h - 1]]
-    bg = tuple(sum(c[i] for c in corners) // 4 for i in range(3))
-    out = Image.new("RGBA", (w, h))
-    op = out.load()
-    tol = CHROMA_TOLERANCE
-    for y in range(h):
-        for x in range(w):
-            r, g, b = px[x, y]
-            d = ((r - bg[0]) ** 2 + (g - bg[1]) ** 2 + (b - bg[2]) ** 2) ** 0.5
-            if d <= tol:
-                a = 0
-            elif d >= tol * 2:
-                a = 255
-            else:
-                a = int(255 * (d - tol) / tol)
-            op[x, y] = (r, g, b, a)
+    """모서리 4곳의 평균색을 배경으로 보고 거리 기반 알파를 만든다.
+    반투명 가장자리는 배경색 기여분을 빼서(despill) 핑크 테두리를 없앤다."""
+    rgb = np.asarray(img.convert("RGB"), dtype=np.float32)
+    h, w, _ = rgb.shape
+    corners = np.stack([rgb[0, 0], rgb[0, w - 1], rgb[h - 1, 0], rgb[h - 1, w - 1]])
+    bg = corners.mean(axis=0)
+    dist = np.sqrt(((rgb - bg) ** 2).sum(axis=2))
+    tol = float(CHROMA_TOLERANCE)
+    alpha = np.clip((dist - tol) / tol, 0.0, 1.0)
+    # despill: c = a*fg + (1-a)*bg → fg = (c - (1-a)*bg) / a
+    a3 = alpha[..., None]
+    safe = np.where(a3 > 0.02, a3, 1.0)
+    fg = np.where(a3 > 0.02, (rgb - (1.0 - a3) * bg) / safe, rgb)
+    fg = np.clip(fg, 0.0, 255.0)
+    out = np.concatenate([fg, alpha[..., None] * 255.0], axis=2).astype(np.uint8)
+    result = Image.fromarray(out, "RGBA")
     if EDGE_SOFTEN > 0:
-        alpha = out.getchannel("A").filter(ImageFilter.GaussianBlur(EDGE_SOFTEN))
-        out.putalpha(alpha)
-    return out
+        soft = result.getchannel("A").filter(ImageFilter.GaussianBlur(EDGE_SOFTEN))
+        result.putalpha(soft)
+    return result
 
 
 def load_cutout(path: Path) -> Image.Image:
@@ -110,24 +109,36 @@ def fit_into(img: Image.Image, max_w: int, max_h: int) -> Image.Image:
 
 
 def bake_shadow(canvas: Image.Image, cx: float, cy: float, rx: float, ry: float) -> None:
-    """바닥 그림자 타원 (렌더러 폴백과 같은 규칙)."""
-    px = canvas.load()
+    """바닥 그림자 타원 (렌더러 폴백과 같은 규칙). 몸통을 그리기 전 빈 캔버스에 넣는다."""
     w, h = canvas.size
-    for y in range(h):
-        for x in range(w):
-            sx = (x + 0.5 - cx) / rx
-            sy = (y + 0.5 - cy) / ry
-            d = sx * sx + sy * sy
-            if d <= 1.0:
-                a = SHADOW_ALPHA * (1.0 - d * 0.5)
-                r, g, b, old = px[x, y]
-                if old == 0:
-                    px[x, y] = (0, 0, 0, int(255 * a))
+    ys, xs = np.mgrid[0:h, 0:w].astype(np.float32)
+    sx = (xs + 0.5 - cx) / rx
+    sy = (ys + 0.5 - cy) / ry
+    d = sx * sx + sy * sy
+    a = np.where(d <= 1.0, SHADOW_ALPHA * (1.0 - d * 0.5), 0.0)
+    arr = np.zeros((h, w, 4), dtype=np.uint8)
+    arr[..., 3] = (a * 255.0).astype(np.uint8)
+    canvas.paste(Image.fromarray(arr, "RGBA"))
+
+
+def lift_brightness(img: Image.Image, min_mean: float, max_gain: float) -> Image.Image:
+    """불투명 픽셀의 평균 밝기가 하한보다 낮으면 RGB를 균일하게 키운다 (색조 유지)."""
+    a = np.asarray(img.convert("RGBA"), dtype=np.float32)
+    body = a[..., 3] > 200
+    if body.sum() == 0:
+        return img
+    rgb = a[body][:, :3]
+    lum = (0.2126 * rgb[:, 0] + 0.7152 * rgb[:, 1] + 0.0722 * rgb[:, 2]).mean()
+    if lum >= min_mean:
+        return img
+    gain = min(max_gain, min_mean / max(lum, 1.0))
+    a[..., :3] = np.clip(a[..., :3] * gain, 0.0, 255.0)
+    return Image.fromarray(a.astype(np.uint8), "RGBA")
 
 
 def import_enemy(name: str, src: Path, size: int) -> Path:
-    cut = load_cutout(src)
-    body = fit_into(cut, int(size * 0.72), int(size * 0.74))
+    cut = lift_brightness(load_cutout(src), ENEMY_MIN_MEAN_LUM, ENEMY_MAX_GAIN)
+    body = fit_into(cut, int(size * 0.80), int(size * 0.78))
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     # 그림자 먼저, 몸통은 위 78% 영역에 바닥 정렬
     bake_shadow(canvas, size * 0.5, size * 0.86, size * 0.36, size * 0.13)
@@ -160,15 +171,11 @@ def import_ground(name: str, src: Path, size: int) -> Path:
     shifted.paste(img.crop((0, half, half, size)), (half, 0))
     shifted.paste(img.crop((half, 0, size, half)), (0, half))
     shifted.paste(img.crop((0, 0, half, half)), (half, half))
-    mask = Image.new("L", (size, size), 0)
-    mp = mask.load()
     band = size // 6
-    for y in range(size):
-        for x in range(size):
-            dx = min(x, size - 1 - x)
-            dy = min(y, size - 1 - y)
-            d = min(dx, dy)
-            mp[x, y] = 0 if d >= band else int(255 * (1.0 - d / band))
+    ys, xs = np.mgrid[0:size, 0:size].astype(np.float32)
+    d = np.minimum(np.minimum(xs, size - 1 - xs), np.minimum(ys, size - 1 - ys))
+    m = np.where(d >= band, 0.0, 1.0 - d / band) * 255.0
+    mask = Image.fromarray(m.astype(np.uint8), "L")
     blended = Image.composite(shifted, img, mask)
     out = OUT / "ground" / f"{name}.png"
     out.parent.mkdir(parents=True, exist_ok=True)
