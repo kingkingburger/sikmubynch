@@ -3,6 +3,7 @@
 작성일: 2026-06-23
 
 > 2026-09-16 추가: 이 문서는 3D 프로토타입의 파일 경계 정리를 다룬다. 이후 2D 쿼터뷰 전환과 시뮬레이션/렌더러 분리가 결정되어, 적·유닛·발사체 관련 항목(enemy.gd, unit.gd 분리, Wave Runtime/Enemy Spawner 추출)은 이 문서의 방식이 아니라 `../technical-design.md`의 Enemy Sim·Combat Sim·Wave Sim 구조로 대체한다. game.gd coordinator, UI controller, Building Placement 항목은 여전히 유효하다.
+> 2026-09-21 추가: 범위 축소로 시너지·보상 카드·이벤트·유닛·배럭·채굴기·버프 타워는 첫 프로토타입에서 제거된다. 이 문서의 해당 시스템 관련 정리 항목은 수행하지 않고 코드와 함께 제거한다. 남는 것은 game.gd coordinator, UI controller(최소 HUD 범위), Building Placement(방어물·타워 3종 배치·철거)뿐이다.
 
 ## 배경
 

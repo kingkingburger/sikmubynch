@@ -11,12 +11,14 @@
 | 5 | `sfx/build.ogg` | SFX | 건물 배치 |
 | 6 | `sfx/destroy.ogg` | SFX | 건물 파괴 |
 | 7 | `sfx/wave_start.ogg` | SFX | 웨이브 시작/클리어 |
-| 8 | `sfx/synergy.ogg` | SFX | 시너지 발동 |
-| 9 | `sfx/reward.ogg` | SFX | 보상 선택 |
-| 10 | `sfx/levelup.ogg` | SFX | 건물 레벨업 |
+| 8 | `sfx/synergy.ogg` | SFX | 시너지 발동 (보류 — 재도입 시) |
+| 9 | `sfx/reward.ogg` | SFX | 보상 선택 (보류 — 재도입 시) |
+| 10 | `sfx/levelup.ogg` | SFX | 건물 레벨업 (보류 — 재도입 시) |
 | 11 | `sfx/ui_click.ogg` | SFX | UI 클릭 |
 
 저장 위치: `project/assets/audio/`
+
+2026-09-21 범위 축소로 8~10번은 첫 프로토타입에서 쓰지 않는다. 대신 대량 전투 피드백을 위해 `sfx/explosion.ogg`(포격 폭발)와 처치 수에 따라 쌓는 `sfx/death.ogg` 레이어 변형이 우선이다. 대량 처치 시 같은 사운드를 개별 재생하지 않고 구간별 레이어로 합친다.
 
 ---
 
