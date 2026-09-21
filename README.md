@@ -44,7 +44,6 @@ SIKMUBYNCH는 플레이어가 한 런 동안 본진을 지키며 자원을 모�
 - [기술 설계](docs/technical-design.md): 2D 전환 결정, 시뮬레이션/렌더러 분리 구조, 물량 단계, 성능 설계
 - [제작 로드맵](docs/production-roadmap.md): 기반 전환 → 재미 증명 → 물량 확장 → 콘텐츠 재도입 순서
 - [검증 계획](docs/quality-plan.md): 플레이 감각, 시스템, 성능, 출시 준비 검증 기준
-- [미완성 작업 목록](docs/unfinished-work.md): 코드·실행 대조 결과, 남은 기능, 오류, 검증 항목과 우선순위
 - [2D 아트 가이드](docs/2d-art-guide.md): 쿼터뷰 스프라이트 제작 및 교체 기준
 - [사운드 가이드](docs/sound-guide.md): BGM/SFX 제작 및 적용 기준
 
@@ -72,8 +71,6 @@ Godot 에디터에서 `project/` 폴더를 열고 F5로 실행한다.
 D:/Godot_v4.6.1-stable_win64.exe/Godot_v4.6.1-stable_win64_console.exe --path project --script ../tools/tests/play_smoke.gd
 D:/Godot_v4.6.1-stable_win64.exe/Godot_v4.6.1-stable_win64_console.exe --path project --script ../tools/tests/capture_screenshot.gd
 ```
-
-과거 3D 프로토타입의 실행·플레이 결과는 [런 안정화 검증 기록](docs/verification/2026-09-08-run-stability.md)에 남아 있다.
 
 ## 조작
 

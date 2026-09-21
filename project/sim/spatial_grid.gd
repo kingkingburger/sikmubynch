@@ -25,11 +25,6 @@ func clear_all() -> void:
 	head.fill(-1)
 	registered = 0
 
-static func cell_of(x: float, y: float) -> int:
-	var cx := clampi(int(x / CELL_SIZE), 0, GRID_W - 1)
-	var cy := clampi(int(y / CELL_SIZE), 0, GRID_W - 1)
-	return cy * GRID_W + cx
-
 ## 살아 있는 적을 전부 다시 등록한다.
 func rebuild(pos_x: PackedFloat32Array, pos_y: PackedFloat32Array, alive: PackedInt32Array, high: int) -> void:
 	head.fill(-1)

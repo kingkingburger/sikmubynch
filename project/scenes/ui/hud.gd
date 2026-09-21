@@ -67,9 +67,6 @@ func setup(root: Node, building_datas: Array) -> void:
 	_setup_esc_menu()
 	_setup_debug_overlay()
 
-func get_canvas() -> CanvasLayer:
-	return _canvas
-
 # ---------------------------------------------------------------------------
 # 갱신
 # ---------------------------------------------------------------------------

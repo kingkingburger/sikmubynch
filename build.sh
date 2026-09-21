@@ -23,11 +23,13 @@ if [ $? -eq 0 ] && [ -f "$BUILD_DIR/SIKMUBYNCH.exe" ]; then
     echo "실행하려면:"
     echo "  $BUILD_DIR/SIKMUBYNCH.exe"
     echo ""
-    # 자동 실행
-    read -p "바로 실행할까요? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        "$BUILD_DIR/SIKMUBYNCH.exe" &
+    # 터미널에서 직접 실행했을 때만 물어본다 (스크립트·자동화에서는 건너뛴다)
+    if [ -t 0 ]; then
+        read -p "바로 실행할까요? (y/n) " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            "$BUILD_DIR/SIKMUBYNCH.exe" &
+        fi
     fi
 else
     echo ""

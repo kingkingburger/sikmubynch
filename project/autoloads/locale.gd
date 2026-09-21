@@ -12,10 +12,8 @@ var _strings: Dictionary = {
 	"controls_info": ["1-8: 건설  |  우클릭: 철거  |  WASD/우드래그: 카메라  |  휠: 줌  |  Space: 일시정지  |  F: 속도", "1-8: Build  |  RMB: Demolish  |  WASD/RMB drag: Camera  |  Wheel: Zoom  |  Space: Pause  |  F: Speed"],
 
 	# HUD
-	"hp": ["체력", "HP"],
 	"hq_hp": ["본진 체력", "HQ HP"],
 	"hq_under_attack": ["본진 공격받는 중!", "HQ UNDER ATTACK!"],
-	"mineral": ["미네랄", "MINERAL"],
 	"selected": ["선택", "SELECTED"],
 	"wave_label": ["급증 %d", "SURGE %d"],
 	"kills_label": ["처치 %d", "KILLS %d"],
@@ -26,9 +24,6 @@ var _strings: Dictionary = {
 	"time_survived": ["생존 %d:%02d", "%d:%02d"],
 	"paused": ["일시정지", "PAUSED"],
 	"threat_radar": ["위협 레이더", "THREAT RADAR"],
-	"cost": ["비용", "COST"],
-	"not_enough_minerals": ["미네랄 부족", "NOT ENOUGH MINERALS"],
-	"cannot_place": ["배치 불가", "CANNOT PLACE"],
 
 	# Buildings
 	"HQ": ["본진", "HQ"],

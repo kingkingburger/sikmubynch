@@ -78,9 +78,6 @@ func set_pause_reason(reason: String, enabled: bool) -> void:
 		_pause_reasons.erase(reason)
 	paused = not _pause_reasons.is_empty()
 
-func has_pause_reason(reason: String) -> bool:
-	return _pause_reasons.has(reason)
-
 func cycle_speed() -> float:
 	if game_speed < 1.5:
 		set_game_speed(2.0)
