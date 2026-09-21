@@ -55,11 +55,13 @@ static func enemy_sprite_key(enemy_type: int) -> String:
 	return "rusher"
 
 ## 2D MultiMesh용 사각 메시. QuadMesh는 캔버스에서 상하가 뒤집히므로 UV를 직접 지정한다.
+## 정점 색은 흰색으로 명시한다. 색 속성이 없으면 GL Compatibility에서 커스텀 셰이더의 COLOR가 정점마다 달라진다.
 static func make_quad_mesh(w: float, h: float) -> ArrayMesh:
 	var hw := w * 0.5
 	var hh := h * 0.5
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_color(Color.WHITE)
 	st.set_uv(Vector2(0.0, 0.0))
 	st.add_vertex(Vector3(-hw, -hh, 0.0))
 	st.set_uv(Vector2(1.0, 0.0))

@@ -46,6 +46,8 @@ func _run() -> void:
 	buf[10] = 1.0
 	buf[11] = 1.0
 	mm.buffer = buf
+	check(game._enemy_renderer.STRIDE == 12 and mmi.material is ShaderMaterial, "buffer stride 12, frame shader material attached")
+	check(game._enemy_renderer.frames_for_type(0) >= 1, "enemy type 0 reports its frame count (%d)" % game._enemy_renderer.frames_for_type(0))
 	if DisplayServer.get_name() != "headless":
 		# headless 더미 렌더러는 인스턴스 값을 돌려주지 않는다. 창 모드에서만 레이아웃을 검증한다.
 		var xf := mm.get_instance_transform_2d(0)

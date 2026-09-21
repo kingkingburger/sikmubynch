@@ -4,6 +4,9 @@
   - 배경 제거: 알파가 있으면 그대로, 없으면 모서리 색을 크로마키로 뺀다 (마젠타·흰색·검정 등 단색 배경)
   - 여백 자르기, 규격 크기로 리사이즈(LANCZOS), 발 위치 앵커 정렬
   - 적: 정사각 캔버스, 몸통은 위 78%, 바닥에 그림자 타원 베이크 (렌더러 레이아웃과 동일)
+  - 적 시트: <이름>_sheet.png (한 줄에 포즈 4개: 걷기A, 걷기B, 물기 준비, 물기)가 있으면 그것을 우선 쓴다.
+    마젠타 틈으로 포즈를 나눠 같은 배율로 맞추고, 정사각 셀을 가로로 이어 붙인 스트립을 만든다.
+    렌더러는 가로/세로 비율로 프레임 수를 안다 (1이면 정지 이미지).
   - 건물: 가로 폭 기준 리사이즈, 캔버스 바닥 중앙 = 발자국 마름모 아래 꼭짓점
   - 지면: 1024×1024로 맞추고 가장자리를 교차 페이드해 이음새를 줄인다
 
@@ -47,6 +50,8 @@ SPEC = {
 CHROMA_TOLERANCE = 60      # 배경색과의 거리(0~441). 크면 더 많이 뺀다
 EDGE_SOFTEN = 1.0          # 키잉 후 가장자리 부드럽게
 SHADOW_ALPHA = 0.45
+SHEET_GAP_MIN = 6          # 시트에서 포즈를 나누는 빈 열의 최소 폭(px)
+SHEET_MIN_FRAME_FRAC = 0.04  # 이보다 좁은 조각은 노이즈로 보고 버린다 (전체 폭 대비)
 ENEMY_MIN_MEAN_LUM = 80.0  # 적 몸통 평균 밝기 하한(0~255). 어두운 지면에 묻히지 않게 끌어올린다
 ENEMY_MAX_GAIN = 1.8
 
@@ -57,6 +62,10 @@ def find_source(name: str) -> Path | None:
         if p.exists():
             return p
     return None
+
+
+def find_sheet(name: str) -> Path | None:
+    return find_source(f"{name}_sheet")
 
 
 def has_real_alpha(img: Image.Image) -> bool:
@@ -137,18 +146,70 @@ def lift_brightness(img: Image.Image, min_mean: float, max_gain: float) -> Image
     return Image.fromarray(a.astype(np.uint8), "RGBA")
 
 
-def import_enemy(name: str, src: Path, size: int) -> Path:
-    cut = lift_brightness(load_cutout(src), ENEMY_MIN_MEAN_LUM, ENEMY_MAX_GAIN)
-    body = fit_into(cut, int(size * 0.80), int(size * 0.78))
+def _enemy_cell(body: Image.Image, size: int) -> Image.Image:
+    """정사각 셀 하나: 그림자 + 바닥 정렬된 몸통 (몸통은 이미 규격에 맞게 리사이즈된 상태)."""
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    # 그림자 먼저, 몸통은 위 78% 영역에 바닥 정렬
     bake_shadow(canvas, size * 0.5, size * 0.86, size * 0.36, size * 0.13)
     x = (size - body.width) // 2
     y = int(size * 0.80) - body.height
     canvas.alpha_composite(body, (max(0, x), max(0, y)))
+    return canvas
+
+
+def split_sheet(cut: Image.Image) -> list[Image.Image]:
+    """배경을 뺀 시트를 빈 열(알파 0) 기준으로 가로 조각으로 나눈다. 각 조각은 bbox로 자른다."""
+    a = np.asarray(cut.getchannel("A"))
+    occupied = (a > 30).any(axis=0)
+    w = occupied.size
+    segments: list[tuple[int, int]] = []
+    start = None
+    gap = 0
+    for x in range(w):
+        if occupied[x]:
+            if start is None:
+                start = x
+            gap = 0
+        else:
+            if start is not None:
+                gap += 1
+                if gap >= SHEET_GAP_MIN:
+                    segments.append((start, x - gap + 1))
+                    start = None
+                    gap = 0
+    if start is not None:
+        segments.append((start, w))
+    min_w = int(w * SHEET_MIN_FRAME_FRAC)
+    segments = [(s, e) for s, e in segments if e - s >= min_w]
+    frames = []
+    for s, e in segments:
+        piece = cut.crop((s, 0, e, cut.height))
+        bbox = piece.getchannel("A").getbbox()
+        if bbox:
+            frames.append(piece.crop(bbox))
+    return frames
+
+
+def import_enemy(name: str, src: Path, size: int, sheet: Path | None = None) -> Path:
     out = OUT / "enemies" / f"{name}.png"
     out.parent.mkdir(parents=True, exist_ok=True)
-    canvas.save(out)
+    if sheet is None:
+        cut = lift_brightness(load_cutout(src), ENEMY_MIN_MEAN_LUM, ENEMY_MAX_GAIN)
+        body = fit_into(cut, int(size * 0.80), int(size * 0.78))
+        _enemy_cell(body, size).save(out)
+        return out
+    # 시트: 포즈를 나누고 모든 포즈에 같은 배율을 써서 크기가 튀지 않게 한다
+    cut = lift_brightness(load_cutout(sheet), ENEMY_MIN_MEAN_LUM, ENEMY_MAX_GAIN)
+    frames = split_sheet(cut)
+    if len(frames) < 2:
+        raise ValueError(f"{sheet.name}: 포즈를 {len(frames)}개밖에 못 나눴다 (포즈 사이 마젠타 틈이 필요)")
+    max_w = max(f.width for f in frames)
+    max_h = max(f.height for f in frames)
+    scale = min(int(size * 0.80) / max_w, int(size * 0.78) / max_h)
+    strip = Image.new("RGBA", (size * len(frames), size), (0, 0, 0, 0))
+    for k, f in enumerate(frames):
+        body = f.resize((max(1, int(round(f.width * scale))), max(1, int(round(f.height * scale)))), Image.LANCZOS)
+        strip.alpha_composite(_enemy_cell(body, size), (k * size, 0))
+    strip.save(out)
     return out
 
 
@@ -194,13 +255,16 @@ def main() -> None:
             print(f"  ? {name}: SPEC에 없는 이름")
             continue
         src = find_source(name)
-        if src is None:
+        sheet = find_sheet(name) if spec["cat"] == "enemy" else None
+        if src is None and sheet is None:
             if sys.argv[1:]:
                 print(f"  - {name}: 원본 없음 ({SRC / (name + '.png')})")
             continue
         try:
             if spec["cat"] == "enemy":
-                out = import_enemy(name, src, spec["size"])
+                out = import_enemy(name, src, spec["size"], sheet)
+                if sheet is not None:
+                    src = sheet
             elif spec["cat"] == "building":
                 out = import_building(name, src, spec["width"], spec["tiles"])
             else:
@@ -209,7 +273,8 @@ def main() -> None:
             print(f"  ! {name}: {exc}")
             continue
         img = Image.open(out)
-        print(f"  ✓ {name}: {src.name} → {out.relative_to(ROOT)} ({img.width}×{img.height})")
+        frames = f", {img.width // img.height}프레임" if spec["cat"] == "enemy" and img.width > img.height else ""
+        print(f"  ✓ {name}: {src.name} → {out.relative_to(ROOT)} ({img.width}×{img.height}{frames})")
         done += 1
     print(f"완료: {done}개. 이후 Godot에서 --headless --import 로 임포트한다.")
 

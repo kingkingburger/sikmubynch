@@ -135,7 +135,7 @@ func _process(delta: float) -> void:
 	_alpha = clampf(_accum / SimConfig.TICK_DT, 0.0, 1.0)
 
 	var t0 := Time.get_ticks_usec()
-	_enemy_renderer.update_from_sim(sim.enemies, _alpha, sim.tick_index)
+	_enemy_renderer.update_from_sim(sim.enemies, _alpha, sim.tick_index, sim.buildings)
 	_projectile_renderer.update_from_sim(sim.combat, _alpha)
 	_effect_renderer.update_frame(delta if not GameFeel.paused else 0.0)
 	for view in _building_views.values():
