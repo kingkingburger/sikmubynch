@@ -11,9 +11,6 @@
 | 5 | `sfx/build.ogg` | SFX | 건물 배치 |
 | 6 | `sfx/destroy.ogg` | SFX | 건물 파괴 |
 | 7 | `sfx/wave_start.ogg` | SFX | 웨이브 시작/클리어 |
-| 8 | `sfx/synergy.ogg` | SFX | 시너지 발동 (보류 — 재도입 시) |
-| 9 | `sfx/reward.ogg` | SFX | 보상 선택 (보류 — 재도입 시) |
-| 10 | `sfx/levelup.ogg` | SFX | 건물 레벨업 (보류 — 재도입 시) |
 | 11 | `sfx/ui_click.ogg` | SFX | UI 클릭 |
 
 저장 위치: `project/assets/audio/`
@@ -103,8 +100,6 @@ action game combat music, loop-friendly
 
 | SFX | 검색어 |
 |-----|--------|
-| synergy.ogg | `magic spell activate` 또는 `power up magical` |
-| reward.ogg | `treasure chest open` 또는 `card reveal magic` |
 
 ### 후처리
 - Audacity에서 트리밍 → OGG 변환 → `project/assets/audio/sfx/`에 복사
@@ -115,12 +110,6 @@ action game combat music, loop-friendly
 
 ### 사용법
 1. https://sfxr.me 접속 (웹 브라우저에서 바로 사용)
-
-### 레벨업 SFX
-1. "Powerup" 버튼 클릭
-2. 마음에 들 때까지 반복 클릭
-3. 파라미터 미세 조정 (선택)
-4. "Export WAV" → `levelup.wav`
 
 ### UI 클릭 SFX
 1. "Blip/Select" 버튼 클릭
@@ -145,9 +134,6 @@ project/assets/audio/
     ├── build.ogg        ← ElevenLabs
     ├── destroy.ogg      ← ElevenLabs
     ├── wave_start.ogg   ← ElevenLabs
-    ├── synergy.ogg      ← Freesound CC0
-    ├── reward.ogg       ← Freesound CC0
-    ├── levelup.ogg      ← jsfxr
     └── ui_click.ogg     ← jsfxr
 ```
 

@@ -212,86 +212,7 @@ def sfx_wave_start() -> np.ndarray:
     return out * envelope(n, 0.15, 0.1, 0.8, 0.3) * 0.7
 
 
-def sfx_synergy() -> np.ndarray:
-    """시너지 발동 — 마법 상승 아르페지오."""
-    dur = 0.6
-    n = int(dur * SAMPLE_RATE)
-    t = np.linspace(0, dur, n)
-    out = np.zeros(n)
 
-    # Ascending notes: C5, E5, G5, C6
-    freqs = [523, 659, 784, 1047]
-    for i, freq in enumerate(freqs):
-        start = int(i * 0.12 * SAMPLE_RATE)
-        note_len = int(0.35 * SAMPLE_RATE)
-        if start + note_len > n:
-            note_len = n - start
-        nt = np.linspace(0, note_len / SAMPLE_RATE, note_len)
-        note = np.sin(2 * np.pi * freq * nt) * 0.25
-        note += np.sin(2 * np.pi * freq * 2 * nt) * 0.1  # shimmer
-        note *= np.exp(-nt * 5)
-        out[start:start+note_len] += note
-
-    # Sparkle noise
-    sparkle = np.random.randn(n) * 0.05
-    sparkle = bandpass_simple(sparkle, 4000, 10000)
-    sparkle *= np.linspace(0.3, 1.0, n) * np.exp(-t * 2)
-
-    out = out + sparkle
-    return out * envelope(n, 0.01, 0.05, 0.7, 0.15) * 0.7
-
-
-def sfx_reward() -> np.ndarray:
-    """보상 선택 — 보물 상자 열림 + 반짝임."""
-    dur = 0.5
-    n = int(dur * SAMPLE_RATE)
-    t = np.linspace(0, dur, n)
-
-    # Opening creak
-    creak_freq = 300 + 500 * t / dur
-    creak_phase = np.cumsum(creak_freq / SAMPLE_RATE) * 2 * np.pi
-    creak = np.sin(creak_phase) * 0.15 * np.exp(-t * 6)
-
-    # Chime (two notes)
-    chime1 = np.sin(2 * np.pi * 880 * t) * 0.3 * np.exp(-t * 8)
-    delay = int(0.1 * SAMPLE_RATE)
-    chime2 = np.zeros(n)
-    chime2_len = n - delay
-    ct = np.linspace(0, chime2_len / SAMPLE_RATE, chime2_len)
-    chime2[delay:] = np.sin(2 * np.pi * 1320 * ct) * 0.25 * np.exp(-ct * 6)
-
-    # Sparkle
-    sparkle = np.random.randn(n) * 0.06
-    sparkle = bandpass_simple(sparkle, 5000, 12000)
-    sparkle *= np.exp(-t * 4)
-
-    out = creak + chime1 + chime2 + sparkle
-    return out * envelope(n, 0.005, 0.05, 0.6, 0.15) * 0.75
-
-
-def sfx_levelup() -> np.ndarray:
-    """레벨업 — 파워업 상승음."""
-    dur = 0.45
-    n = int(dur * SAMPLE_RATE)
-    t = np.linspace(0, dur, n)
-
-    # Rising sweep
-    freq = 300 + 900 * (t / dur) ** 1.5
-    phase = np.cumsum(freq / SAMPLE_RATE) * 2 * np.pi
-    sweep = np.sin(phase) * 0.35
-    sweep += np.sin(phase * 2) * 0.15  # harmonic
-
-    # Burst at end
-    burst_env = np.exp(-((t - dur * 0.8) ** 2) / 0.005)
-    burst = np.sin(2 * np.pi * 1200 * t) * 0.2 * burst_env
-
-    # Shimmer
-    shimmer = np.random.randn(n) * 0.04
-    shimmer = bandpass_simple(shimmer, 3000, 8000)
-    shimmer *= np.linspace(0.2, 1.0, n)
-
-    out = sweep + burst + shimmer
-    return out * envelope(n, 0.01, 0.03, 0.8, 0.1) * 0.7
 
 
 def sfx_ui_click() -> np.ndarray:
@@ -562,9 +483,6 @@ def main() -> None:
         "build": sfx_build,
         "destroy": sfx_destroy,
         "wave_start": sfx_wave_start,
-        "synergy": sfx_synergy,
-        "reward": sfx_reward,
-        "levelup": sfx_levelup,
         "ui_click": sfx_ui_click,
         "explosion": sfx_explosion,
         "mineral": sfx_mineral,

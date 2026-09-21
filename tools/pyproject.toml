@@ -1,10 +1,9 @@
 [project]
 name = "tools"
 version = "0.1.0"
-description = "Add your description here"
+description = "SIKMUBYNCH asset tools: sprite importer, procedural SFX generator"
 requires-python = ">=3.14"
 dependencies = [
     "numpy>=2.4.3",
     "pillow>=12.3.0",
-    "trimesh>=4.11.4",
 ]
