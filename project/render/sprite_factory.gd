@@ -4,8 +4,55 @@ extends RefCounted
 ## 모든 개체 스프라이트는 바닥에 그림자 타원을 포함한다.
 
 const SHADOW_ALPHA := 0.45
+const SPRITE_ROOT := "res://assets/sprites/"
 
 enum Shape { DIAMOND, HEX, SEAM_DIAMOND, DOT, BLOB }
+
+static var _cache: Dictionary = {}
+
+## assets/sprites/<category>/<name>.png 가 있으면 텍스처, 없으면 null (호출자가 폴백을 쓴다).
+## 줌아웃에서 축소돼도 떨리지 않게 밉맵을 런타임에 만든다 (.import 설정에 의존하지 않는다).
+## 호출자는 texture_filter 를 TEXTURE_FILTER_LINEAR_WITH_MIPMAPS 로 둔다.
+static func load_sprite(category: String, name: String) -> Texture2D:
+	var path := SPRITE_ROOT + category + "/" + name + ".png"
+	if _cache.has(path):
+		return _cache[path]
+	var tex: Texture2D = null
+	if ResourceLoader.exists(path):
+		var loaded := load(path) as Texture2D
+		if loaded != null:
+			var img := loaded.get_image()
+			if img != null and not img.is_empty():
+				if img.is_compressed():
+					img.decompress()
+				img.generate_mipmaps()
+				tex = ImageTexture.create_from_image(img)
+			else:
+				tex = loaded
+	_cache[path] = tex
+	return tex
+
+## 건물 이름(BuildingData.building_name) → 스프라이트 파일 이름
+static func building_sprite_key(building_name: String) -> String:
+	match building_name:
+		"HQ": return "hq"
+		"Barricade": return "barricade"
+		"Wall": return "wall"
+		"Gun Tower": return "gun_tower"
+		"Cannon": return "cannon_tower"
+		"Frost Tower": return "frost_tower"
+		"Flame Tower": return "flame_tower"
+		"Tesla Tower": return "tesla_tower"
+		"Sniper Tower": return "sniper_tower"
+	return building_name.to_lower().replace(" ", "_")
+
+static func enemy_sprite_key(enemy_type: int) -> String:
+	match enemy_type:
+		EnemyData.EnemyType.RUSHER: return "rusher"
+		EnemyData.EnemyType.TANK: return "tank"
+		EnemyData.EnemyType.SPLITTER: return "splitter"
+		EnemyData.EnemyType.MINI: return "mini"
+	return "rusher"
 
 ## 2D MultiMesh용 사각 메시. QuadMesh는 캔버스에서 상하가 뒤집히므로 UV를 직접 지정한다.
 static func make_quad_mesh(w: float, h: float) -> ArrayMesh:

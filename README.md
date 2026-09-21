@@ -33,6 +33,7 @@ SIKMUBYNCH는 플레이어가 한 런 동안 본진을 지키며 자원을 모�
 
 - **2026-09-21 코드 전환**: 3D 씬·GLB 모델·보류 시스템 코드를 제거하고, `project/sim`(Node 없는 시뮬레이션)과 `project/render`(MultiMesh 2D 렌더러)로 재구성했다. headless 소크에서 800~1,000마리 동시 생존 시 시뮬레이션 틱 평균 0.25 ms, 창 모드 895마리 렌더 약 1 ms를 확인했다. Flow Field 재계산(건물 배치·파괴 시) 30~40 ms 히치는 단계 D에서 다룬다.
 - **2026-09-21 첫 플레이 반영**: “웨이브 사이 휴식이 지루하다, 타워 종류가 적다, 타격감과 자원 표시가 약하다”는 판단으로 웨이브 라운드를 없애고 상시 스트림 + 주기적 급증으로 바꿨다. 타워를 3종에서 6종(화염·전격·저격 추가)으로 늘리고 비용을 낮췄으며, 총구 섬광·예광탄·피격 펀치·잔해·볼트·빔과 큰 자원 패널·획득 팝업·구매 가능 표시를 넣었다. 스크립트 방어선 소크: 21번째 급증(약 14분)에서 사망, 최대 동시 1,104마리, 틱 평균 0.7 ms.
+- **2026-09-21 아트 파이프라인**: 배경과 적이 게임답게 보이도록 AI 생성 원본 이미지를 스프라이트로 넣는 경로를 만들었다. 테마는 다크 SF(외계 생명체 vs 인류 전초기지). `assets_src/`에 원본을 넣고 `tools/import_sprites.py`로 규격화하면 적·건물·지면 렌더러가 파일이 있는 개체만 스프라이트로 그리고 나머지는 폴백 도형을 유지한다. 개체별 프롬프트와 규칙은 [`assets_src/README.md`](assets_src/README.md)에 있다.
 
 전환 순서와 구조는 [기술 설계](docs/technical-design.md)를 따른다.
 
@@ -109,15 +110,18 @@ project/
 ├── render/             # 시뮬레이션 상태를 2D 쿼터뷰로 그린다
 │   ├── enemy_renderer.gd    # 적 MultiMesh (타입별), 보간, 피격 플래시
 │   ├── projectile_renderer.gd / effect_renderer.gd
-│   ├── building_view.gd     # 건물 Node2D (이소 블록, HP 바)
+│   ├── building_view.gd     # 건물 Node2D (스프라이트 또는 이소 블록, HP 바)
 │   ├── ground_renderer.gd / placement_view.gd / world_camera.gd
-│   └── iso.gd / sprite_factory.gd   # 2:1 투영, 폴백 스프라이트
+│   └── iso.gd / sprite_factory.gd   # 2:1 투영, 스프라이트 로드(밉맵), 폴백 도형
 ├── scenes/
 │   ├── main/           # 타이틀, 메인 게임 씬(코디네이터)
 │   └── ui/             # HUD (자원·수입·획득 팝업, 본진 체력, 슬롯 구매 가능 표시, 급증 배너, 위협 레이더, 메뉴, 결과)
 ├── scripts/            # 건물·적 카탈로그, 위협 레이더, Resource 데이터 정의(data/)
-└── assets/audio/       # BGM, SFX
+├── assets/audio/       # BGM, SFX
+└── assets/sprites/     # 임포트된 스프라이트 (enemies/ buildings/ ground/). 없으면 폴백 도형
 
+assets_src/             # AI 생성 원본 이미지와 개체별 프롬프트 (README.md)
 docs/                   # 제품·설계·검증 문서와 제작 가이드
+tools/import_sprites.py # 원본 → 게임 규격 스프라이트 (배경 제거, 리사이즈, 앵커, 그림자)
 tools/tests/            # headless 회귀, 씬 스모크, 소크, 스크린샷 캡처
 ```

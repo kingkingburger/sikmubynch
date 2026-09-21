@@ -48,7 +48,13 @@ func setup(enemy_datas: Array) -> void:
 			EnemyData.EnemyType.MINI:
 				px = 18
 				shape = SpriteFactory.Shape.DIAMOND
-		var tex := SpriteFactory.make_enemy_texture(shape, px, ed.color)
+		# 스프라이트 파일이 있으면 그것을, 없으면 코드 생성 폴백. 캔버스 크기는 파일이 정한다
+		var tex: Texture2D = SpriteFactory.load_sprite("enemies", SpriteFactory.enemy_sprite_key(ed.enemy_type))
+		var from_file := tex != null
+		if from_file:
+			px = tex.get_width()
+		else:
+			tex = SpriteFactory.make_enemy_texture(shape, px, ed.color)
 		var quad := SpriteFactory.make_quad_mesh(float(px), float(px))
 		var mm := MultiMesh.new()
 		mm.transform_format = MultiMesh.TRANSFORM_2D
@@ -60,6 +66,8 @@ func setup(enemy_datas: Array) -> void:
 		var mmi := MultiMeshInstance2D.new()
 		mmi.multimesh = mm
 		mmi.texture = tex
+		if from_file:
+			mmi.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		add_child(mmi)
 		_mmis.append(mmi)
 		var buf := PackedFloat32Array()

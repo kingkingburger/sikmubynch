@@ -4,8 +4,10 @@ extends Node2D
 ## 폴백 스프라이트: 이소메트릭 블록(윗면 마름모 + 좌우 측면) + 타입별 지붕 장식 + HP 바.
 
 const Iso := preload("res://render/iso.gd")
+const SpriteFactory := preload("res://render/sprite_factory.gd")
 
 var sim_index: int = -1
+var _tex: Texture2D = null    # assets/sprites/buildings/<name>.png 가 있으면 사용
 var data: BuildingData
 var tile_x: int = 0
 var tile_y: int = 0
@@ -24,6 +26,9 @@ func setup(index: int, bd: BuildingData, tx: int, ty: int) -> void:
 	tile_y = ty
 	size = bd.size
 	position = Iso.to_screen(float(tx) + float(size) * 0.5, float(ty) + float(size) * 0.5)
+	_tex = SpriteFactory.load_sprite("buildings", SpriteFactory.building_sprite_key(bd.building_name))
+	if _tex != null:
+		texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 	queue_redraw()
 
 ## 매 프레임 호출. HP 변화가 있을 때만 다시 그린다.
@@ -58,6 +63,9 @@ func update_from_sim(buildings, delta: float, tick_index: int) -> void:
 
 func _draw() -> void:
 	if data == null:
+		return
+	if _tex != null:
+		_draw_sprite()
 		return
 	var s := float(size)
 	var half := s * 0.5
@@ -169,3 +177,48 @@ func _draw() -> void:
 		elif _hp_ratio < 0.6:
 			col = Color(0.9, 0.75, 0.1)
 		draw_rect(Rect2(x0, bar_y, w * _hp_ratio, 4.0), col)
+
+## 스프라이트 모드. 캔버스 바닥 중앙 = 발자국 마름모 아래 꼭짓점. 피격은 붉은 틴트, 발사는 상단 섬광.
+func _draw_sprite() -> void:
+	var s := float(size)
+	var half := s * 0.5
+	var bottom_b := Iso.to_screen(half, half)
+	var top_b := Iso.to_screen(-half, -half)
+	var right_b := Iso.to_screen(half, -half)
+	var left_b := Iso.to_screen(-half, half)
+	# 바닥 그림자
+	var shadow := PackedVector2Array([
+		top_b + Vector2(4.0, 2.0), right_b + Vector2(10.0, 4.0), bottom_b + Vector2(6.0, 6.0), left_b + Vector2(0.0, 4.0)
+	])
+	draw_colored_polygon(shadow, Color(0.0, 0.0, 0.0, 0.35))
+	var w := float(_tex.get_width())
+	var h := float(_tex.get_height())
+	var rect := Rect2(bottom_b.x - w * 0.5, bottom_b.y - h, w, h)
+	var tint := Color.WHITE
+	if _flash > 0.0:
+		tint = Color(1.0, 1.0 - 0.6 * _flash, 1.0 - 0.6 * _flash)
+	if data.building_type == BuildingData.BuildingType.HQ:
+		var p := (sin(_pulse) + 1.0) * 0.5
+		tint = tint.lightened(0.08 * p)
+	draw_texture_rect(_tex, rect, false, tint)
+	# 발사 섬광: 스프라이트 위쪽 1/4 지점
+	if _fire > 0.0 and data.is_tower():
+		var roof := Vector2(bottom_b.x, bottom_b.y - h * 0.78)
+		var col := data.color.lightened(0.55)
+		col.a = 0.9 * _fire
+		var radius := 6.0 + 5.0 * _fire
+		if data.building_type == BuildingData.BuildingType.CANNON_TOWER:
+			radius = 10.0 + 8.0 * _fire
+		draw_circle(roof, radius, col)
+	# HP 바 (손상됐을 때만)
+	if _hp_ratio < 0.999:
+		var bw := 30.0 * s
+		var bar_y := rect.position.y - 8.0
+		var x0 := -bw * 0.5
+		draw_rect(Rect2(x0 - 1.0, bar_y - 1.0, bw + 2.0, 6.0), Color(0.05, 0.05, 0.05, 0.9))
+		var col := Color(0.2, 0.85, 0.3)
+		if _hp_ratio < 0.3:
+			col = Color(0.9, 0.2, 0.15)
+		elif _hp_ratio < 0.6:
+			col = Color(0.9, 0.75, 0.1)
+		draw_rect(Rect2(x0, bar_y, bw * _hp_ratio, 4.0), col)

@@ -69,10 +69,12 @@ project/                                # Godot 4 프로젝트
   scripts/                              # 건물·적 카탈로그, 위협 레이더
     data/                               # Resource 데이터 정의 (BuildingData, EnemyData)
   assets/
-    audio/                              # BGM, SFX (스프라이트 아틀라스는 아직 없음, 코드 생성 폴백 사용)
+    audio/                              # BGM, SFX
+    sprites/                            # 임포트된 스프라이트 (enemies/ buildings/ ground/). 파일이 없는 개체는 코드 생성 폴백
 
+assets_src/                            # AI 생성 원본 이미지 + 개체별 프롬프트(README.md). 임포트 스크립트의 입력
 docs/                                  # 보편적인 제품/설계/검증 문서
-tools/                                 # 회귀 검증 실행기, tests/ (headless 회귀·씬 스모크·소크·스크린샷)
+tools/                                 # 회귀 검증 실행기, import_sprites.py(원본→스프라이트), tests/ (headless 회귀·씬 스모크·소크·스크린샷)
 build.sh                               # Windows exe 빌드 스크립트
 build/                                 # 빌드 출력, git ignored
 ```
@@ -92,6 +94,7 @@ build/                                 # 빌드 출력, git ignored
 - 2026-09-21 범위 축소: 증강·카드·시너지·이벤트·유닛·메타 보류. 첫 프로토타입은 맵 1/본진 1/방어물 1~2/타워 3/적 3/자원 1/무한 웨이브.
 - 2026-09-21 단계 B 코드 전환: `project/sim`(Node 없는 시뮬레이션)과 `project/render`(MultiMesh 2D)로 재구성. 3D 씬·모델·보류 시스템 코드 제거. headless 소크 800~1,000마리에서 틱 평균 0.25 ms, 창 모드 895마리 렌더 약 1 ms. 남은 병목은 Flow Field 재계산 30~40 ms 히치(단계 D).
 - 2026-09-21 첫 플레이 반영(단계 C 시작): 웨이브 라운드·휴식 제거 → 상시 스트림 + 급증. 타워 3종 → 6종(화염·전격·저격), 비용 인하, 기본 수입 2/초. 타격감(총구 섬광·예광탄·피격 펀치·잔해·볼트·빔)과 자원 UI(큰 패널·수입·획득 팝업·구매 가능 표시). 스크립트 소크: 21번째 급증(약 14분) 사망, 최대 동시 1,104마리.
+- 2026-09-21 아트 파이프라인: 테마 다크 SF(외계 생명체 vs 인류 전초기지). `assets_src/` 원본 → `tools/import_sprites.py`(배경 제거·리사이즈·앵커·그림자 베이크) → `project/assets/sprites/`. 적·건물·지면 렌더러가 파일이 있는 개체만 스프라이트로 그린다. 원본 이미지는 아직 없다.
 
 ## 현재 우선순위
 
