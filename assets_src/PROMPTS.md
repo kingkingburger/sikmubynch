@@ -1,11 +1,49 @@
-# 복붙용 완성 프롬프트 (ChatGPT 등 이미지 생성 대화창에 그대로 붙인다)
+# 복붙용 완성 프롬프트 (ChatGPT 이미지 생성 대화창용)
 
-한 대화창에서 순서대로 진행한다. 각 프롬프트마다 **지정된 기준 이미지를 첨부**하고 아래 블록을 통째로 붙인다.
-결과는 정사각 PNG로 저장해 `assets_src/<파일명>` 에 넣는다. 배경이 마젠타가 아니어도 **단색이거나 투명**이면 임포터가 처리한다. 그라데이션·바닥·그림자가 들어가면 다시 만든다.
+## A. 한 번에 붙이는 프롬프트 (권장)
+
+1. ChatGPT 새 대화창을 연다.
+2. `ref/gun_tower_ref.png` 와 `ref/rusher_ref.png` 두 장을 첨부한다 (순서대로: 타워 먼저, 벌레 다음).
+3. 아래 블록을 통째로 붙여 넣고 보낸다 → 1번(HQ)이 나온다.
+4. 이미지를 **저장** (파일명은 목록의 이름) → `assets_src/` 에 넣는다.
+5. `next` 라고 보낸다 → 다음 장. 12번까지 반복.
+6. 마음에 안 드는 장이 있으면 `redo #4, closer to the reference turret, same rendering and palette` 처럼 번호로 다시 시킨다.
+
+배경이 마젠타가 아니어도 **단색이거나 투명**이면 된다. 그라데이션·바닥·그림자가 들어가면 그 번호를 다시 시킨다.
+
+```
+I need a matched set of 12 game sprites for an isometric tower-defense game. I attached two style references: the first image (the gun turret) is the reference for ALL buildings, the second image (the red creature) is the reference for ALL enemies.
+
+Rules for every image:
+- Match the reference exactly: painted semi-realistic rendering, the same level of detail and edge crispness, the same isometric 3/4 top-down camera angle, the same soft directional light from the upper left.
+- Flat solid magenta background #FF00FF. One object centered, full body visible, not cropped. No ground, no floor, no cast shadow, no text, no watermark.
+- Square 1024x1024.
+- Building palette: gunmetal gray armor plates #3B3F45, darker recesses #25282C, yellow-black hazard stripes #E0B428 and #1A1A1A. Every building stands on the same square dark steel base plate #2A2D31 with a thin yellow edge trim as the reference turret. Only one glowing color per building, listed below.
+- Enemy palette: the same alien species family as the reference creature: chitin body, dark charcoal joints #2B2224, glowing orange-yellow eyes and joint vents #FFA028. Bright and saturated so it reads on dark ground.
+
+Generate them ONE AT A TIME in this order. Start with #1 now. Each time I reply "next", generate the next one. Label each result with its number and filename. If I say "redo #N", regenerate that one only.
+
+1. hq.png — Large fortified command bunker in the same design language as the reference turret: wide low-rise armored body with a raised central tower, thick gunmetal armor plates, hazard stripes along the edges, an antenna mast, and a large blue glowing energy core visible in the center. Stands on a large square base plate about three times the footprint of the reference turret. Glow: blue #3C8CFF only.
+2. barricade.png — Low portable barricade: three gunmetal armor panels bolted together with sandbags at the base, hazard stripes on the panel edges, knee height, no weapons. On the same square base plate. No glow.
+3. wall.png — Heavy wall block: solid dark gunmetal reinforced block with rivets, bolted panels and hazard-stripe corners, chest height, no weapons. On the same square base plate. No glow.
+4. cannon_tower.png — Heavy artillery cannon turret built like the reference turret: one huge short barrel on a bulky armored mount, hydraulic recoil pistons, orange glowing vents. On the same square base plate. Glow: orange #FF7A1E only.
+5. frost_tower.png — Cryo turret built like the reference turret: cylindrical coolant tank with cyan glowing liquid windows, a frost emitter dish on top, frost crystals on the metal. On the same square base plate. Glow: cyan #4FD8FF only.
+6. flame_tower.png — Flamethrower turret built like the reference turret: twin fuel tanks on the back, a wide nozzle with a small red-orange pilot flame, scorched metal around the nozzle. On the same square base plate. Glow: red-orange #FF4A16 only.
+7. tesla_tower.png — Tesla coil turret built like the reference turret: a tall coil with a violet glowing orb on top, small electric arcs around the orb, ceramic insulators on the body. On the same square base plate. Glow: violet #9A7CFF only.
+8. sniper_tower.png — Tall railgun sniper turret built like the reference turret: slim tall body with one long thin barrel angled upward, a green laser-sight glow at the scope. On the same square base plate. Glow: green #5CE08A only.
+9. rusher.png — The same creature as the reference creature, redesigned to read clearly at a tiny size: thicker compact body, shorter sturdier legs, large glowing orange eyes, low aggressive lunging pose. Brighter and more saturated crimson red chitin #C8262A than the reference.
+10. tank.png — Heavy variant of the same alien species: massive armored brute with a thick plated carapace, heavy limbs, black bone spikes, wide low stance, about three times the mass of the reference creature. Dark violet-purple chitin #5A3D7A, same glowing orange eyes and joint vents.
+11. splitter.png — Spore-carrier variant of the same alien species: a bloated round translucent yellow-green sac #A8D830 full of glowing larvae, carried on thin legs, pulsing veins on the sac, the same chitin rendering on legs and head, same orange eyes.
+12. mini.png — Larva of the same alien species: tiny compact soft body, short legs, small mandibles, a glowing green core visible through pale green skin #A8D830, small orange-yellow eyes. Simple silhouette that fills the frame.
+```
 
 ---
 
-## 0. 세션 시작 (한 번만. `ref/gun_tower_ref.png` 와 `ref/rusher_ref.png` 두 장 첨부)
+## B. 한 장씩 따로 만들 때 (A가 안 될 때, 또는 한 장만 다시 만들 때)
+
+각 프롬프트마다 **지정된 기준 이미지를 첨부**하고 아래 블록을 통째로 붙인다.
+
+### 0. 세션 시작 (한 번만. `ref/gun_tower_ref.png` 와 `ref/rusher_ref.png` 두 장 첨부)
 
 ```
 I am going to ask you for 13 game sprites one at a time. The two attached images are the fixed style references for this whole session: the turret is the reference for every building, the red creature is the reference for every enemy. For every image, keep the rendering identical to these references: painted semi-realistic style, same level of detail, same isometric 3/4 top-down camera angle, same soft directional light from the upper left, flat solid magenta background #FF00FF, one object centered, full body visible, no ground, no floor, no cast shadow, no text, no watermark. Always output a square 1024x1024 image. Reply "ready" and wait for the first request.
