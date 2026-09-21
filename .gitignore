@@ -12,3 +12,5 @@ Thumbs.db
 export_presets.cfg
 build/
 __pycache__/
+assets_src/_old/
+assets_src/_alt/
