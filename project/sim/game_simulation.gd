@@ -40,6 +40,7 @@ var buildings_hit: PackedInt32Array         # 이번 틱 피격된 건물 인덱
 var minerals_gained_this_tick: int = 0
 var last_tick_usec: int = 0                 # 프로파일용
 var flow_recalc_timer: int = -1
+var _income_accum: float = 0.0              # 기본 수입 소수 누적
 
 func _init() -> void:
 	rng = RandomNumberGenerator.new()
@@ -74,6 +75,7 @@ func start(seed: int, starting_defense: bool = true) -> void:
 	buildings_hit = PackedInt32Array()
 	minerals_gained_this_tick = 0
 	flow_recalc_timer = -1
+	_income_accum = 0.0
 
 	building_datas = BuildingCatalog.create()
 	enemy_datas = EnemyCatalog.create()
@@ -178,8 +180,8 @@ func tick() -> void:
 	var dt := SimConfig.TICK_DT
 	_clear_tick_results()
 
-	# 1. 웨이브 스폰
-	waves.drain_spawns(dt, enemies)
+	# 1. 스폰 (스트림 + 급증 큐)
+	waves.drain_spawns(dt, enemies, rng)
 
 	# 2. Flow Field
 	if flow_recalc_timer >= 0:
@@ -198,7 +200,7 @@ func tick() -> void:
 
 	# 5. 전투
 	if not game_over:
-		combat.tick_towers(dt, buildings, enemies, grid)
+		combat.tick_towers(dt, buildings, enemies, grid, tick_index)
 		combat.tick_projectiles(dt, enemies, grid, tick_index)
 		for b in enemies.pending_detach:
 			buildings.detach_attacker(b)
@@ -214,18 +216,20 @@ func tick() -> void:
 		enemies.spawn(int(sr[base]), sr[base + 1] + ox, sr[base + 2] + oy,
 			sr[base + 3], sr[base + 4], sr[base + 5])
 
-	# 7. 보상
+	# 7. 보상 (처치 + 기본 수입)
 	kills += combat.tick_kills
 	if enemies.reward_pending > 0:
 		minerals += enemies.reward_pending
 		minerals_gained_this_tick += enemies.reward_pending
+	_income_accum += SimConfig.BASE_INCOME_PER_SEC * dt
+	if _income_accum >= 1.0:
+		var gained := int(_income_accum)
+		_income_accum -= float(gained)
+		minerals += gained
+		minerals_gained_this_tick += gained
 
-	# 8. 웨이브 진행
+	# 8. 압박 진행 (급증 시작, 스트림 방향 전환)
 	waves.tick(dt, enemies.alive_count, rng)
-	if waves.wave_cleared_flag:
-		var bonus := waves.clear_bonus(waves.wave_number - 1)
-		minerals += bonus
-		minerals_gained_this_tick += bonus
 
 	tick_index += 1
 	time += dt
@@ -287,7 +291,7 @@ func state_hash() -> int:
 ## 디버그·스트레스: 적을 즉시 추가한다. ring_radius > 0이면 HQ 주변 링에, 아니면 맵 가장자리에.
 func debug_spawn(count: int, type: int = EnemyData.EnemyType.RUSHER, ring_radius: float = -1.0) -> int:
 	var spawned := 0
-	var w := waves.wave_number
+	var now := waves.time
 	var m := float(SimConfig.MAP_SIZE)
 	for i in range(count):
 		var x := 0.0
@@ -311,6 +315,6 @@ func debug_spawn(count: int, type: int = EnemyData.EnemyType.RUSHER, ring_radius
 				3:
 					x = 0.6
 					y = along
-		if enemies.spawn(type, x, y, WaveSim.hp_scale(w), WaveSim.dps_scale(w), WaveSim.speed_scale(w)) >= 0:
+		if enemies.spawn(type, x, y, WaveSim.hp_scale(now), WaveSim.dps_scale(now), WaveSim.speed_scale(now)) >= 0:
 			spawned += 1
 	return spawned

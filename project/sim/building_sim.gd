@@ -25,6 +25,11 @@ var t_slow_radius: PackedFloat32Array
 var t_proj_kind: PackedInt32Array
 var t_proj_speed: PackedFloat32Array
 var t_is_tower: PackedInt32Array
+var t_mode: PackedInt32Array          # BuildingData.AttackMode
+var t_chain: PackedInt32Array
+var t_chain_radius: PackedFloat32Array
+var t_beam_width: PackedFloat32Array
+var t_prefer_hp: PackedInt32Array
 
 # 개체 배열
 var alive: PackedInt32Array
@@ -36,6 +41,7 @@ var tile_y: PackedInt32Array
 var size: PackedInt32Array
 var cooldown: PackedFloat32Array
 var last_hit_tick: PackedInt32Array
+var last_fire_tick: PackedInt32Array  # 총구 섬광용. 렌더러가 읽는다
 var attackers: PackedInt32Array     # 현재 이 건물을 공격 중인 적 수
 var attacker_cap: PackedInt32Array  # 동시 공격 상한 (타일당 ATTACKERS_PER_TILE)
 var grid: PackedInt32Array          # 타일 → 건물 인덱스, 없으면 -1
@@ -63,6 +69,8 @@ func _init() -> void:
 	cooldown.resize(MAX)
 	last_hit_tick = PackedInt32Array()
 	last_hit_tick.resize(MAX)
+	last_fire_tick = PackedInt32Array()
+	last_fire_tick.resize(MAX)
 	attackers = PackedInt32Array()
 	attackers.resize(MAX)
 	attacker_cap = PackedInt32Array()
@@ -77,6 +85,7 @@ func clear_all() -> void:
 	grid.fill(-1)
 	cooldown.fill(0.0)
 	last_hit_tick.fill(-100)
+	last_fire_tick.fill(-100)
 	attackers.fill(0)
 	attacker_cap.fill(0)
 	free_list = PackedInt32Array()
@@ -99,6 +108,11 @@ func set_types(datas: Array) -> void:
 	t_proj_kind = PackedInt32Array()
 	t_proj_speed = PackedFloat32Array()
 	t_is_tower = PackedInt32Array()
+	t_mode = PackedInt32Array()
+	t_chain = PackedInt32Array()
+	t_chain_radius = PackedFloat32Array()
+	t_beam_width = PackedFloat32Array()
+	t_prefer_hp = PackedInt32Array()
 	for d in datas:
 		var bd := d as BuildingData
 		t_cost.append(bd.cost)
@@ -114,6 +128,11 @@ func set_types(datas: Array) -> void:
 		t_proj_kind.append(int(bd.projectile_kind))
 		t_proj_speed.append(bd.projectile_speed)
 		t_is_tower.append(1 if bd.is_tower() else 0)
+		t_mode.append(int(bd.attack_mode))
+		t_chain.append(bd.chain_count)
+		t_chain_radius.append(bd.chain_radius)
+		t_beam_width.append(bd.beam_width)
+		t_prefer_hp.append(1 if bd.prefer_high_hp else 0)
 
 func building_at(tx: int, ty: int) -> int:
 	if not SimConfig.in_bounds(tx, ty):
@@ -156,6 +175,7 @@ func place(type: int, tx: int, ty: int) -> int:
 	size[idx] = t_size[type]
 	cooldown[idx] = 0.0
 	last_hit_tick[idx] = -100
+	last_fire_tick[idx] = -100
 	attackers[idx] = 0
 	var s := t_size[type]
 	# 둘레 타일 수 × 타일당 상한 (1×1은 4, 3×3은 8칸 둘레 → 32는 과해서 절반)

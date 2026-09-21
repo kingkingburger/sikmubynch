@@ -54,22 +54,25 @@ func _run() -> void:
 		check(is_equal_approx(xf.x.x, 2.0) and is_equal_approx(xf.y.y, 2.0), "buffer layout: scale")
 		check(is_equal_approx(col.r, 0.5) and is_equal_approx(col.g, 0.25), "buffer layout: color")
 
-	# 몇 초 진행
-	for i in 120:
+	# 시뮬레이션 2초 진행 (프레임 수가 아니라 틱 기준)
+	var frames := 0
+	while game.sim.tick_index < 60 and frames < 2000:
 		await process_frame
-	check(game.sim.tick_index > 15, "simulation ticks advance (%d)" % game.sim.tick_index)
+		frames += 1
+	check(game.sim.tick_index >= 60, "simulation ticks advance (%d)" % game.sim.tick_index)
 	check(game.sim.enemies_alive() > 0, "enemies exist after 2 seconds")
 	check(game._enemy_renderer.visible_total() == game.sim.enemies_alive(), "renderer shows every alive enemy")
 
 	# 건설: 마우스 위치를 타일로 바꿔 배치
 	var vp: Vector2 = game.get_viewport().get_visible_rect().size
 	var minerals: int = game.sim.minerals
-	game._select_slot(1)   # Gun Tower
+	game._select_slot(2)   # Gun Tower
 	var tile := Vector2i(60, 63)
 	var views_before: int = game._building_views.size()
+	var gun_cost: int = game.sim.buildings.t_cost[BuildingData.BuildingType.GUN_TOWER]
 	check(views_before == game.sim.buildings.alive_count, "one view per starting building")
 	check(game._try_place(BuildingData.BuildingType.GUN_TOWER, tile), "place gun tower via scene")
-	check(game.sim.minerals == minerals - 50, "minerals spent")
+	check(game.sim.minerals == minerals - gun_cost, "minerals spent")
 	check(game._building_views.size() == views_before + 1, "building view created")
 	check(not game._try_place(BuildingData.BuildingType.GUN_TOWER, tile), "occupied tile rejected")
 	check(game._try_demolish(tile), "demolish via scene")

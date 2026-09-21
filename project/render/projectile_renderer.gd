@@ -1,6 +1,7 @@
 extends Node2D
 
 ## 발사체 렌더러. MultiMesh 1개, 종류별 색·크기. 발사체는 지면 위로 약간 떠서 날아간다.
+## 탄은 진행 방향으로 늘어난 예광탄으로 그린다(회전 변환). 셸은 크고 둥글게, 냉기는 푸르게.
 
 const Iso := preload("res://render/iso.gd")
 const SpriteFactory := preload("res://render/sprite_factory.gd")
@@ -8,13 +9,15 @@ const SimConfig := preload("res://sim/sim_config.gd")
 
 const STRIDE := 12
 const LIFT_PX := 22.0
+const TRACER_LEN := 2.6     # 진행 방향 늘림 배수
+const TRACER_MIN_SPEED := 0.05
 
 var _mmi: MultiMeshInstance2D
 var _buf: PackedFloat32Array
 var _count: int = 0
 
 func setup() -> void:
-	var quad := SpriteFactory.make_quad_mesh(12.0, 12.0)
+	var quad := SpriteFactory.make_quad_mesh(14.0, 14.0)
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_2D
 	mm.use_colors = true
@@ -24,7 +27,7 @@ func setup() -> void:
 	mm.custom_aabb = SpriteFactory.map_aabb(SimConfig.MAP_SIZE)
 	_mmi = MultiMeshInstance2D.new()
 	_mmi.multimesh = mm
-	_mmi.texture = SpriteFactory.make_dot_texture(12, true)
+	_mmi.texture = SpriteFactory.make_dot_texture(14, true)
 	add_child(_mmi)
 	_buf = PackedFloat32Array()
 	_buf.resize(SimConfig.MAX_PROJECTILES * STRIDE)
@@ -48,35 +51,48 @@ func update_from_sim(combat, alpha: float) -> void:
 		var y := ppy[i] + (py[i] - ppy[i]) * alpha
 		var s := Iso.to_screen(x, y)
 		var o := n * STRIDE
-		var scale := 1.0
+		var sx := 0.7
+		var sy := 0.7
 		var r := 1.0
-		var g := 0.9
-		var b := 0.4
+		var g := 0.92
+		var b := 0.45
+		var angle := 0.0
 		match kind[i]:
 			2:  # 셸
-				scale = 1.6
+				sx = 1.5
+				sy = 1.5
 				r = 1.0
 				g = 0.55
 				b = 0.2
 			3:  # 냉기
-				scale = 1.2
+				sx = 1.1
+				sy = 1.1
 				r = 0.5
 				g = 0.85
 				b = 1.0
-		buf_write(o, scale, s.x, s.y - LIFT_PX, r, g, b)
+			_:  # 탄: 화면상 진행 방향으로 늘린다
+				var d := Iso.to_screen(px[i], py[i]) - Iso.to_screen(ppx[i], ppy[i])
+				if d.length_squared() > TRACER_MIN_SPEED:
+					angle = d.angle()
+					sx = 0.55 * TRACER_LEN
+					sy = 0.4
+		_buf_write(o, sx, sy, angle, s.x, s.y - LIFT_PX, r, g, b)
 		n += 1
 	_count = n
 	var mm := _mmi.multimesh
 	mm.buffer = _buf
 	mm.visible_instance_count = n
 
-func buf_write(o: int, scale: float, x: float, y: float, r: float, g: float, b: float) -> void:
-	_buf[o] = scale
-	_buf[o + 1] = 0.0
+## 2D 변환 8 + 색 4. 회전 각도 angle(라디안), 축 배율 sx·sy.
+func _buf_write(o: int, sx: float, sy: float, angle: float, x: float, y: float, r: float, g: float, b: float) -> void:
+	var c := cos(angle)
+	var s := sin(angle)
+	_buf[o] = c * sx
+	_buf[o + 1] = -s * sy
 	_buf[o + 2] = 0.0
 	_buf[o + 3] = x
-	_buf[o + 4] = 0.0
-	_buf[o + 5] = scale
+	_buf[o + 4] = s * sx
+	_buf[o + 5] = c * sy
 	_buf[o + 6] = 0.0
 	_buf[o + 7] = y
 	_buf[o + 8] = r

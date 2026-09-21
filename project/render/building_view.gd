@@ -13,6 +13,7 @@ var size: int = 1
 
 var _hp_ratio: float = 1.0
 var _flash: float = 0.0
+var _fire: float = 0.0        # 총구 섬광 세기 (0..1)
 var _last_hp: float = -1.0
 var _pulse: float = 0.0
 
@@ -34,6 +35,8 @@ func update_from_sim(buildings, delta: float, tick_index: int) -> void:
 	var ratio := clampf(hp / max_hp, 0.0, 1.0)
 	var hit_age: int = tick_index - buildings.last_hit_tick[sim_index]
 	var new_flash := clampf(1.0 - float(hit_age) / 4.0, 0.0, 1.0)
+	var fire_age: int = tick_index - buildings.last_fire_tick[sim_index]
+	var new_fire := clampf(1.0 - float(fire_age) / 3.0, 0.0, 1.0)
 	var need := false
 	if hp != _last_hp:
 		_last_hp = hp
@@ -41,6 +44,9 @@ func update_from_sim(buildings, delta: float, tick_index: int) -> void:
 		need = true
 	if absf(new_flash - _flash) > 0.01:
 		_flash = new_flash
+		need = true
+	if absf(new_fire - _fire) > 0.01:
+		_fire = new_fire
 		need = true
 	if data.building_type == BuildingData.BuildingType.HQ:
 		_pulse += delta * 2.0
@@ -96,21 +102,49 @@ func _draw() -> void:
 	draw_line(left_b, bottom_b, outline, 1.5)
 	draw_line(bottom_b, right_b, outline, 1.5)
 
-	# 지붕 장식
-	var roof_center := (top_t + bottom_t) * 0.5
+	# 지붕 장식. 발사 직후에는 반동(위로 튐)과 총구 섬광.
+	var recoil := Vector2(0.0, -3.0 * _fire)
+	var roof_center := (top_t + bottom_t) * 0.5 + recoil
 	match data.building_type:
 		BuildingData.BuildingType.GUN_TOWER:
 			draw_circle(roof_center, 7.0, Color(0.25, 0.22, 0.18))
 			draw_circle(roof_center, 4.0, Color(1.0, 0.9, 0.5))
+			if _fire > 0.0:
+				draw_circle(roof_center + Vector2(0, -6), 5.0 + 4.0 * _fire, Color(1.0, 0.95, 0.6, 0.9 * _fire))
 		BuildingData.BuildingType.CANNON_TOWER:
 			draw_circle(roof_center, 11.0, Color(0.2, 0.16, 0.14))
 			draw_circle(roof_center, 6.0, Color(1.0, 0.5, 0.2))
+			if _fire > 0.0:
+				draw_circle(roof_center + Vector2(0, -8), 9.0 + 8.0 * _fire, Color(1.0, 0.7, 0.3, 0.85 * _fire))
 		BuildingData.BuildingType.FROST_TOWER:
 			var d := PackedVector2Array([
 				roof_center + Vector2(0, -10), roof_center + Vector2(7, 0),
 				roof_center + Vector2(0, 10), roof_center + Vector2(-7, 0)
 			])
 			draw_colored_polygon(d, Color(0.8, 0.97, 1.0))
+			if _fire > 0.0:
+				draw_circle(roof_center, 8.0 + 6.0 * _fire, Color(0.7, 0.95, 1.0, 0.6 * _fire))
+		BuildingData.BuildingType.FLAME_TOWER:
+			# 노즐 + 불씨. 발사 중에는 불꽃이 커진다
+			draw_circle(roof_center, 8.0, Color(0.22, 0.14, 0.1))
+			draw_circle(roof_center, 4.5, Color(1.0, 0.55, 0.15))
+			var glow := 0.35 + 0.65 * _fire
+			draw_circle(roof_center + Vector2(0, -5), 6.0 + 7.0 * _fire, Color(1.0, 0.5, 0.1, 0.75 * glow))
+			draw_circle(roof_center + Vector2(0, -8), 3.0 + 4.0 * _fire, Color(1.0, 0.9, 0.4, 0.9 * glow))
+		BuildingData.BuildingType.TESLA_TOWER:
+			# 코일: 세로 막대 + 구체. 발사 시 구체가 밝아진다
+			draw_line(roof_center + Vector2(0, 4), roof_center + Vector2(0, -14), Color(0.3, 0.28, 0.4), 4.0)
+			draw_circle(roof_center + Vector2(0, -16), 6.0, Color(0.75, 0.7, 1.0))
+			if _fire > 0.0:
+				draw_circle(roof_center + Vector2(0, -16), 9.0 + 8.0 * _fire, Color(0.8, 0.75, 1.0, 0.7 * _fire))
+		BuildingData.BuildingType.SNIPER_TOWER:
+			# 긴 총열 + 조준경. 발사 시 총열 끝 섬광
+			var barrel_end := roof_center + Vector2(14, -10)
+			draw_line(roof_center, barrel_end, Color(0.2, 0.25, 0.22), 5.0)
+			draw_line(roof_center, barrel_end, Color(0.55, 0.8, 0.65), 2.0)
+			draw_circle(roof_center, 5.0, Color(0.3, 0.6, 0.45))
+			if _fire > 0.0:
+				draw_circle(barrel_end, 5.0 + 7.0 * _fire, Color(0.8, 1.0, 0.85, 0.95 * _fire))
 		BuildingData.BuildingType.HQ:
 			var d := PackedVector2Array([
 				roof_center + Vector2(0, -22), roof_center + Vector2(26, 0),

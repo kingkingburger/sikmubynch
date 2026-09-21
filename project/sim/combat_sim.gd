@@ -1,6 +1,7 @@
 extends RefCounted
 
 ## Combat Sim — 타워 타겟팅, 발사체 진행, 피해·감속 적용, 처치 집계.
+## 발사 방식 4가지: PROJECTILE(발사체), CHAIN(연쇄 즉발), AREA(반경 즉발), BEAM(직선 관통 즉발).
 ## 시너지 배율은 없다. 피해는 _apply_damage 한곳을 거친다(재도입 시 배율을 여기에 끼운다).
 
 const SimConfig := preload("res://sim/sim_config.gd")
@@ -10,8 +11,15 @@ const KIND_NONE := 0
 const KIND_BULLET := 1
 const KIND_SHELL := 2
 const KIND_FROST := 3
+const MODE_PROJECTILE := 0
+const MODE_CHAIN := 1
+const MODE_AREA := 2
+const MODE_BEAM := 3
 const PROJECTILE_TTL := 3.0
 const QUERY_CAP := 512
+const MAX_BOLTS := 256      # 연쇄 번개 선분 이벤트 상한 (틱당)
+const MAX_BEAMS := 64
+const MAX_FLAMES := 128
 
 # 발사체 배열
 var p_alive: PackedInt32Array
@@ -47,8 +55,27 @@ var explosion_y: PackedFloat32Array
 var explosion_radius: PackedFloat32Array
 var explosion_kills: PackedInt32Array
 var shots_fired: int = 0
+# 즉발 무기 표현용 선분: 연쇄 번개(볼트), 저격 빔, 화염(타워→목표 방향)
+var bolt_count: int = 0
+var bolt_x0: PackedFloat32Array
+var bolt_y0: PackedFloat32Array
+var bolt_x1: PackedFloat32Array
+var bolt_y1: PackedFloat32Array
+var beam_count: int = 0
+var beam_x0: PackedFloat32Array
+var beam_y0: PackedFloat32Array
+var beam_x1: PackedFloat32Array
+var beam_y1: PackedFloat32Array
+var beam_kills: PackedInt32Array
+var flame_count: int = 0
+var flame_x: PackedFloat32Array
+var flame_y: PackedFloat32Array
+var flame_tx: PackedFloat32Array
+var flame_ty: PackedFloat32Array
+var flame_radius: PackedFloat32Array
 
 var _query: PackedInt32Array
+var _chain_visited: PackedInt32Array
 
 func _init() -> void:
 	p_alive = PackedInt32Array()
@@ -98,8 +125,38 @@ func _init() -> void:
 	explosion_radius.resize(SimConfig.MAX_EXPLOSION_EVENTS)
 	explosion_kills = PackedInt32Array()
 	explosion_kills.resize(SimConfig.MAX_EXPLOSION_EVENTS)
+	bolt_x0 = PackedFloat32Array()
+	bolt_x0.resize(MAX_BOLTS)
+	bolt_y0 = PackedFloat32Array()
+	bolt_y0.resize(MAX_BOLTS)
+	bolt_x1 = PackedFloat32Array()
+	bolt_x1.resize(MAX_BOLTS)
+	bolt_y1 = PackedFloat32Array()
+	bolt_y1.resize(MAX_BOLTS)
+	beam_x0 = PackedFloat32Array()
+	beam_x0.resize(MAX_BEAMS)
+	beam_y0 = PackedFloat32Array()
+	beam_y0.resize(MAX_BEAMS)
+	beam_x1 = PackedFloat32Array()
+	beam_x1.resize(MAX_BEAMS)
+	beam_y1 = PackedFloat32Array()
+	beam_y1.resize(MAX_BEAMS)
+	beam_kills = PackedInt32Array()
+	beam_kills.resize(MAX_BEAMS)
+	flame_x = PackedFloat32Array()
+	flame_x.resize(MAX_FLAMES)
+	flame_y = PackedFloat32Array()
+	flame_y.resize(MAX_FLAMES)
+	flame_tx = PackedFloat32Array()
+	flame_tx.resize(MAX_FLAMES)
+	flame_ty = PackedFloat32Array()
+	flame_ty.resize(MAX_FLAMES)
+	flame_radius = PackedFloat32Array()
+	flame_radius.resize(MAX_FLAMES)
 	_query = PackedInt32Array()
 	_query.resize(QUERY_CAP)
+	_chain_visited = PackedInt32Array()
+	_chain_visited.resize(16)
 	clear_all()
 
 func clear_all() -> void:
@@ -115,6 +172,9 @@ func clear_tick_results() -> void:
 	hit_count = 0
 	explosion_count = 0
 	shots_fired = 0
+	bolt_count = 0
+	beam_count = 0
+	flame_count = 0
 
 func _alloc_projectile() -> int:
 	var idx := -1
@@ -159,7 +219,7 @@ func fire(kind: int, x: float, y: float, target: int, target_gen: int, tx: float
 	return idx
 
 ## 타워 발사 판정
-func tick_towers(dt: float, buildings, enemies, grid) -> void:
+func tick_towers(dt: float, buildings, enemies, grid, tick_index: int) -> void:
 	var b_alive: PackedInt32Array = buildings.alive
 	var b_type: PackedInt32Array = buildings.type_id
 	var is_tower: PackedInt32Array = buildings.t_is_tower
@@ -179,30 +239,205 @@ func tick_towers(dt: float, buildings, enemies, grid) -> void:
 		var cx: float = buildings.center_x(i)
 		var cy: float = buildings.center_y(i)
 		var range_val: float = buildings.t_range[t]
-		var target: int = grid.nearest(cx, cy, range_val, e_x, e_y, e_alive)
+		var mode: int = buildings.t_mode[t]
+		if mode == MODE_AREA:
+			# 반경 안 전부 즉시 피해. 대상이 없으면 짧게 쉰다.
+			var n: int = grid.query_circle(cx, cy, range_val, e_x, e_y, e_alive, _query)
+			if n == 0:
+				buildings.cooldown[i] = 0.1
+				continue
+			buildings.cooldown[i] = 1.0 / buildings.t_rate[t]
+			buildings.last_fire_tick[i] = tick_index
+			_fire_area(i, cx, cy, range_val, n, buildings.t_damage[t], enemies, tick_index)
+			continue
+		var target := -1
+		if buildings.t_prefer_hp[t] != 0:
+			target = _highest_hp_in_range(cx, cy, range_val, enemies, grid)
+		else:
+			target = grid.nearest(cx, cy, range_val, e_x, e_y, e_alive)
 		if target < 0:
 			buildings.cooldown[i] = 0.1
 			continue
 		buildings.cooldown[i] = 1.0 / buildings.t_rate[t]
-		var kind: int = buildings.t_proj_kind[t]
-		var target_gen: int = enemies.generation[target]
-		var tx := e_x[target]
-		var ty := e_y[target]
-		if kind == KIND_SHELL:
-			# 리드 샷: 적 이동을 조금 예측한 지면 지점
-			var dist := sqrt((tx - cx) * (tx - cx) + (ty - cy) * (ty - cy))
-			var travel: float = dist / buildings.t_proj_speed[t]
-			tx += (e_x[target] - enemies.prev_x[target]) * travel * 30.0 * 0.5
-			ty += (e_y[target] - enemies.prev_y[target]) * travel * 30.0 * 0.5
-			target = -1
-		var splash: float = buildings.t_splash[t]
-		var slow_dur := 0.0
-		if kind == KIND_FROST:
-			splash = buildings.t_slow_radius[t]
-			slow_dur = buildings.t_slow_dur[t]
-		fire(kind, cx, cy, target, target_gen, tx, ty,
-			buildings.t_damage[t], buildings.t_proj_speed[t], splash,
-			buildings.t_slow[t], slow_dur)
+		buildings.last_fire_tick[i] = tick_index
+		shots_fired += 1
+		match mode:
+			MODE_CHAIN:
+				_fire_chain(cx, cy, target, buildings.t_chain[t], buildings.t_chain_radius[t],
+					buildings.t_damage[t], enemies, grid, tick_index)
+			MODE_BEAM:
+				_fire_beam(cx, cy, target, range_val, buildings.t_beam_width[t],
+					buildings.t_damage[t], enemies, grid, tick_index)
+			_:
+				shots_fired -= 1   # fire()가 다시 센다
+				_fire_projectile(i, t, cx, cy, target, buildings, enemies)
+
+func _fire_projectile(i: int, t: int, cx: float, cy: float, target: int, buildings, enemies) -> void:
+	var e_x: PackedFloat32Array = enemies.pos_x
+	var e_y: PackedFloat32Array = enemies.pos_y
+	var kind: int = buildings.t_proj_kind[t]
+	var target_gen: int = enemies.generation[target]
+	var tx := e_x[target]
+	var ty := e_y[target]
+	if kind == KIND_SHELL:
+		# 리드 샷: 적 이동을 조금 예측한 지면 지점
+		var dist := sqrt((tx - cx) * (tx - cx) + (ty - cy) * (ty - cy))
+		var travel: float = dist / buildings.t_proj_speed[t]
+		tx += (e_x[target] - enemies.prev_x[target]) * travel * 30.0 * 0.5
+		ty += (e_y[target] - enemies.prev_y[target]) * travel * 30.0 * 0.5
+		target = -1
+	var splash: float = buildings.t_splash[t]
+	var slow_dur := 0.0
+	if kind == KIND_FROST:
+		splash = buildings.t_slow_radius[t]
+		slow_dur = buildings.t_slow_dur[t]
+	fire(kind, cx, cy, target, target_gen, tx, ty,
+		buildings.t_damage[t], buildings.t_proj_speed[t], splash,
+		buildings.t_slow[t], slow_dur)
+
+## 사거리 안에서 HP가 가장 높은 적 (저격 타워). 없으면 -1.
+func _highest_hp_in_range(cx: float, cy: float, radius: float, enemies, grid) -> int:
+	var n: int = grid.query_circle(cx, cy, radius, enemies.pos_x, enemies.pos_y, enemies.alive, _query)
+	var best := -1
+	var best_hp := -1.0
+	var hp: PackedFloat32Array = enemies.hp
+	for k in range(n):
+		var e := _query[k]
+		if hp[e] > best_hp:
+			best_hp = hp[e]
+			best = e
+	return best
+
+## 연쇄 번개: 첫 대상에서 chain_radius 안의 아직 안 맞은 적으로 최대 chain_count번 튄다.
+func _fire_chain(cx: float, cy: float, first: int, chain_count: int, chain_radius: float,
+		damage: float, enemies, grid, tick_index: int) -> void:
+	var e_x: PackedFloat32Array = enemies.pos_x
+	var e_y: PackedFloat32Array = enemies.pos_y
+	var e_alive: PackedInt32Array = enemies.alive
+	var visited := 0
+	var cur := first
+	var px := cx
+	var py := cy
+	var hops := maxi(chain_count, 1)
+	while cur >= 0 and visited < hops:
+		var hx := e_x[cur]
+		var hy := e_y[cur]
+		_push_bolt(px, py, hx, hy)
+		_push_hit(hx, hy, KIND_BULLET)
+		if visited < _chain_visited.size():
+			_chain_visited[visited] = cur
+		visited += 1
+		_apply_damage(cur, damage, enemies, tick_index)
+		px = hx
+		py = hy
+		# 다음 대상: 반경 안에서 가장 가까운 미방문 적 (죽은 적은 alive=0이라 자동 제외)
+		var n: int = grid.query_circle(px, py, chain_radius, e_x, e_y, e_alive, _query)
+		var best := -1
+		var best_d := chain_radius * chain_radius + 1.0
+		for k in range(n):
+			var e := _query[k]
+			var seen := false
+			for v in range(mini(visited, _chain_visited.size())):
+				if _chain_visited[v] == e:
+					seen = true
+					break
+			if seen:
+				continue
+			var dx := e_x[e] - px
+			var dy := e_y[e] - py
+			var d := dx * dx + dy * dy
+			if d < best_d:
+				best_d = d
+				best = e
+		cur = best
+
+## 저격 빔: 타워에서 대상을 지나 사거리 끝까지 직선. 반폭 안의 적을 전부 관통한다.
+func _fire_beam(cx: float, cy: float, target: int, range_val: float, half_width: float,
+		damage: float, enemies, grid, tick_index: int) -> void:
+	var e_x: PackedFloat32Array = enemies.pos_x
+	var e_y: PackedFloat32Array = enemies.pos_y
+	var dx := e_x[target] - cx
+	var dy := e_y[target] - cy
+	var len := sqrt(dx * dx + dy * dy)
+	if len < 0.001:
+		dx = 1.0
+		dy = 0.0
+		len = 1.0
+	var ux := dx / len
+	var uy := dy / len
+	var ex := cx + ux * range_val
+	var ey := cy + uy * range_val
+	# 선분 중점 원으로 후보를 모은 뒤 선분 거리로 거른다
+	var mx := (cx + ex) * 0.5
+	var my := (cy + ey) * 0.5
+	var n: int = grid.query_circle(mx, my, range_val * 0.5 + half_width, e_x, e_y, enemies.alive, _query)
+	var kills := 0
+	var w2 := half_width * half_width
+	for k in range(n):
+		var e := _query[k]
+		var rx := e_x[e] - cx
+		var ry := e_y[e] - cy
+		var along := rx * ux + ry * uy
+		if along < 0.0 or along > range_val:
+			continue
+		var perp_x := rx - ux * along
+		var perp_y := ry - uy * along
+		if perp_x * perp_x + perp_y * perp_y > w2:
+			continue
+		_push_hit(e_x[e], e_y[e], KIND_BULLET)
+		if _apply_damage(e, damage, enemies, tick_index):
+			kills += 1
+	if beam_count < MAX_BEAMS:
+		beam_x0[beam_count] = cx
+		beam_y0[beam_count] = cy
+		beam_x1[beam_count] = ex
+		beam_y1[beam_count] = ey
+		beam_kills[beam_count] = kills
+	beam_count += 1
+
+## 화염: 반경 안 전부 피해. 표현용으로 가장 가까운 적 방향을 남긴다.
+func _fire_area(i: int, cx: float, cy: float, radius: float, n: int, damage: float, enemies, tick_index: int) -> void:
+	var e_x: PackedFloat32Array = enemies.pos_x
+	var e_y: PackedFloat32Array = enemies.pos_y
+	var near := -1
+	var near_d := 1.0e9
+	for k in range(n):
+		var e := _query[k]
+		var dx := e_x[e] - cx
+		var dy := e_y[e] - cy
+		var d := dx * dx + dy * dy
+		if d < near_d:
+			near_d = d
+			near = e
+	var tx := cx
+	var ty := cy
+	if near >= 0:
+		tx = e_x[near]
+		ty = e_y[near]
+	for k in range(n):
+		_apply_damage(_query[k], damage, enemies, tick_index)
+	if flame_count < MAX_FLAMES:
+		flame_x[flame_count] = cx
+		flame_y[flame_count] = cy
+		flame_tx[flame_count] = tx
+		flame_ty[flame_count] = ty
+		flame_radius[flame_count] = radius
+	flame_count += 1
+
+func _push_bolt(x0: float, y0: float, x1: float, y1: float) -> void:
+	if bolt_count < MAX_BOLTS:
+		bolt_x0[bolt_count] = x0
+		bolt_y0[bolt_count] = y0
+		bolt_x1[bolt_count] = x1
+		bolt_y1[bolt_count] = y1
+	bolt_count += 1
+
+func _push_hit(x: float, y: float, kind: int) -> void:
+	if hit_count < SimConfig.MAX_HIT_EVENTS:
+		hit_x[hit_count] = x
+		hit_y[hit_count] = y
+		hit_kind[hit_count] = kind
+	hit_count += 1
 
 ## 발사체 진행과 명중
 func tick_projectiles(dt: float, enemies, grid, tick_index: int) -> void:
@@ -249,11 +484,7 @@ func tick_projectiles(dt: float, enemies, grid, tick_index: int) -> void:
 
 func _on_hit(i: int, x: float, y: float, target: int, enemies, grid, tick_index: int) -> void:
 	var kind := p_kind[i]
-	if hit_count < SimConfig.MAX_HIT_EVENTS:
-		hit_x[hit_count] = x
-		hit_y[hit_count] = y
-		hit_kind[hit_count] = kind
-	hit_count += 1
+	_push_hit(x, y, kind)
 	match kind:
 		KIND_BULLET:
 			if target >= 0:

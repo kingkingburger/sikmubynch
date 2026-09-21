@@ -355,6 +355,55 @@ def sfx_mineral() -> np.ndarray:
 
 # ─── BGM ────────────────────────────────────────────────────────
 
+
+def sfx_tesla() -> np.ndarray:
+    """전격 — 짧은 지직 방전. 고주파 노이즈 + 빠른 진동."""
+    dur = 0.18
+    n = int(dur * SAMPLE_RATE)
+    t = np.linspace(0, dur, n)
+    rng = np.random.default_rng(7)
+    crackle = rng.standard_normal(n) * 0.6
+    crackle = bandpass_simple(crackle, 1500, 9000)
+    gate = (rng.random(n) > 0.35).astype(float)
+    crackle *= gate * np.exp(-t * 18)
+    buzz = np.sign(np.sin(2 * np.pi * 110 * t)) * 0.25 * np.exp(-t * 20)
+    zap = np.sin(2 * np.pi * (4000 - 3000 * t / dur) * t) * 0.3 * np.exp(-t * 25)
+    out = crackle + buzz + zap
+    return out * envelope(n, 0.002, 0.02, 0.5, 0.08) * 0.7
+
+
+def sfx_sniper() -> np.ndarray:
+    """저격 — 날카로운 파열음 + 짧은 저음 꼬리."""
+    dur = 0.45
+    n = int(dur * SAMPLE_RATE)
+    t = np.linspace(0, dur, n)
+    rng = np.random.default_rng(11)
+    crack = rng.standard_normal(n) * 0.9
+    crack = bandpass_simple(crack, 2500, 9000)
+    crack *= np.exp(-t * 60)
+    body_freq = 60 + 400 * np.exp(-t * 40)
+    phase = np.cumsum(body_freq / SAMPLE_RATE) * 2 * np.pi
+    body = np.sin(phase) * 0.7 * np.exp(-t * 12)
+    tail = rng.standard_normal(n) * 0.25
+    tail = lowpass(tail, 900)
+    tail *= np.exp(-t * 7)
+    out = crack + body + tail
+    return out * envelope(n, 0.001, 0.03, 0.4, 0.2) * 0.85
+
+
+def sfx_flame() -> np.ndarray:
+    """화염 — 낮게 깔리는 분사음. 짧은 루프용."""
+    dur = 0.3
+    n = int(dur * SAMPLE_RATE)
+    t = np.linspace(0, dur, n)
+    rng = np.random.default_rng(3)
+    roar = rng.standard_normal(n) * 0.5
+    roar = bandpass_simple(roar, 120, 1800)
+    flutter = 1.0 + 0.25 * np.sin(2 * np.pi * 27 * t)
+    out = roar * flutter
+    return out * envelope(n, 0.03, 0.05, 0.8, 0.1) * 0.6
+
+
 def bgm_title() -> np.ndarray:
     """타이틀 BGM — 다크 판타지 앰비언트 드론 (30초 루프)."""
     dur = 30.0
@@ -501,6 +550,9 @@ def bgm_battle() -> np.ndarray:
 # ─── Main ───────────────────────────────────────────────────────
 
 def main() -> None:
+    """인자로 이름을 주면 그 SFX만 다시 만든다: uv run create_sounds.py tesla sniper"""
+    import sys
+    only = set(sys.argv[1:])
     print("=== SIKMUBYNCH 프로시저럴 사운드 생성 ===\n")
 
     print("[SFX]")
@@ -516,10 +568,17 @@ def main() -> None:
         "ui_click": sfx_ui_click,
         "explosion": sfx_explosion,
         "mineral": sfx_mineral,
+        "tesla": sfx_tesla,
+        "sniper": sfx_sniper,
+        "flame": sfx_flame,
     }
     for name, gen_fn in sfx_map.items():
+        if only and name not in only:
+            continue
         data = gen_fn()
         save_wav(OUT_SFX / f"{name}.wav", data)
+    if only:
+        return
 
     print("\n[BGM]")
     save_wav(OUT_BGM / "title.wav", bgm_title())

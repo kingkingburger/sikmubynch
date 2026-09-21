@@ -19,6 +19,7 @@ const HQ_CENTER := Vector2(63.5, 63.5)
 const FLOW_RECALC_DELAY_TICKS := 8  # 건설 후 Flow Field 재계산까지 대기 틱 (약 0.27초)
 
 const START_MINERALS := 150
+const BASE_INCOME_PER_SEC := 2.0   # 처치 외 기본 수입. 손이 멈추지 않게 하는 최소치
 const DEMOLISH_REFUND := 0.5
 
 ## 렌더러·게임 필이 소비하는 틱 이벤트 상한. 넘치면 개수만 센다.

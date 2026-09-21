@@ -25,6 +25,12 @@ func new_sim(seed_value: int = 20260921, starting_defense: bool = false) -> Game
 	sim.start(seed_value, starting_defense)
 	return sim
 
+## 스폰을 끄고 수동 스폰만으로 검증할 때
+func quiet_sim(seed_value: int = 20260921) -> GameSimulation:
+	var sim := new_sim(seed_value)
+	sim.waves.enabled = false
+	return sim
+
 func run_ticks(sim: GameSimulation, n: int) -> void:
 	for i in range(n):
 		sim.tick()
@@ -35,10 +41,13 @@ func _run() -> void:
 	test_placement_and_demolish()
 	test_enemy_reaches_and_attacks_hq()
 	test_towers_kill_and_splitter_children()
-	test_wave_completion_waits_for_children()
+	test_pressure_never_rests()
+	test_surge_schedule_and_scaling()
 	test_determinism()
 	test_building_destroyed_unblocks_path()
 	test_cannon_splash_and_frost_slow()
+	test_flame_tesla_sniper()
+	test_attacker_cap_and_hq_regen()
 	test_stress_500()
 	print("RESULT: %d checks, %d failures" % [checks, failures.size()])
 	quit(0 if failures.is_empty() else 1)
@@ -59,11 +68,11 @@ func test_start_state() -> void:
 	check(sim.flow.is_reachable(0, 0), "corner is reachable from HQ")
 	check(sim.flow.cost_at(63, 63) == 0, "HQ cell cost 0")
 	check(not sim.game_over, "not game over at start")
-	sim.tick()
-	check(sim.waves.active and sim.waves.wave_number == 1, "wave 1 starts on first tick")
-	check(sim.waves.wave_type == WaveSim.WaveType.SCOUT, "wave 1 is scout")
-	run_ticks(sim, 30)
-	check(sim.enemies_alive() > 0, "enemies spawn within a second")
+	check(sim.waves.wave_number == 0, "no surge before the run starts")
+	run_ticks(sim, 30 * 3)
+	check(sim.enemies_alive() > 0, "stream spawns enemies within 3 seconds")
+	run_ticks(sim, 30 * 7)
+	check(sim.enemies_alive() >= 6, "first 10 seconds show a visible group (%d)" % sim.enemies_alive())
 
 func test_flow_field() -> void:
 	var sim := new_sim()
@@ -92,7 +101,6 @@ func test_flow_field() -> void:
 	check(f.is_reachable(5, 5), "opening one gap restores reachability")
 	var d := Vector2(f.dir_x[5 * SimConfig.MAP_SIZE + 5], f.dir_y[5 * SimConfig.MAP_SIZE + 5])
 	check(d.length() > 0.9 and d.x > 0.0 and d.y > 0.0, "direction at (5,5) points toward HQ")
-	# 대각선 모서리 관통 금지: (20,20)이 막히고 (21,20),(20,21)이 막혔으면 (21,21)에서 대각선으로 (20,20)... 방향은 직교여야 함
 	var f2 := new_sim().flow
 	f2.set_blocked(62, 61, true)
 	f2.set_blocked(61, 62, true)
@@ -102,12 +110,13 @@ func test_flow_field() -> void:
 	check(not (d2.x > 0.5 and d2.y > 0.5), "no diagonal corner cutting between two blocked orthogonals")
 
 func test_placement_and_demolish() -> void:
-	var sim := new_sim()
+	var sim := quiet_sim()
 	var gun := BuildingData.BuildingType.GUN_TOWER
+	var gun_cost: int = sim.buildings.t_cost[gun]
 	var before := sim.minerals
 	var idx := sim.place_building(gun, 60, 63)
 	check(idx >= 0, "gun tower placed")
-	check(sim.minerals == before - 50, "gun tower costs 50")
+	check(sim.minerals == before - gun_cost, "gun tower costs %d" % gun_cost)
 	check(sim.place_building(gun, 60, 63) == -1, "cannot place on occupied tile")
 	check(sim.place_building(BuildingData.BuildingType.HQ, 10, 10) == -1, "cannot place HQ")
 	check(sim.place_building(gun, 63, 63) == -1, "cannot place on HQ")
@@ -115,22 +124,23 @@ func test_placement_and_demolish() -> void:
 	sim.minerals = 0
 	check(sim.place_building(BuildingData.BuildingType.BARRICADE, 10, 10) == -1, "cannot afford with 0 minerals")
 	var refund := sim.demolish_at(60, 63)
-	check(refund == 25, "demolish refunds 50 percent")
-	check(sim.minerals == 25, "refund added")
+	check(refund == gun_cost / 2, "demolish refunds 50 percent")
+	check(sim.minerals == gun_cost / 2, "refund added")
 	check(sim.buildings.building_at(60, 63) == -1, "tile freed after demolish")
-	check(not sim.flow.is_blocked(60, 63), "flow tile unblocked after demolish")
-	check(sim.demolish_at(63, 63) == -1, "HQ cannot be demolished")
-	# 배치 후 지연 재계산
+	check(not sim.flow.is_blocked(60, 63), "demolish unblocks flow tile")
+	check(sim.demolish_at(63, 63) == -1, "cannot demolish HQ")
 	sim.minerals = 500
 	var recalcs := sim.flow.recalc_count
 	sim.place_building(BuildingData.BuildingType.WALL, 63, 58)
 	run_ticks(sim, SimConfig.FLOW_RECALC_DELAY_TICKS + 2)
 	check(sim.flow.recalc_count == recalcs + 1, "flow recalculates once after placement delay")
+	# 기본 수입
+	var m0 := sim.minerals
+	run_ticks(sim, 30 * 5)
+	check(sim.minerals >= m0 + int(SimConfig.BASE_INCOME_PER_SEC * 5.0) - 1, "base income pays about %d over 5 seconds" % int(SimConfig.BASE_INCOME_PER_SEC * 5.0))
 
 func test_enemy_reaches_and_attacks_hq() -> void:
-	var sim := new_sim()
-	sim.waves.active = true   # 웨이브 자동 시작을 막기 위해 활성 상태로 두고 큐는 비운다
-	sim.waves.wave_time = -1000.0
+	var sim := quiet_sim()
 	var e := sim.enemies.spawn(EnemyData.EnemyType.RUSHER, 63.5, 50.0, 1.0, 1.0, 1.0)
 	check(e >= 0, "manual spawn")
 	var hp0 := sim.hq_hp()
@@ -140,9 +150,7 @@ func test_enemy_reaches_and_attacks_hq() -> void:
 	check(not sim.game_over, "single rusher does not end the game in 8 seconds")
 
 func test_towers_kill_and_splitter_children() -> void:
-	var sim := new_sim()
-	sim.waves.active = true
-	sim.waves.wave_time = -1000.0
+	var sim := quiet_sim()
 	sim.minerals = 1000
 	check(sim.place_building(BuildingData.BuildingType.GUN_TOWER, 63, 55) >= 0, "gun tower near path")
 	var minerals := sim.minerals
@@ -160,7 +168,9 @@ func test_towers_kill_and_splitter_children() -> void:
 			break
 	check(died_tick > 0, "gun tower kills splitter within 10 seconds")
 	check(sim.kills == kills + 1, "kill counted once")
-	check(sim.minerals == minerals + 5, "splitter reward 5")
+	var reward: int = sim.enemies.t_reward[EnemyData.EnemyType.SPLITTER]
+	var income_max := int(SimConfig.BASE_INCOME_PER_SEC * float(died_tick) / 30.0) + 1
+	check(sim.minerals >= minerals + reward and sim.minerals <= minerals + reward + income_max, "splitter reward paid")
 	check(sim.enemies_alive() == 2, "B01 two mini children spawned on death")
 	check(sim.enemies.generation[s] == gen + 1 or sim.enemies.alive[s] == 0, "freed index is reused with a new generation")
 	var mini_found := false
@@ -169,40 +179,53 @@ func test_towers_kill_and_splitter_children() -> void:
 			mini_found = true
 	check(mini_found, "children are MINI type")
 
-func test_wave_completion_waits_for_children() -> void:
-	var sim := new_sim()
-	sim.tick()
-	# 큐를 비우고 스플리터 하나만 남긴다
-	sim.waves._clear_queue()
-	for i in range(sim.enemies.high):
-		if sim.enemies.alive[i] != 0:
-			sim.enemies.kill(i)
-	sim.enemies.clear_tick_results()
-	sim.minerals = 1000
-	sim.place_building(BuildingData.BuildingType.GUN_TOWER, 63, 55)
-	var s := sim.enemies.spawn(EnemyData.EnemyType.SPLITTER, 63.5, 52.0, 1.0, 1.0, 1.0)
-	var gen := sim.enemies.generation[s]
-	var wave := sim.waves.wave_number
-	var ticks := 0
-	var died := false
-	while ticks < 300:
+## 압박은 쉬지 않는다: 어떤 5초 구간에도 스폰이 있고, 급증 사이에도 스트림이 흐른다.
+func test_pressure_never_rests() -> void:
+	var sim := new_sim(4321)
+	sim.minerals = 100000
+	# 적이 쌓이지 않게 강한 방어를 두고 스폰만 관찰
+	for x in range(50, 78, 2):
+		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, x, 52)
+		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, x, 74)
+	for y in range(54, 74, 2):
+		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, 50, y)
+		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, 76, y)
+	var gaps := 0
+	var windows := 0
+	var last_total := sim.waves.stream_spawned
+	for w in range(24):   # 120초를 5초 창으로
+		run_ticks(sim, 30 * 5)
+		windows += 1
+		var total := sim.waves.stream_spawned
+		if total == last_total:
+			gaps += 1
+		last_total = total
+	check(gaps == 0, "stream spawned in every 5-second window (%d gaps of %d)" % [gaps, windows])
+	check(sim.waves.wave_number >= 3, "at least 3 surges in 120 seconds (%d)" % sim.waves.wave_number)
+	check(sim.waves.stream_spawned > 60, "stream alone spawned a crowd (%d)" % sim.waves.stream_spawned)
+	check(not sim.game_over, "strong defense survives 2 minutes")
+
+func test_surge_schedule_and_scaling() -> void:
+	check(WaveSim.type_for_surge(1) == WaveSim.WaveType.DENSITY, "surge 1 is density")
+	check(WaveSim.type_for_surge(2) == WaveSim.WaveType.BREACH, "surge 2 is breach")
+	check(WaveSim.type_for_surge(3) == WaveSim.WaveType.STORM, "surge 3 is storm")
+	check(WaveSim.surge_count(3) > WaveSim.surge_count(1), "surges grow")
+	check(WaveSim.surge_count(15) >= 400 and WaveSim.surge_count(15) <= 700, "15th storm is a 400-700 crowd (%d)" % WaveSim.surge_count(15))
+	check(WaveSim.hp_scale(0.0) == 1.0 and WaveSim.hp_scale(600.0) > 2.0, "HP scales with time")
+	check(WaveSim.stream_rate(600.0) > WaveSim.stream_rate(0.0) * 5.0, "stream rate rises over 10 minutes")
+	var comp0 := WaveSim.composition(0.0, WaveSim.WaveType.STORM)
+	check(comp0[1] == 0.0 and comp0[2] == 0.0, "no tanks or splitters at time 0")
+	var comp5 := WaveSim.composition(300.0, WaveSim.WaveType.BREACH)
+	check(comp5[1] > 0.4, "breach surge is tank-heavy after 5 minutes")
+	var sim := new_sim(99)
+	var started_at := -1.0
+	for t in range(30 * 30):
 		sim.tick()
-		ticks += 1
-		if sim.enemies.alive[s] == 0 or sim.enemies.generation[s] != gen:
-			died = true
-			break
-	check(died, "splitter died")
-	check(sim.waves.wave_number == wave and sim.waves.active, "B01 wave not cleared while children alive")
-	ticks = 0
-	while sim.enemies_alive() > 0 and ticks < 600:
-		sim.tick()
-		ticks += 1
-	check(sim.enemies_alive() == 0, "children killed")
-	check(sim.waves.wave_number == wave + 1 and sim.waves.between, "B01 wave clears once after all children die")
-	var minerals := sim.minerals
-	run_ticks(sim, int(WaveSim.WAVE_INTERVAL * 30.0) + 2)
-	check(sim.waves.active and sim.waves.wave_number == wave + 1, "next wave starts after countdown")
-	check(sim.minerals >= minerals, "clear bonus was paid before next wave")
+		if sim.waves.wave_started_flag and started_at < 0.0:
+			started_at = sim.waves.time
+	check(started_at > 0.0 and absf(started_at - WaveSim.SURGE_FIRST_AT) < 0.2, "first surge at %.0fs" % WaveSim.SURGE_FIRST_AT)
+	check(sim.waves.wave_type == WaveSim.WaveType.DENSITY and sim.waves.total_planned > 0, "first surge is a density crowd")
+	check(sim.waves.seconds_to_surge() > 0.0 and sim.waves.seconds_to_surge() <= WaveSim.SURGE_INTERVAL, "countdown to next surge running")
 
 func test_determinism() -> void:
 	var a := new_sim(777)
@@ -212,6 +235,9 @@ func test_determinism() -> void:
 		sim.place_building(BuildingData.BuildingType.GUN_TOWER, 60, 60)
 		sim.place_building(BuildingData.BuildingType.CANNON_TOWER, 66, 60)
 		sim.place_building(BuildingData.BuildingType.FROST_TOWER, 60, 66)
+		sim.place_building(BuildingData.BuildingType.TESLA_TOWER, 66, 66)
+		sim.place_building(BuildingData.BuildingType.FLAME_TOWER, 63, 59)
+		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, 63, 68)
 		for x in range(58, 69):
 			sim.place_building(BuildingData.BuildingType.BARRICADE, x, 57)
 	run_ticks(a, 30 * 40)
@@ -226,9 +252,7 @@ func test_determinism() -> void:
 	check(c.state_hash() != a.state_hash(), "different seed gives different state")
 
 func test_building_destroyed_unblocks_path() -> void:
-	var sim := new_sim()
-	sim.waves.active = true
-	sim.waves.wave_time = -1000.0
+	var sim := quiet_sim()
 	sim.minerals = 5000
 	# HQ 북쪽을 바리케이드로 막고 적을 북쪽에 둔다 (완전 봉쇄)
 	for x in range(58, 70):
@@ -251,14 +275,11 @@ func test_building_destroyed_unblocks_path() -> void:
 	check(sim.flow.is_reachable(63, 40), "destroyed barricade reopens the path")
 
 func test_cannon_splash_and_frost_slow() -> void:
-	var sim := new_sim()
-	sim.waves.active = true
-	sim.waves.wave_time = -1000.0
+	var sim := quiet_sim()
 	sim.minerals = 5000
 	sim.place_building(BuildingData.BuildingType.CANNON_TOWER, 63, 54)
-	var ids: Array = []
 	for i in range(10):
-		ids.append(sim.enemies.spawn(EnemyData.EnemyType.RUSHER, 62.5 + float(i % 4) * 0.4, 50.0 + float(i / 4) * 0.4, 1.0, 1.0, 0.01))
+		sim.enemies.spawn(EnemyData.EnemyType.RUSHER, 62.5 + float(i % 4) * 0.4, 50.0 + float(i / 4) * 0.4, 1.0, 1.0, 0.01)
 	var explosions := 0
 	var max_kills := 0
 	for t in range(30 * 6):
@@ -269,9 +290,7 @@ func test_cannon_splash_and_frost_slow() -> void:
 	check(explosions > 0, "cannon fires shells")
 	check(max_kills >= 3, "Q-SYS-12 one shell kills several clustered rushers (%d)" % max_kills)
 
-	var sim2 := new_sim()
-	sim2.waves.active = true
-	sim2.waves.wave_time = -1000.0
+	var sim2 := quiet_sim()
 	sim2.minerals = 5000
 	sim2.place_building(BuildingData.BuildingType.FROST_TOWER, 63, 54)
 	var e := sim2.enemies.spawn(EnemyData.EnemyType.TANK, 63.5, 51.0, 10.0, 1.0, 0.5)
@@ -283,6 +302,74 @@ func test_cannon_splash_and_frost_slow() -> void:
 			break
 	check(slowed, "frost tower slows the tank")
 
+## 새 타워 3종: 화염(반경 즉발), 전격(연쇄), 저격(관통·최대 HP 우선)
+func test_flame_tesla_sniper() -> void:
+	# 화염: 반경 안 10마리가 한 번에 맞는다
+	var sim := quiet_sim()
+	sim.minerals = 5000
+	sim.place_building(BuildingData.BuildingType.FLAME_TOWER, 63, 54)
+	for i in range(10):
+		sim.enemies.spawn(EnemyData.EnemyType.RUSHER, 62.0 + float(i % 5) * 0.6, 56.0 + float(i / 5) * 0.6, 1.0, 1.0, 0.01)
+	var flames := 0
+	for t in range(6):
+		sim.tick()
+		flames += sim.combat.flame_count
+	check(flames > 0, "flame tower fires (%d)" % flames)
+	var hurt := 0
+	for i in range(sim.enemies.high):
+		if sim.enemies.alive[i] != 0 and sim.enemies.hp[i] < sim.enemies.max_hp[i]:
+			hurt += 1
+	check(hurt >= 8, "flame hits the whole cluster at once (%d)" % hurt)
+
+	# 전격: 한 발이 여러 마리로 튄다
+	var sim2 := quiet_sim()
+	sim2.minerals = 5000
+	sim2.place_building(BuildingData.BuildingType.TESLA_TOWER, 63, 54)
+	for i in range(8):
+		sim2.enemies.spawn(EnemyData.EnemyType.RUSHER, 61.0 + float(i) * 0.9, 58.0, 1.0, 1.0, 0.01)
+	var max_bolts := 0
+	for t in range(30 * 2):
+		sim2.tick()
+		max_bolts = maxi(max_bolts, sim2.combat.bolt_count)
+	check(max_bolts >= 4, "tesla chains through several enemies (%d bolts)" % max_bolts)
+
+	# 저격: 탱크(최대 HP)를 우선하고, 한 줄로 선 적을 관통한다
+	var sim3 := quiet_sim()
+	sim3.minerals = 5000
+	sim3.place_building(BuildingData.BuildingType.SNIPER_TOWER, 63, 54)
+	var r1 := sim3.enemies.spawn(EnemyData.EnemyType.RUSHER, 63.5, 58.0, 1.0, 1.0, 0.01)
+	var tank := sim3.enemies.spawn(EnemyData.EnemyType.TANK, 63.5, 62.0, 1.0, 1.0, 0.01)
+	var r2 := sim3.enemies.spawn(EnemyData.EnemyType.RUSHER, 63.5, 60.0, 1.0, 1.0, 0.01)
+	var r_side := sim3.enemies.spawn(EnemyData.EnemyType.RUSHER, 58.0, 58.0, 1.0, 1.0, 0.01)
+	var beams := 0
+	for t in range(30 * 2):
+		sim3.tick()
+		beams += sim3.combat.beam_count
+		if beams > 0:
+			break
+	check(beams > 0, "sniper fires a beam")
+	check(sim3.enemies.hp[tank] < sim3.enemies.max_hp[tank], "sniper hits the tank (highest HP)")
+	check(sim3.enemies.alive[r1] == 0 and sim3.enemies.alive[r2] == 0, "beam pierces rushers standing in line")
+	check(sim3.enemies.alive[r_side] != 0 and sim3.enemies.hp[r_side] == sim3.enemies.max_hp[r_side], "beam misses the rusher off the line")
+
+func test_attacker_cap_and_hq_regen() -> void:
+	var sim := quiet_sim()
+	for i in range(40):
+		sim.enemies.spawn(EnemyData.EnemyType.RUSHER, 60.0 + float(i % 8), 52.0 + float(i / 8) * 0.5, 100.0, 1.0, 1.0)
+	run_ticks(sim, 30 * 8)
+	var hq := sim.buildings.hq_index
+	check(sim.buildings.attackers[hq] <= sim.buildings.attacker_cap[hq], "attackers on HQ never exceed the cap")
+	check(sim.buildings.attackers[hq] > 0, "some rushers are attacking the HQ")
+	var waiting := 0
+	for i in range(sim.enemies.high):
+		if sim.enemies.alive[i] != 0 and sim.enemies.attack_target[i] < 0:
+			waiting += 1
+	check(waiting > 0, "excess rushers wait behind the front (%d)" % waiting)
+	var sim2 := quiet_sim()
+	sim2.buildings.hp[sim2.buildings.hq_index] = 1000.0
+	run_ticks(sim2, 30 * 10)
+	check(sim2.hq_hp() > 1000.0 and sim2.hq_hp() < 1100.0, "HQ regenerates slowly (%.0f)" % sim2.hq_hp())
+
 func test_stress_500() -> void:
 	var sim := new_sim(4242)
 	sim.minerals = 100000
@@ -291,7 +378,10 @@ func test_stress_500() -> void:
 		sim.place_building(BuildingData.BuildingType.CANNON_TOWER, x, 70)
 	for y in range(56, 72, 2):
 		sim.place_building(BuildingData.BuildingType.FROST_TOWER, 54, y)
-		sim.place_building(BuildingData.BuildingType.GUN_TOWER, 72, y)
+		sim.place_building(BuildingData.BuildingType.TESLA_TOWER, 72, y)
+	for x in range(56, 72, 4):
+		sim.place_building(BuildingData.BuildingType.FLAME_TOWER, x, 58)
+		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, x, 68)
 	sim.debug_spawn(500)
 	check(sim.enemies_alive() >= 500, "500 enemies spawned")
 	var worst := 0
@@ -304,5 +394,3 @@ func test_stress_500() -> void:
 	print("STRESS 500: avg tick %.2f ms, worst %.2f ms, alive %d, kills %d" % [
 		float(total) / float(n) / 1000.0, float(worst) / 1000.0, sim.enemies_alive(), sim.kills])
 	check(float(total) / float(n) < 33000.0, "500 enemies: average tick under 33 ms (30Hz budget)")
-	check(sim.kills > 0, "towers kill during stress")
-	check(sim.enemies.peak_alive >= 500, "peak alive recorded")

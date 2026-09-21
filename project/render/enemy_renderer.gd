@@ -10,6 +10,7 @@ const SimConfig := preload("res://sim/sim_config.gd")
 
 const STRIDE := 12   # 2D transform 8 + color 4
 const FLASH_TICKS := 3.0
+const PUNCH_SCALE := 0.3   # 피격 순간 확대 비율
 
 var _mmis: Array = []          # MultiMeshInstance2D per type
 var _buffers: Array = []       # PackedFloat32Array per type
@@ -103,16 +104,19 @@ func update_from_sim(enemies, alpha: float, tick_index: int) -> void:
 		var sy := (x + y) * half_h - float(_type_px[t]) * 0.36
 		var buf: PackedFloat32Array = _buffers[t]
 		var o := n * STRIDE
-		buf[o] = 1.0
+		# 피격 플래시(흰색) + 순간 확대(펀치). 저체력은 어둡게.
+		var flash := 1.0 - (ftick - float(last_hit[i])) / FLASH_TICKS
+		var punch := 1.0
+		if flash > 0.0:
+			punch = 1.0 + PUNCH_SCALE * flash
+		buf[o] = punch
 		buf[o + 1] = 0.0
 		buf[o + 2] = 0.0
 		buf[o + 3] = sx
 		buf[o + 4] = 0.0
-		buf[o + 5] = 1.0
+		buf[o + 5] = punch
 		buf[o + 6] = 0.0
-		buf[o + 7] = sy
-		# 색: 피격 플래시(흰색) + 저체력 어둡게
-		var flash := 1.0 - (ftick - float(last_hit[i])) / FLASH_TICKS
+		buf[o + 7] = sy - float(_type_px[t]) * 0.36 * (punch - 1.0)
 		var ratio := hp[i] / max_hp[i]
 		var shade := 0.7 + 0.3 * ratio
 		if flash > 0.0:

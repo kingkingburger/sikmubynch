@@ -12,7 +12,7 @@ static func create() -> Array:
 	rusher.max_hp = 25.0
 	rusher.dps = 5.0
 	rusher.speed = 3.5
-	rusher.mineral_reward = 3
+	rusher.mineral_reward = 2
 	rusher.color = Color(0.85, 0.2, 0.15)
 	rusher.scale_factor = 1.0
 	list.append(rusher)
@@ -23,7 +23,7 @@ static func create() -> Array:
 	tank.max_hp = 140.0
 	tank.dps = 14.0
 	tank.speed = 1.8
-	tank.mineral_reward = 8
+	tank.mineral_reward = 7
 	tank.color = Color(0.5, 0.35, 0.62)
 	tank.scale_factor = 1.5
 	list.append(tank)
@@ -34,7 +34,7 @@ static func create() -> Array:
 	splitter.max_hp = 40.0
 	splitter.dps = 4.0
 	splitter.speed = 3.0
-	splitter.mineral_reward = 5
+	splitter.mineral_reward = 4
 	splitter.color = Color(0.6, 0.85, 0.2)
 	splitter.scale_factor = 1.15
 	splitter.split_count = 2

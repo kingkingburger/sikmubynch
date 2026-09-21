@@ -58,6 +58,7 @@ func _ready() -> void:
 		_enemy_colors.append((ed as EnemyData).color)
 
 	_ground = GroundRenderer.new()
+	_ground.z_index = -5   # 잔해 얼룩(z -1)이 바닥 위에 오도록
 	add_child(_ground)
 	_ground.setup(SimConfig.MAP_SIZE, SimConfig.HQ_CENTER, run_seed)
 
@@ -147,13 +148,13 @@ func _process(delta: float) -> void:
 		_hud.tick(delta, sim, _debug_visible, _debug_text() if _debug_visible else "")
 
 func _debug_text() -> String:
-	return "FPS %d\n적 %d (최대 %d)\n발사체 %d  파티클 %d\n건물 %d\n틱 %.2f ms  렌더 %.2f ms\n스폰 큐 %d  그리드 %d  Flow 재계산 %d\n웨이브 %d 시간 %.1f  속도 %.1fx  seed %d" % [
+	return "FPS %d\n적 %d (최대 %d)\n발사체 %d  파티클 %d\n건물 %d\n틱 %.2f ms  렌더 %.2f ms\n급증 큐 %d  그리드 %d  Flow 재계산 %d\n급증 %d  스트림 %.1f/s  시간 %.0f  속도 %.1fx  seed %d" % [
 		Engine.get_frames_per_second(), sim.enemies_alive(), sim.peak_alive(),
 		sim.combat.p_alive_count, _effect_renderer.particle_count(),
 		sim.buildings.alive_count,
 		float(sim.last_tick_usec) / 1000.0, float(_last_render_usec) / 1000.0,
 		sim.waves.queue_size(), sim.grid.registered, sim.flow.recalc_count,
-		sim.waves.wave_number, sim.waves.wave_time, GameFeel.game_speed, run_seed
+		sim.waves.wave_number, sim.waves.stream_rate(sim.waves.time), sim.waves.time, GameFeel.game_speed, run_seed
 	]
 
 ## 틱 결과를 표현 계층으로 넘긴다. 규모에 비례하되 개별 재생하지 않는다.
@@ -171,8 +172,42 @@ func _consume_tick_events() -> void:
 		_effect_renderer.on_explosions(c.explosion_count, c.explosion_x, c.explosion_y, c.explosion_radius, c.explosion_kills)
 		for i in range(mini(c.explosion_count, SimConfig.MAX_EXPLOSION_EVENTS)):
 			max_explosion_kills = maxi(max_explosion_kills, c.explosion_kills[i])
+	if c.bolt_count > 0:
+		_effect_renderer.on_bolts(c.bolt_count, c.bolt_x0, c.bolt_y0, c.bolt_x1, c.bolt_y1)
+		AudioManager.play_sfx_by_name("tesla", -8.0, 1.0 + randf_range(-0.1, 0.1))
+	if c.beam_count > 0:
+		_effect_renderer.on_beams(c.beam_count, c.beam_x0, c.beam_y0, c.beam_x1, c.beam_y1, c.beam_kills)
+		AudioManager.play_sfx_by_name("sniper", -4.0, 1.0 + randf_range(-0.05, 0.05))
+		GameFeel.shake(1.2)
+	if c.flame_count > 0:
+		_effect_renderer.on_flames(c.flame_count, c.flame_x, c.flame_y, c.flame_tx, c.flame_ty, c.flame_radius)
+		AudioManager.play_sfx_by_name("flame", -12.0)
+	if c.explosion_count > 0:
+		GameFeel.shake(1.5 + 0.4 * float(mini(max_explosion_kills, 10)))
+	# 총구 섬광: 이번 틱 발사한 타워 (상한 안에서)
+	var flashed := 0
+	for idx in range(sim.buildings.high):
+		if flashed >= 48:
+			break
+		if sim.buildings.alive[idx] == 0 or sim.buildings.last_fire_tick[idx] != sim.tick_index - 1:
+			continue
+		var view: BuildingView = _building_views.get(idx)
+		if view == null:
+			continue
+		var bd: BuildingData = view.data
+		var radius := 6.0
+		match bd.building_type:
+			BuildingData.BuildingType.CANNON_TOWER: radius = 12.0
+			BuildingData.BuildingType.SNIPER_TOWER: radius = 9.0
+			BuildingData.BuildingType.TESLA_TOWER: radius = 8.0
+			BuildingData.BuildingType.FLAME_TOWER: radius = 0.0
+		if radius > 0.0:
+			_effect_renderer.on_muzzle(view.position - Vector2(0.0, Iso.height_px(bd.height) + 10.0), bd.color.lightened(0.5), radius)
+			flashed += 1
 	GameFeel.report_kills(c.tick_kills, max_explosion_kills)
 	AudioManager.play_kill_layer(c.tick_kills, max_explosion_kills)
+	if sim.minerals_gained_this_tick > 0:
+		_hud.report_gain(sim.minerals_gained_this_tick)
 
 	for idx in sim.buildings_destroyed:
 		var view: BuildingView = _building_views.get(idx)
@@ -192,8 +227,9 @@ func _consume_tick_events() -> void:
 	if sim.waves.wave_started_flag:
 		_hud.show_wave_banner(sim.waves.wave_number, sim.waves.wave_type, sim.waves.spawn_sides, sim.waves.total_planned)
 		AudioManager.play_sfx_by_name("wave_start")
-	if sim.waves.wave_cleared_flag:
-		AudioManager.play_sfx_by_name("mineral", -2.0)
+		GameFeel.shake(2.5)
+	if sim.waves.stream_shift_flag:
+		_hud.show_stream_shift(sim.waves.stream_sides)
 
 # ---------------------------------------------------------------------------
 # 건물 표현
@@ -309,6 +345,9 @@ func _input(event: InputEvent) -> void:
 			KEY_3: _select_slot(2)
 			KEY_4: _select_slot(3)
 			KEY_5: _select_slot(4)
+			KEY_6: _select_slot(5)
+			KEY_7: _select_slot(6)
+			KEY_8: _select_slot(7)
 			KEY_F:
 				var spd := GameFeel.cycle_speed()
 				_hud.set_speed_label(spd)
@@ -385,9 +424,9 @@ func _on_game_over() -> void:
 	_esc_visible = false
 	AudioManager.stop_bgm()
 	AudioManager.play_sfx_by_name("destroy", 3.0)
-	var secs := int(GameManager.game_time)
+	var secs := int(sim.waves.time)
 	var result_text := Locale.t_fmt("result_format", [
-		sim.waves.wave_number, sim.kills, sim.peak_alive(), secs / 60, secs % 60
+		secs / 60, secs % 60, sim.waves.wave_number, sim.kills, sim.peak_alive()
 	])
 	_hud.set_esc_visible(false)
 	_hud.show_game_over(result_text)
