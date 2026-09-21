@@ -48,6 +48,7 @@ func _run() -> void:
 	test_cannon_splash_and_frost_slow()
 	test_flame_tesla_sniper()
 	test_attacker_cap_and_hq_regen()
+	test_enemies_bite_nearby_towers()
 	test_stress_500()
 	print("RESULT: %d checks, %d failures" % [checks, failures.size()])
 	quit(0 if failures.is_empty() else 1)
@@ -377,6 +378,32 @@ func test_attacker_cap_and_hq_regen() -> void:
 	sim2.buildings.hp[sim2.buildings.hq_index] = 1000.0
 	run_ticks(sim2, 30 * 10)
 	check(sim2.hq_hp() > 1000.0 and sim2.hq_hp() < 1100.0, "HQ regenerates slowly (%.0f)" % sim2.hq_hp())
+
+## 적은 길을 막은 벽만이 아니라 경로 근처의 타워도 문다. 슬롯이 꽉 찬 건물은 지나쳐 본진으로 간다.
+func test_enemies_bite_nearby_towers() -> void:
+	var sim := quiet_sim()
+	sim.minerals = 1000
+	# 북쪽에서 내려오는 길(x=63) 옆 2칸에 타워. 길을 막지 않는다
+	var tower := sim.place_building(BuildingData.BuildingType.GUN_TOWER, 65, 50)
+	check(tower >= 0, "tower placed beside the path")
+	run_ticks(sim, 1)
+	check(sim.buildings.near_building[50 * SimConfig.MAP_SIZE + 63] == tower, "path cell 2 tiles away sees the tower")
+	check(sim.buildings.near_building[50 * SimConfig.MAP_SIZE + 60] == -1, "cell 5 tiles away does not")
+	for i in range(40):
+		sim.enemies.spawn(EnemyData.EnemyType.RUSHER, 62.5 + float(i % 3) * 0.5, 40.0 + float(i / 3) * 0.4, 100.0, 1.0, 1.0)
+	run_ticks(sim, 30 * 8)
+	var tower_hp: float = sim.buildings.hp[tower]
+	check(tower_hp < sim.buildings.max_hp[tower], "rushers bite the tower even though it does not block the path (hp %.0f)" % tower_hp)
+	check(sim.buildings.attackers[tower] <= sim.buildings.attacker_cap[tower], "tower attackers never exceed the cap")
+	var hq := sim.buildings.hq_index
+	check(sim.buildings.attackers[hq] > 0 or sim.hq_hp() < 2500.0, "rushers that found the tower full moved on to the HQ")
+	var on_hq_cells := 0
+	for i in range(sim.enemies.high):
+		if sim.enemies.alive[i] == 0:
+			continue
+		if sim.buildings.building_at(int(sim.enemies.pos_x[i]), int(sim.enemies.pos_y[i])) == hq:
+			on_hq_cells += 1
+	check(on_hq_cells == 0, "attackers stop at the HQ edge instead of standing on it (%d)" % on_hq_cells)
 
 func test_stress_500() -> void:
 	var sim := new_sim(4242)

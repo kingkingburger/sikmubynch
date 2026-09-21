@@ -9,6 +9,7 @@ const MAX := SimConfig.MAX_BUILDINGS
 const SIZE := SimConfig.MAP_SIZE
 const ATTACKERS_PER_TILE := 4
 const HQ_REGEN_PER_SEC := 4.0
+const AGGRO_RADIUS := 2             # 적이 경로를 벗어나 물러 가는 거리 (칸, 체비셰프)
 
 # 타입 테이블 (BuildingData를 펼친 것)
 var type_count: int = 0
@@ -45,6 +46,9 @@ var last_fire_tick: PackedInt32Array  # 총구 섬광용. 렌더러가 읽는다
 var attackers: PackedInt32Array     # 현재 이 건물을 공격 중인 적 수
 var attacker_cap: PackedInt32Array  # 동시 공격 상한 (타일당 ATTACKERS_PER_TILE)
 var grid: PackedInt32Array          # 타일 → 건물 인덱스, 없으면 -1
+var near_building: PackedInt32Array # 타일 → AGGRO_RADIUS 안에서 가장 가까운 건물, 없으면 -1
+var near_dist: PackedInt32Array     # 그 건물까지 거리(칸)
+var near_dirty: bool = false        # 배치·철거 후 rebuild_near 필요
 var free_list: PackedInt32Array
 var high: int = 0
 var alive_count: int = 0
@@ -77,12 +81,19 @@ func _init() -> void:
 	attacker_cap.resize(MAX)
 	grid = PackedInt32Array()
 	grid.resize(SimConfig.CELLS)
+	near_building = PackedInt32Array()
+	near_building.resize(SimConfig.CELLS)
+	near_dist = PackedInt32Array()
+	near_dist.resize(SimConfig.CELLS)
 	free_list = PackedInt32Array()
 	clear_all()
 
 func clear_all() -> void:
 	alive.fill(0)
 	grid.fill(-1)
+	near_building.fill(-1)
+	near_dist.fill(0)
+	near_dirty = false
 	cooldown.fill(0.0)
 	last_hit_tick.fill(-100)
 	last_fire_tick.fill(-100)
@@ -184,6 +195,7 @@ func place(type: int, tx: int, ty: int) -> int:
 		for dx in range(s):
 			grid[(ty + dy) * SIZE + tx + dx] = idx
 	alive_count += 1
+	near_dirty = true
 	return idx
 
 func remove(idx: int) -> void:
@@ -198,8 +210,44 @@ func remove(idx: int) -> void:
 			grid[(ty + dy) * SIZE + tx + dx] = -1
 	free_list.append(idx)
 	alive_count -= 1
+	near_dirty = true
 	if idx == hq_index:
 		hq_index = -1
+
+## 타일마다 AGGRO_RADIUS 안의 가장 가까운 건물을 기록한다. 적이 틱마다 한 번 읽는다.
+## 건물 수 × 발자국 × (2R+1)² 이라 Flow Field BFS보다 훨씬 싸다. 배치·철거 직후 즉시 갱신한다.
+func rebuild_near() -> void:
+	near_dirty = false
+	near_building.fill(-1)
+	near_dist.fill(0)
+	var r := AGGRO_RADIUS
+	for b in range(high):
+		if alive[b] == 0:
+			continue
+		var s := size[b]
+		var x0 := tile_x[b] - r
+		var y0 := tile_y[b] - r
+		var x1 := tile_x[b] + s - 1 + r
+		var y1 := tile_y[b] + s - 1 + r
+		for y in range(maxi(y0, 0), mini(y1, SIZE - 1) + 1):
+			# 발자국까지의 체비셰프 거리
+			var ddy := 0
+			if y < tile_y[b]:
+				ddy = tile_y[b] - y
+			elif y > tile_y[b] + s - 1:
+				ddy = y - (tile_y[b] + s - 1)
+			for x in range(maxi(x0, 0), mini(x1, SIZE - 1) + 1):
+				var ddx := 0
+				if x < tile_x[b]:
+					ddx = tile_x[b] - x
+				elif x > tile_x[b] + s - 1:
+					ddx = x - (tile_x[b] + s - 1)
+				var d := maxi(ddx, ddy)
+				var cell := y * SIZE + x
+				var cur := near_building[cell]
+				if cur < 0 or d < near_dist[cell]:
+					near_building[cell] = b
+					near_dist[cell] = d
 
 ## 피해 적용. 파괴되면 true.
 func damage(idx: int, amount: float, tick: int) -> bool:

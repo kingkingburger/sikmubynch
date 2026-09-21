@@ -100,6 +100,7 @@ func start(seed: int, starting_defense: bool = true) -> void:
 		for entry in STARTING_DEFENSE:
 			_place_free(int(entry[0]), int(entry[1]), int(entry[2]))
 	flow.recalculate()
+	buildings.rebuild_near()
 
 ## 비용 없이 배치 (시작 방어물). Flow Field는 호출자가 재계산한다.
 func _place_free(type: int, tx: int, ty: int) -> int:
@@ -194,7 +195,9 @@ func tick() -> void:
 	# 3. 공간 그리드
 	grid.rebuild(enemies.pos_x, enemies.pos_y, enemies.alive, enemies.high)
 
-	# 4. 적 이동·건물 공격
+	# 4. 적 이동·건물 공격 (근처 건물 표는 배치·철거 직후 바로 갱신한다)
+	if buildings.near_dirty:
+		buildings.rebuild_near()
 	enemies.tick(dt, flow, buildings, tick_index)
 	_resolve_building_damage()
 

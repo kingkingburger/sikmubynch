@@ -1,13 +1,16 @@
 extends RefCounted
 
 ## Enemy Sim — 적 위치·HP·감속을 배열로 관리하고 Flow Field를 따라 이동시킨다.
-## 다음 타일에 건물이 있으면 멈춰서 공격한다. 적끼리는 충돌하지 않는다(밀도는 겹침으로 표현).
+## 근처(AGGRO_RADIUS 칸)에 건물이 있으면 무엇이든 그쪽으로 틀어 문다. 타워도 예외가 아니다.
+## 공격 슬롯이 꽉 찬 건물은 지나친다. 길을 막은 건물 앞에서는 슬롯이 날 때까지 기다린다(밀집).
+## 적끼리는 충돌하지 않는다(밀도는 겹침으로 표현).
 
 const SimConfig := preload("res://sim/sim_config.gd")
 
 const MAX := SimConfig.MAX_ENEMIES
 const SIZE := SimConfig.MAP_SIZE
 const ATTACK_INTERVAL := 1.0
+const ENGAGE_DIST := 0.6   # 건물 발자국 가장자리에서 이 거리 안이면 문다 (칸)
 
 # 타입 테이블
 var type_count: int = 0
@@ -223,6 +226,11 @@ func tick(dt: float, flow, buildings, tick_index: int) -> void:
 	var hq_y: float = SimConfig.HQ_CENTER.y
 	var grid: PackedInt32Array = buildings.grid
 	var b_alive: PackedInt32Array = buildings.alive
+	var near_b: PackedInt32Array = buildings.near_building
+	var b_cap: PackedInt32Array = buildings.attacker_cap
+	var b_tx: PackedInt32Array = buildings.tile_x
+	var b_ty: PackedInt32Array = buildings.tile_y
+	var b_size: PackedInt32Array = buildings.size
 	var dir_x: PackedFloat32Array = flow.dir_x
 	var dir_y: PackedFloat32Array = flow.dir_y
 	var cost: PackedInt32Array = flow.cost
@@ -255,13 +263,38 @@ func tick(dt: float, flow, buildings, tick_index: int) -> void:
 					building_hits.append(target)
 				continue
 
-		# 이동 방향
 		var cx := int(x)
 		var cy := int(y)
 		var cell := cy * size + cx
 		var mx := 0.0
 		var my := 0.0
-		if cost[cell] == unreachable:
+
+		# 근처 건물: 슬롯이 남아 있으면 그쪽으로 틀고, 발자국에 닿으면 문다
+		var steer := false
+		var nb := near_b[cell]
+		# attackers는 이 루프 안에서 바뀌므로 (Packed 배열은 값 복사) 직접 읽는다
+		if nb >= 0 and b_alive[nb] != 0 and buildings.attackers[nb] < b_cap[nb]:
+			var bs := float(b_size[nb])
+			var bx0 := float(b_tx[nb])
+			var by0 := float(b_ty[nb])
+			var px := clampf(x, bx0, bx0 + bs)
+			var py := clampf(y, by0, by0 + bs)
+			var ddx := px - x
+			var ddy := py - y
+			var dist := sqrt(ddx * ddx + ddy * ddy)
+			if dist <= ENGAGE_DIST:
+				_try_engage(i, nb, buildings)
+				if attack_target[i] == nb:
+					continue
+			elif dist > 0.001:
+				mx = ddx / dist
+				my = ddy / dist
+				steer = true
+
+		# 이동 방향 (근처 건물이 없으면 Flow Field)
+		if steer:
+			pass
+		elif cost[cell] == unreachable:
 			mx = hq_x - x
 			my = hq_y - y
 			var l := sqrt(mx * mx + my * my)
