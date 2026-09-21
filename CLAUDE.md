@@ -54,27 +54,25 @@
 
 ## 프로젝트 구조
 
-아래는 2D 전환 후 목표 구조다. 현재 코드는 아직 3D 프로토타입이며, 전환 순서는 `docs/technical-design.md`의 “3D에서 2D로 전환하는 순서”를 따른다.
+2026-09-21 코드 전환으로 아래가 실제 저장소 구조다. 3D 씬·GLB 모델·보류 시스템 코드는 제거했다.
 
 ```text
 project/                                # Godot 4 프로젝트
   project.godot                         # 엔진 설정
-  autoloads/                            # Locale, GameManager, GameFeel, AudioManager, EffectsManager
-  sim/                                  # Node 없는 시뮬레이션: GameSimulation, EnemySim, CombatSim, WaveSim, FlowField, SpatialGrid, Spawner
-  render/                               # 시뮬레이션 상태를 2D로 그리는 렌더러 (적·발사체·이펙트 MultiMesh)
+  autoloads/                            # Locale, GameManager(런 상태 미러), GameFeel, AudioManager
+  sim/                                  # Node 없는 시뮬레이션: GameSimulation, EnemySim, CombatSim, WaveSim, BuildingSim, FlowField, SpatialGrid, SimConfig
+  render/                               # 시뮬레이션 상태를 2D로 그리는 렌더러 (적·발사체·이펙트 MultiMesh, 건물 Node2D, 카메라, 배치 고스트)
   export_presets.cfg                    # Windows Desktop export 설정
   scenes/                               # 씬 파일 (Node 허용 범위)
     main/                               # 타이틀, 메인 게임 씬(코디네이터)
-    buildings/                          # HQ, 방어물 1~2종, 타워 3종
-    ui/                                 # HUD, 메뉴, 위협 레이더
-  scripts/                              # 게임플레이 helper와 데이터 클래스
-    data/                               # Resource 데이터 정의
+    ui/                                 # HUD, 메뉴, 위협 레이더, 결과 화면
+  scripts/                              # 건물·적 카탈로그, 위협 레이더
+    data/                               # Resource 데이터 정의 (BuildingData, EnemyData)
   assets/
-    sprites/                            # 쿼터뷰 스프라이트와 카테고리 아틀라스
-    audio/                              # BGM, SFX
+    audio/                              # BGM, SFX (스프라이트 아틀라스는 아직 없음, 코드 생성 폴백 사용)
 
 docs/                                  # 보편적인 제품/설계/검증 문서
-tools/                                 # 에셋 제작 보조 도구, 회귀 검증 실행기
+tools/                                 # 회귀 검증 실행기, tests/ (headless 회귀·씬 스모크·소크·스크린샷)
 build.sh                               # Windows exe 빌드 스크립트
 build/                                 # 빌드 출력, git ignored
 ```
@@ -91,11 +89,12 @@ build/                                 # 빌드 출력, git ignored
 - M6 게임 필: 쉐이크, 히트스톱, 크리티컬, 카메라, 드래그 배치
 - M7 이후: 시작 화면, ESC 메뉴, 디버그 오버레이, 256 맵, StarCraft식 UI, GLB 모델, 파티클
 - 2026-09-16 방향 전환: 3D → 2D 쿼터뷰, 시뮬레이션/렌더러 분리 결정.
-- 2026-09-21 범위 축소: 증강·카드·시너지·이벤트·유닛·메타 보류. 첫 프로토타입은 맵 1/본진 1/방어물 1~2/타워 3/적 3/자원 1/무한 웨이브. 현재 코드에는 보류 시스템이 그대로 남아 있으며, 코드 전환과 제거는 로드맵 단계 B에서 진행한다.
+- 2026-09-21 범위 축소: 증강·카드·시너지·이벤트·유닛·메타 보류. 첫 프로토타입은 맵 1/본진 1/방어물 1~2/타워 3/적 3/자원 1/무한 웨이브.
+- 2026-09-21 단계 B 코드 전환: `project/sim`(Node 없는 시뮬레이션)과 `project/render`(MultiMesh 2D)로 재구성. 3D 씬·모델·보류 시스템 코드 제거. 축소 범위(본진, 바리케이드·강화벽, 타워 3종, 적 3종+분열체, 미네랄, 무한 웨이브)가 동작한다. headless 소크 800~1,000마리에서 틱 평균 0.25 ms, 창 모드 895마리 렌더 약 1 ms. 남은 병목은 Flow Field 재계산 30~40 ms 히치(단계 D).
 
 ## 현재 우선순위
 
-- 2D 쿼터뷰 전환과 시뮬레이션/렌더러 분리를 끝내고, 축소 범위 프로토타입을 100 → 500마리에서 돌린다. 전환 중에는 새 게임플레이 기능을 추가하지 않는다.
+- 단계 B 기반 전환은 끝났다. 다음은 단계 C: 실제 플레이로 밸런스·피드백을 다듬는다. 새 시스템 추가보다 지금 루프의 재미를 먼저 확인한다.
 - 500마리에서 “계속 하고 싶은가”를 증명한다. 이것이 안 되면 콘텐츠를 추가하지 않는다.
 - 첫 10초 안에 적 규모와 본진 위험이 보이게 만든다.
 - 웨이브가 단순 숫자 증가가 아니라 방향, 밀도, 규모 조합으로 압박을 만든다.
@@ -117,7 +116,8 @@ build/                                 # 빌드 출력, git ignored
 첫 프로토타입 범위:
 
 - **GameSimulation**: 고정 틱 진행, 하위 Sim 호출 순서, 런 상태 스냅샷, 정지·배속
-- **EnemySim**: 적 위치·HP·상태 배열, Flow Field 이동, 건물 접촉
+- **EnemySim**: 적 위치·HP·감속 배열, Flow Field 이동, 건물 접촉·공격 슬롯(건물당 동시 공격 상한)
+- **BuildingSim**: 건물 HP·타일 점유·공격자 상한·본진 재생
 - **CombatSim**: 타워 타겟팅, 발사체, 피해, 감속, 처치 이벤트
 - **WaveSim**: 웨이브 규모, 스폰 방향·밀도, 적 템플릿, 스폰 큐
 - **FlowField**: 대규모 적 이동 경로
@@ -127,4 +127,4 @@ build/                                 # 빌드 출력, git ignored
 - **GameFeel**: 화면 흔들림, 히트스톱, 대량 처치 피드백
 - **AudioManager**: BGM, SFX, 볼륨 제어
 
-보류 (핵심 전투 검증 후 재도입 검토): **SynergyManager**, **EventManager**, **RewardCard**, 유닛·배럭, 채굴기, 버프 타워. 기존 코드는 전환 단계 B에서 제거하고, 재도입할 때 시뮬레이션 구조에 맞춰 다시 설계한다.
+보류 (핵심 전투 검증 후 재도입 검토): 시너지, 이벤트, 보상 카드, 유닛·배럭, 채굴기, 버프 타워. 기존 코드는 단계 B에서 제거했고, 재도입할 때 시뮬레이션 구조에 맞춰 다시 설계한다.

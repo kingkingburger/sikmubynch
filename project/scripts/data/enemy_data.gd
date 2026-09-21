@@ -1,7 +1,9 @@
 class_name EnemyData
 extends Resource
 
-enum EnemyType { RUSHER, SPLITTER, EXPLODER, TANK, ELITE_RUSHER, DESTROYER }
+## 적 타입별 기본 정의. 웨이브 배율은 스폰 시 곱한다.
+
+enum EnemyType { RUSHER, TANK, SPLITTER, MINI }
 
 @export var enemy_name: String = ""
 @export var enemy_type: EnemyType = EnemyType.RUSHER
@@ -11,6 +13,4 @@ enum EnemyType { RUSHER, SPLITTER, EXPLODER, TANK, ELITE_RUSHER, DESTROYER }
 @export var mineral_reward: int = 3
 @export var color: Color = Color.RED
 @export var scale_factor: float = 1.0
-@export var split_count: int = 2
-@export var explode_radius: float = 2.5
-@export var explode_damage: float = 30.0
+@export var split_count: int = 0       # 사망 시 생성할 MINI 수

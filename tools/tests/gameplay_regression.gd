@@ -1,14 +1,14 @@
 extends SceneTree
 
+## 렌더러 없는 시뮬레이션 회귀 검증. 씬을 띄우지 않고 sim만 돌린다.
+## 실행: godot --headless --path project --script ../tools/tests/gameplay_regression.gd
+
+const GameSimulation := preload("res://sim/game_simulation.gd")
+const SimConfig := preload("res://sim/sim_config.gd")
+const WaveSim := preload("res://sim/wave_sim.gd")
+
 var failures: Array[String] = []
 var checks := 0
-var game
-var gm
-var flow
-var spatial
-var synergy
-var events
-var feel
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -19,333 +19,290 @@ func check(condition: bool, label: String) -> void:
 		failures.append(label)
 		print("FAIL: ", label)
 
-func fresh_game() -> void:
-	change_scene_to_file("res://scenes/main/game.tscn")
-	await process_frame
-	await process_frame
-	game = current_scene
-	game.set_process(false)
-	game._wave_active = false
-	game._spawn_queue.clear()
-	for enemy in get_nodes_in_group("enemies"):
-		enemy.queue_free()
-	game.enemies_alive = 0
-	await process_frame
-	spatial._grids["enemies"].clear()
+## 테스트 기본은 시작 방어물 없이 (개별 적 이동·공격 검증이 타워에 방해받지 않도록)
+func new_sim(seed_value: int = 20260921, starting_defense: bool = false) -> GameSimulation:
+	var sim := GameSimulation.new()
+	sim.start(seed_value, starting_defense)
+	return sim
 
-func live_enemies() -> Array:
-	return get_nodes_in_group("enemies").filter(func(enemy): return not enemy._dead)
+func run_ticks(sim: GameSimulation, n: int) -> void:
+	for i in range(n):
+		sim.tick()
 
 func _run() -> void:
-	gm = root.get_node("GameManager")
-	flow = root.get_node("FlowField")
-	spatial = root.get_node("SpatialGrid")
-	synergy = root.get_node("SynergyManager")
-	events = root.get_node("EventManager")
-	feel = root.get_node("GameFeel")
-	seed(20260908)
-	await test_run_and_pathfinding()
-	await test_pause_rewards_and_input()
-	await test_rewards_and_synergies()
+	test_start_state()
+	test_flow_field()
+	test_placement_and_demolish()
+	test_enemy_reaches_and_attacks_hq()
+	test_towers_kill_and_splitter_children()
+	test_wave_completion_waits_for_children()
+	test_determinism()
+	test_building_destroyed_unblocks_path()
+	test_cannon_splash_and_frost_slow()
+	test_stress_500()
 	print("RESULT: %d checks, %d failures" % [checks, failures.size()])
 	quit(0 if failures.is_empty() else 1)
 
-func test_run_and_pathfinding() -> void:
-	await fresh_game()
-	var wave = load("res://scripts/wave_director.gd")
-	game.queue_enemy_spawn(wave.create_enemy_templates(2)[1], Vector3(110, 0, 110))
-	game._wave_active = true
-	game._process_spawn_queue()
-	check(game.enemies_alive == 1, "normal spawn increments count")
-	live_enemies()[0]._die()
-	game._check_wave_completion()
-	check(gm.wave_number == 1 and game._spawn_queue.size() == 2, "B01 pending split children prevent clear")
-	game._process_spawn_queue()
-	check(game.enemies_alive == 2 and live_enemies().size() == 2, "B01 split count matches living children")
-	for enemy in live_enemies():
-		enemy._die()
-	await process_frame
-	await process_frame
-	check(gm.wave_number == 2 and game.enemies_alive == 0, "B01 clear only after all children die")
-	game._check_wave_completion()
-	check(gm.wave_number == 2, "B01 clear is not duplicated")
+func test_start_state() -> void:
+	var sim := new_sim()
+	check(sim.minerals == SimConfig.START_MINERALS, "start minerals")
+	check(sim.buildings.hq_index >= 0, "HQ placed")
+	check(sim.buildings.building_at(63, 63) == sim.buildings.hq_index, "HQ occupies center tile")
+	check(sim.buildings.building_at(61, 63) == -1, "tile next to HQ is free")
+	check(is_equal_approx(sim.hq_hp(), 2500.0), "HQ HP 2500")
+	check(sim.buildings.alive_count == 1, "no starting defense when disabled")
+	var sim_def := GameSimulation.new()
+	sim_def.start(1, true)
+	check(sim_def.buildings.alive_count == 5, "starting defense: HQ + 4 gun towers")
+	check(sim_def.flow.is_reachable(0, 0), "starting defense keeps corner reachable")
+	check(sim.enemies_alive() == 0, "no enemies before first tick")
+	check(sim.flow.is_reachable(0, 0), "corner is reachable from HQ")
+	check(sim.flow.cost_at(63, 63) == 0, "HQ cell cost 0")
+	check(not sim.game_over, "not game over at start")
+	sim.tick()
+	check(sim.waves.active and sim.waves.wave_number == 1, "wave 1 starts on first tick")
+	check(sim.waves.wave_type == WaveSim.WaveType.SCOUT, "wave 1 is scout")
+	run_ticks(sim, 30)
+	check(sim.enemies_alive() > 0, "enemies spawn within a second")
 
-	await fresh_game()
-	flow.set_obstacle(Vector2i(10, 10), true)
-	flow.set_obstacle(Vector2i(10, 10), true)
-	flow.set_obstacle(Vector2i(11, 10), true)
-	flow.set_obstacle(Vector2i(10, 10), false)
-	check(flow._obstacles.has(Vector2i(5, 5)), "B03 adjacent occupied tile stays blocked")
-	flow.set_obstacle(Vector2i(11, 10), false)
-	check(not flow._obstacles.has(Vector2i(5, 5)), "B03 last tile unblocks; duplicate registration is idempotent")
-	for i in 10:
-		flow.set_obstacle(Vector2i(20 + i, 20), true)
-		game._on_restart()
-		await process_frame
-		await process_frame
-		game = current_scene
-		check(flow._obstacles.is_empty() and flow._world_obstacles.is_empty(), "B02 restart %d clears obstacles" % i)
-		check(gm.wave_number == 1 and gm.minerals == 150 and not gm.is_game_over, "restart %d resets run state" % i)
-		check(not flow._field.is_empty(), "restart %d recalculates directions" % i)
+func test_flow_field() -> void:
+	var sim := new_sim()
+	var f := sim.flow
+	f.set_blocked(10, 10, true)
+	f.set_blocked(10, 10, true)
+	f.set_blocked(11, 10, true)
+	f.set_blocked(10, 10, false)
+	check(f.is_blocked(10, 10), "B03 double-registered tile stays blocked after one release")
+	f.set_blocked(10, 10, false)
+	check(not f.is_blocked(10, 10), "B03 last release unblocks")
+	f.set_blocked(11, 10, false)
+	# 벽으로 완전히 둘러싸면 도달 불가
+	for x in range(60, 67):
+		f.set_blocked(x, 60, true)
+		f.set_blocked(x, 66, true)
+	for y in range(61, 66):
+		f.set_blocked(60, y, true)
+		f.set_blocked(66, y, true)
+	f.recalculate()
+	check(not f.is_reachable(5, 5), "fully walled HQ is unreachable from outside")
+	check(f.is_reachable(61, 61), "inside the wall ring is reachable")
+	# 한 칸 열면 다시 도달
+	f.set_blocked(63, 60, false)
+	f.recalculate()
+	check(f.is_reachable(5, 5), "opening one gap restores reachability")
+	var d := Vector2(f.dir_x[5 * SimConfig.MAP_SIZE + 5], f.dir_y[5 * SimConfig.MAP_SIZE + 5])
+	check(d.length() > 0.9 and d.x > 0.0 and d.y > 0.0, "direction at (5,5) points toward HQ")
+	# 대각선 모서리 관통 금지: (20,20)이 막히고 (21,20),(20,21)이 막혔으면 (21,21)에서 대각선으로 (20,20)... 방향은 직교여야 함
+	var f2 := new_sim().flow
+	f2.set_blocked(62, 61, true)
+	f2.set_blocked(61, 62, true)
+	f2.recalculate()
+	var idx := 61 * SimConfig.MAP_SIZE + 61
+	var d2 := Vector2(f2.dir_x[idx], f2.dir_y[idx])
+	check(not (d2.x > 0.5 and d2.y > 0.5), "no diagonal corner cutting between two blocked orthogonals")
 
-	await fresh_game()
-	var unit = load("res://scenes/units/unit.tscn").instantiate()
-	unit.data = load("res://scripts/data/unit_data.gd").new()
-	unit.data.speed = 30.0
-	unit.position = Vector3(40, 0, 40)
-	game.add_child(unit)
-	unit._patrol_target = Vector3(65, 0, 40)
-	var first_cell = spatial._pos_to_cell(unit.global_position)
-	for i in 60:
-		await process_frame
-	unit.set_physics_process(false)
-	check(spatial._pos_to_cell(unit.global_position) != first_cell, "B04 fixture moved across cells")
-	check(spatial.find_in_range(unit.global_position, "units", 0.5).has(unit), "B04 moving unit is searchable at current position")
-	unit._die()
-	check(not spatial.find_in_range(unit.global_position, "units", 0.5).has(unit), "B04 dead unit is removed")
-	game._on_esc_title()
-	await process_frame
-	await process_frame
-	for i in 600:
-		await process_frame
-	current_scene._on_start()
-	await process_frame
-	await process_frame
-	check(gm.game_time < 0.1, "B16 title waiting time is excluded from new run")
+func test_placement_and_demolish() -> void:
+	var sim := new_sim()
+	var gun := BuildingData.BuildingType.GUN_TOWER
+	var before := sim.minerals
+	var idx := sim.place_building(gun, 60, 63)
+	check(idx >= 0, "gun tower placed")
+	check(sim.minerals == before - 50, "gun tower costs 50")
+	check(sim.place_building(gun, 60, 63) == -1, "cannot place on occupied tile")
+	check(sim.place_building(BuildingData.BuildingType.HQ, 10, 10) == -1, "cannot place HQ")
+	check(sim.place_building(gun, 63, 63) == -1, "cannot place on HQ")
+	check(sim.flow.is_blocked(60, 63), "placed tower blocks flow tile")
+	sim.minerals = 0
+	check(sim.place_building(BuildingData.BuildingType.BARRICADE, 10, 10) == -1, "cannot afford with 0 minerals")
+	var refund := sim.demolish_at(60, 63)
+	check(refund == 25, "demolish refunds 50 percent")
+	check(sim.minerals == 25, "refund added")
+	check(sim.buildings.building_at(60, 63) == -1, "tile freed after demolish")
+	check(not sim.flow.is_blocked(60, 63), "flow tile unblocked after demolish")
+	check(sim.demolish_at(63, 63) == -1, "HQ cannot be demolished")
+	# 배치 후 지연 재계산
+	sim.minerals = 500
+	var recalcs := sim.flow.recalc_count
+	sim.place_building(BuildingData.BuildingType.WALL, 63, 58)
+	run_ticks(sim, SimConfig.FLOW_RECALC_DELAY_TICKS + 2)
+	check(sim.flow.recalc_count == recalcs + 1, "flow recalculates once after placement delay")
 
-func test_pause_rewards_and_input() -> void:
-	await fresh_game()
-	game._spawn_wave()
-	var queued = game._spawn_queue.size()
-	feel.toggle_pause()
-	game._process(0.0)
-	game._process_spawn_queue()
-	check(game._spawn_queue.size() == queued and game.enemies_alive == 0, "B06 paused spawn queue is frozen")
-	feel.hitstop(0.04)
-	feel._process(0.0)
-	check(Engine.time_scale == 0.0, "B06 hitstop cannot resume a paused game")
-	game._toggle_esc_menu()
-	game._on_esc_resume()
-	check(feel.paused, "ESC resume preserves manual pause")
-	feel.toggle_pause()
-	check(not feel.paused, "manual pause resumes explicitly")
-	feel.reset()
-	game._process_spawn_queue()
-	check(game.enemies_alive == 3, "B06 spawning resumes")
-	var enemy = live_enemies()[0]
-	enemy._attack_target = game._hq
-	enemy._attack_timer = 0.0
-	var hp = game._hq.current_hp
-	feel.toggle_pause()
-	enemy._physics_process(0.0)
-	for i in 60:
-		await process_frame
-	check(game._hq.current_hp == hp, "B06 paused enemy cannot deal damage")
+func test_enemy_reaches_and_attacks_hq() -> void:
+	var sim := new_sim()
+	sim.waves.active = true   # 웨이브 자동 시작을 막기 위해 활성 상태로 두고 큐는 비운다
+	sim.waves.wave_time = -1000.0
+	var e := sim.enemies.spawn(EnemyData.EnemyType.RUSHER, 63.5, 50.0, 1.0, 1.0, 1.0)
+	check(e >= 0, "manual spawn")
+	var hp0 := sim.hq_hp()
+	run_ticks(sim, 30 * 8)
+	check(sim.enemies.attack_target[e] == sim.buildings.hq_index, "rusher reaches HQ and targets it")
+	check(sim.hq_hp() < hp0, "HQ takes damage")
+	check(not sim.game_over, "single rusher does not end the game in 8 seconds")
 
-	await fresh_game()
-	game._on_wave_cleared()
-	var countdown = game._wave_countdown
-	var before_time = gm.game_time
-	for i in 660:
-		game._process(1.0 / 60.0)
-		await process_frame
-	check(game._awaiting_card and not game._wave_active and game.enemies_alive == 0, "B05 unselected cards do not start next wave")
-	check(game._wave_countdown == countdown and gm.game_time == before_time, "B05 card choice freezes run time and countdown")
-	game._on_choice_event("Gamble", "Risk minerals for a bigger reward?", [{"label": "Pass", "id": "gamble_pass"}])
-	check(game._ui._card_panel.visible and not game._ui._choice_panel.visible, "C02 only reward card is shown first")
-	game._toggle_esc_menu()
-	game._on_card_selected(0)
-	check(game._awaiting_card, "ESC blocks reward callbacks behind menu")
-	game._on_esc_resume()
-	check(feel.paused and Engine.time_scale == 0.0, "ESC resume preserves reward pause")
-	game._on_card_skip()
-	check(not game._ui._card_panel.visible and game._ui._choice_panel.visible, "C02 choice appears after card skip")
-	check(game._awaiting_choice and feel.paused, "C02 queued choice retains pause")
-	game._on_choice_selected(-1)
-	check(game._awaiting_choice, "invalid choice index is rejected")
-	game._on_choice_selected(0)
-	check(not game._awaiting_choice and not feel.paused, "choice completion resumes countdown")
-	game._process(11.0)
-	check(game._wave_active, "next wave starts after all selections finish")
+func test_towers_kill_and_splitter_children() -> void:
+	var sim := new_sim()
+	sim.waves.active = true
+	sim.waves.wave_time = -1000.0
+	sim.minerals = 1000
+	check(sim.place_building(BuildingData.BuildingType.GUN_TOWER, 63, 55) >= 0, "gun tower near path")
+	var minerals := sim.minerals
+	var kills := sim.kills
+	var s := sim.enemies.spawn(EnemyData.EnemyType.SPLITTER, 63.5, 52.0, 1.0, 1.0, 1.0)
+	check(s >= 0, "splitter spawned")
+	var gen := sim.enemies.generation[s]
+	var ticks := 0
+	var died_tick := -1
+	while ticks < 30 * 10:
+		sim.tick()
+		ticks += 1
+		if sim.enemies.alive[s] == 0 or sim.enemies.generation[s] != gen:
+			died_tick = ticks
+			break
+	check(died_tick > 0, "gun tower kills splitter within 10 seconds")
+	check(sim.kills == kills + 1, "kill counted once")
+	check(sim.minerals == minerals + 5, "splitter reward 5")
+	check(sim.enemies_alive() == 2, "B01 two mini children spawned on death")
+	check(sim.enemies.generation[s] == gen + 1 or sim.enemies.alive[s] == 0, "freed index is reused with a new generation")
+	var mini_found := false
+	for i in range(sim.enemies.high):
+		if sim.enemies.alive[i] != 0 and sim.enemies.type_id[i] == EnemyData.EnemyType.MINI:
+			mini_found = true
+	check(mini_found, "children are MINI type")
 
-	await fresh_game()
-	var reward = load("res://scripts/data/reward_card.gd")
-	game._pending_cards = [reward.generate_pool(1)[0]]
-	game._awaiting_card = true
-	feel.set_pause_reason("reward", true)
-	var minerals = gm.minerals
-	game._on_card_selected(-1)
-	check(gm.minerals == minerals, "negative reward index is rejected")
-	game._on_card_selected(0)
-	game._on_card_selected(0)
-	check(gm.minerals == minerals + 35, "reward can be applied only once")
-	check(not feel.paused, "card selection resumes game")
+func test_wave_completion_waits_for_children() -> void:
+	var sim := new_sim()
+	sim.tick()
+	# 큐를 비우고 스플리터 하나만 남긴다
+	sim.waves._clear_queue()
+	for i in range(sim.enemies.high):
+		if sim.enemies.alive[i] != 0:
+			sim.enemies.kill(i)
+	sim.enemies.clear_tick_results()
+	sim.minerals = 1000
+	sim.place_building(BuildingData.BuildingType.GUN_TOWER, 63, 55)
+	var s := sim.enemies.spawn(EnemyData.EnemyType.SPLITTER, 63.5, 52.0, 1.0, 1.0, 1.0)
+	var gen := sim.enemies.generation[s]
+	var wave := sim.waves.wave_number
+	var ticks := 0
+	var died := false
+	while ticks < 300:
+		sim.tick()
+		ticks += 1
+		if sim.enemies.alive[s] == 0 or sim.enemies.generation[s] != gen:
+			died = true
+			break
+	check(died, "splitter died")
+	check(sim.waves.wave_number == wave and sim.waves.active, "B01 wave not cleared while children alive")
+	ticks = 0
+	while sim.enemies_alive() > 0 and ticks < 600:
+		sim.tick()
+		ticks += 1
+	check(sim.enemies_alive() == 0, "children killed")
+	check(sim.waves.wave_number == wave + 1 and sim.waves.between, "B01 wave clears once after all children die")
+	var minerals := sim.minerals
+	run_ticks(sim, int(WaveSim.WAVE_INTERVAL * 30.0) + 2)
+	check(sim.waves.active and sim.waves.wave_number == wave + 1, "next wave starts after countdown")
+	check(sim.minerals >= minerals, "clear bonus was paid before next wave")
 
-	await fresh_game()
-	var point = game._camera.unproject_position(Vector3(124.5, 0, 124.5))
-	var press = InputEventMouseButton.new()
-	press.button_index = MOUSE_BUTTON_LEFT
-	press.pressed = true
-	press.position = point
-	game._input(press)
-	check(not game._dragging, "UI-consumed press cannot start world drag")
-	for state in ["reward", "choice", "esc", "game_over"]:
-		game._awaiting_card = state == "reward"
-		game._awaiting_choice = state == "choice"
-		game._esc_visible = state == "esc"
-		gm.is_game_over = state == "game_over"
-		minerals = gm.minerals
-		game._dragging = true
-		game._input(press)
-		game._unhandled_input(press)
-		game._handle_left_click(point)
-		game._try_drag_build(point)
-		game._handle_right_click(point)
-		check(gm.minerals == minerals and game._buildings_count == 1, "B07 %s blocks field mutations" % state)
-		check(not game._dragging, "B07 %s cancels drag" % state)
-	gm.is_game_over = false
-	game._esc_visible = false
-	game._awaiting_card = false
-	game._awaiting_choice = false
-	game._handle_left_click(point)
-	check(gm.minerals == 140 and game._buildings_count == 2, "field input works after modal closes")
+func test_determinism() -> void:
+	var a := new_sim(777)
+	var b := new_sim(777)
+	for sim in [a, b]:
+		sim.minerals = 2000
+		sim.place_building(BuildingData.BuildingType.GUN_TOWER, 60, 60)
+		sim.place_building(BuildingData.BuildingType.CANNON_TOWER, 66, 60)
+		sim.place_building(BuildingData.BuildingType.FROST_TOWER, 60, 66)
+		for x in range(58, 69):
+			sim.place_building(BuildingData.BuildingType.BARRICADE, x, 57)
+	run_ticks(a, 30 * 40)
+	run_ticks(b, 30 * 40)
+	check(a.state_hash() == b.state_hash(), "Q-SYS-7 same seed gives same state after 40 seconds")
+	check(a.kills == b.kills and a.minerals == b.minerals, "Q-SYS-7 kills and minerals match")
+	check(a.kills > 0, "towers killed something in 40 seconds")
+	var c := new_sim(778)
+	c.minerals = 2000
+	c.place_building(BuildingData.BuildingType.GUN_TOWER, 60, 60)
+	run_ticks(c, 30 * 40)
+	check(c.state_hash() != a.state_hash(), "different seed gives different state")
 
-func spawn_enemy(pos: Vector3 = Vector3(100, 0, 100)):
-	var wave = load("res://scripts/wave_director.gd")
-	game.queue_enemy_spawn(wave.create_enemy_templates(1)[0], pos)
-	game._process_spawn_queue()
-	var enemy = live_enemies().back()
-	enemy.set_physics_process(false)
-	return enemy
+func test_building_destroyed_unblocks_path() -> void:
+	var sim := new_sim()
+	sim.waves.active = true
+	sim.waves.wave_time = -1000.0
+	sim.minerals = 5000
+	# HQ 북쪽을 바리케이드로 막고 적을 북쪽에 둔다 (완전 봉쇄)
+	for x in range(58, 70):
+		sim.place_building(BuildingData.BuildingType.BARRICADE, x, 58)
+		sim.place_building(BuildingData.BuildingType.BARRICADE, x, 69)
+	for y in range(59, 69):
+		sim.place_building(BuildingData.BuildingType.BARRICADE, 58, y)
+		sim.place_building(BuildingData.BuildingType.BARRICADE, 69, y)
+	run_ticks(sim, SimConfig.FLOW_RECALC_DELAY_TICKS + 2)
+	check(not sim.flow.is_reachable(63, 40), "walled HQ unreachable")
+	for i in range(12):
+		sim.enemies.spawn(EnemyData.EnemyType.TANK, 62.0 + float(i % 3), 50.0, 3.0, 3.0, 1.0)
+	var buildings_before := sim.buildings.alive_count
+	var ticks := 0
+	while sim.buildings.alive_count == buildings_before and ticks < 30 * 60:
+		sim.tick()
+		ticks += 1
+	check(sim.buildings.alive_count < buildings_before, "tanks break a barricade when path is blocked")
+	run_ticks(sim, SimConfig.FLOW_RECALC_DELAY_TICKS + 2)
+	check(sim.flow.is_reachable(63, 40), "destroyed barricade reopens the path")
 
-func test_rewards_and_synergies() -> void:
-	await fresh_game()
-	var reward = load("res://scripts/data/reward_card.gd")
-	game._apply_card(reward.generate_pool(1)[3])
-	events.resolve_choice("empower_accept")
-	check(is_equal_approx(events.get_unit_dps_perm_bonus(), 0.38), "B08 card and event permanent bonuses stack")
-	events.clear_combat_effects()
-	check(is_equal_approx(events.get_unit_dps_perm_bonus(), 0.38), "B08 wave cleanup preserves permanent bonus")
-	game._on_restart()
-	await process_frame
-	await process_frame
-	check(events.get_unit_dps_perm_bonus() == 0.0, "B08 new run resets permanent bonus")
+func test_cannon_splash_and_frost_slow() -> void:
+	var sim := new_sim()
+	sim.waves.active = true
+	sim.waves.wave_time = -1000.0
+	sim.minerals = 5000
+	sim.place_building(BuildingData.BuildingType.CANNON_TOWER, 63, 54)
+	var ids: Array = []
+	for i in range(10):
+		ids.append(sim.enemies.spawn(EnemyData.EnemyType.RUSHER, 62.5 + float(i % 4) * 0.4, 50.0 + float(i / 4) * 0.4, 1.0, 1.0, 0.01))
+	var explosions := 0
+	var max_kills := 0
+	for t in range(30 * 6):
+		sim.tick()
+		if sim.combat.explosion_count > 0:
+			explosions += sim.combat.explosion_count
+			max_kills = maxi(max_kills, sim.combat.explosion_kills[0])
+	check(explosions > 0, "cannon fires shells")
+	check(max_kills >= 3, "Q-SYS-12 one shell kills several clustered rushers (%d)" % max_kills)
 
-	await fresh_game()
-	for count in [1, 3, 5]:
-		synergy.reset()
-		for i in count:
-			synergy.add_trait(0)
-		var expected = {1: 1.2, 3: 1.5, 5: 2.0}[count]
-		check(is_equal_approx(synergy.get_dps_multiplier(0), expected), "B09 base tier at %d essences" % count)
-		synergy.add_trait(1)
-		synergy.add_trait(2)
-		check(is_equal_approx(synergy.get_dps_multiplier(0), expected + 0.15), "B09 three-element bonus at %d essences" % count)
-		synergy.add_trait(3)
-		check(is_equal_approx(synergy.get_dps_multiplier(0), expected + 0.3), "B09 four-element bonus at %d essences" % count)
-	for count in [1, 3, 5]:
-		synergy.reset()
-		for i in count:
-			synergy.add_trait(4)
-		game._hq.current_hp = game._hq.get_effective_max_hp()
-		var maximum = game._hq.current_hp
-		game._hq._process(1.0 / 60.0)
-		check(is_equal_approx(game._hq.current_hp, maximum), "B10 fortified HQ retains full HP at %d essences" % count)
-		game._hq.current_hp -= 10.0
-		game._hq._process(1.0)
-		check(game._hq.current_hp > maximum - 10.0 and game._hq.current_hp <= maximum, "B10 HQ regenerates under effective limit")
+	var sim2 := new_sim()
+	sim2.waves.active = true
+	sim2.waves.wave_time = -1000.0
+	sim2.minerals = 5000
+	sim2.place_building(BuildingData.BuildingType.FROST_TOWER, 63, 54)
+	var e := sim2.enemies.spawn(EnemyData.EnemyType.TANK, 63.5, 51.0, 10.0, 1.0, 0.5)
+	var slowed := false
+	for t in range(30 * 5):
+		sim2.tick()
+		if sim2.enemies.alive[e] != 0 and sim2.enemies.slow_mult[e] < 0.6:
+			slowed = true
+			break
+	check(slowed, "frost tower slows the tank")
 
-	await fresh_game()
-	game._hq.current_hp = 500.0
-	game._apply_card(reward.generate_pool(1)[2])
-	check(is_equal_approx(game._hq.get_effective_max_hp(), 1100.0), "B14 HP card increases maximum")
-	check(is_equal_approx(game._hq.current_hp, 600.0), "B14 HP increase preserves missing HP")
-	var tower = game.tower_scene.instantiate()
-	tower.data = game._building_datas[1]
-	tower.position = Vector3(124, 0, 124)
-	tower.add_to_group("buildings")
-	game.add_child(tower)
-	check(is_equal_approx(tower.current_hp, 110.0), "B14 future buildings start with buffed full HP")
-	tower.level_up()
-	check(is_equal_approx(tower.get_effective_max_hp(), 143.0), "B14 level and HP reward multiply")
-	game._hq.current_hp = 100.0
-	var legendary = reward.generate_pool(5).filter(func(card): return card.heal_fraction > 0.0)[0]
-	game._apply_card(legendary)
-	check(is_equal_approx(game._hq.get_effective_max_hp(), 1450.0), "B14 maximum HP rewards accumulate")
-	check(is_equal_approx(game._hq.current_hp, 957.5), "B14 legendary additionally heals 35 percent of new maximum")
-	events.clear_combat_effects()
-	check(is_equal_approx(game._hq.get_effective_max_hp(), 1450.0), "B14 maximum HP bonus survives wave cleanup")
-	synergy.add_trait(4)
-	check(is_equal_approx(game._hq.get_effective_max_hp(), 1740.0), "B14 fortify multiplies permanent HP bonus")
-	await fresh_game()
-	check(game._hq.get_effective_max_hp() == 1000.0, "B14 next run resets maximum HP bonus")
-	var fire = reward.generate_pool(1)[4]
-	game._apply_card(fire)
-	check(synergy.get_trait_count(0) == 1 and get_nodes_in_group("buildings").size() == 1, "B15 global essence is valid without a tower")
-	check(not fire.description.contains("랜덤 타워"), "B15 description does not promise a random target")
-	synergy.add_trait(1)
-	check(synergy.get_primary_attack_trait() == 0, "B15 tied essences retain first acquired element")
-	synergy.add_trait(1)
-	check(synergy.get_primary_attack_trait() == 1, "B15 leading essence changes common attack element")
-
-	await fresh_game()
-	events._apply_combat_event(events.CombatEvent.BONUS_WAVE)
-	var enemy = spawn_enemy()
-	var minerals = gm.minerals
-	enemy._die()
-	var orbs = game.get_children().filter(func(node): return node.get_script() == load("res://scenes/effects/mineral_orb.gd"))
-	check(orbs.size() == 1 and orbs[0].amount == 6, "B11 normal game path creates doubled reward orb")
-	events.clear_combat_effects()
-	orbs[0]._process(2.0)
-	check(gm.minerals == minerals + 6, "B11 orb keeps death-time amount after event ends")
-	enemy = spawn_enemy(Vector3(110, 0, 110))
-	for connection in enemy.drop_mineral.get_connections():
-		enemy.drop_mineral.disconnect(connection.callable)
-	events._apply_combat_event(events.CombatEvent.BONUS_WAVE)
-	events.resolve_choice("challenge_accept")
-	minerals = gm.minerals
-	enemy._die()
-	check(gm.minerals == minerals + 12, "B11 direct reward combines bonus wave and challenge")
-	check(events.get_challenge_reward_mult() == 2.0, "challenge clear bonus remains separate")
-	events.clear_combat_effects()
-	check(events.get_enemy_mineral_reward(3) == 3, "B11 normal reward restored after event")
-
-	for count in [1, 3]:
-		for lethal_hit in [false, true]:
-			await fresh_game()
-			for i in count:
-				synergy.add_trait(2)
-			var poisoned = spawn_enemy()
-			var neighbor = spawn_enemy(Vector3(101, 0, 100))
-			var projectile = load("res://scenes/projectiles/projectile.tscn").instantiate()
-			projectile.target = poisoned
-			projectile.damage = 100.0 if lethal_hit else 1.0
-			projectile.trait_effects = synergy.get_special_effects(2)
-			game.add_child(projectile)
-			projectile.set_process(false)
-			projectile._on_hit()
-			if not lethal_hit:
-				poisoned._die()
-			check((neighbor._poison_dps > 0.0) == (count >= 3), "B12 poison spread count=%d lethal=%s" % [count, lethal_hit])
-			projectile.queue_free()
-
-	await fresh_game()
-	var unit_script = load("res://scripts/data/unit_data.gd")
-	var unit_scene = load("res://scenes/units/unit.tscn")
-	events.add_unit_dps_perm_bonus(0.3)
-	for unit_type in 4:
-		var unit = unit_scene.instantiate()
-		unit.data = unit_script.new()
-		unit.data.unit_type = unit_type
-		unit.data.dps = 12.0
-		unit.position = Vector3(100, 0, 100)
-		game.add_child(unit)
-		unit.set_physics_process(false)
-		check(is_equal_approx(unit._get_attack_damage(), 15.6), "B13 damage bonus includes unit type %d" % unit_type)
-		if unit_type == 3:
-			var victim = spawn_enemy(Vector3(101, 0, 100))
-			var hp = victim.current_hp
-			unit._bomber_explode()
-			check(is_equal_approx(hp - victim.current_hp, 15.6), "B13 bomber explosion uses buffed damage")
-		else:
-			unit.queue_free()
+func test_stress_500() -> void:
+	var sim := new_sim(4242)
+	sim.minerals = 100000
+	for x in range(54, 74, 2):
+		sim.place_building(BuildingData.BuildingType.GUN_TOWER, x, 56)
+		sim.place_building(BuildingData.BuildingType.CANNON_TOWER, x, 70)
+	for y in range(56, 72, 2):
+		sim.place_building(BuildingData.BuildingType.FROST_TOWER, 54, y)
+		sim.place_building(BuildingData.BuildingType.GUN_TOWER, 72, y)
+	sim.debug_spawn(500)
+	check(sim.enemies_alive() >= 500, "500 enemies spawned")
+	var worst := 0
+	var total := 0
+	var n := 30 * 10
+	for i in range(n):
+		sim.tick()
+		worst = maxi(worst, sim.last_tick_usec)
+		total += sim.last_tick_usec
+	print("STRESS 500: avg tick %.2f ms, worst %.2f ms, alive %d, kills %d" % [
+		float(total) / float(n) / 1000.0, float(worst) / 1000.0, sim.enemies_alive(), sim.kills])
+	check(float(total) / float(n) < 33000.0, "500 enemies: average tick under 33 ms (30Hz budget)")
+	check(sim.kills > 0, "towers kill during stress")
+	check(sim.enemies.peak_alive >= 500, "peak alive recorded")

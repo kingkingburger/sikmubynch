@@ -1,186 +1,141 @@
 extends SceneTree
 
-# Five minutes of real elapsed time using viewport mouse input and normal resources.
-var gm
-var game
-var output_dir: String
-var started_ms: int
-var next_action := 0.0
-var next_sample := 0.0
-var modal_since := -1.0
-var last_modal := ""
-var runs: Array = []
-var samples: Array = []
+## 게임 씬 스모크 테스트. 씬을 띄우고 프레임을 돌리며 렌더러·HUD·입력 경로가 오류 없이 도는지 본다.
+## headless에서도 동작한다(그리기는 생략되지만 스크립트 경로는 실행된다).
+
 var failures: Array[String] = []
-var builds := 0
-var rewards := 0
-var captured: Dictionary = {}
-var duration := 300.0
-var ending := false
+var checks := 0
+var game
+var feel
+var gm
 
 func _initialize() -> void:
 	call_deferred("_run")
 
-func click_at(pos: Vector2) -> void:
-	var motion := InputEventMouseMotion.new()
-	motion.position = pos
-	root.push_input(motion)
-	for pressed in [true, false]:
-		var button := InputEventMouseButton.new()
-		button.button_index = MOUSE_BUTTON_LEFT
-		button.position = pos
-		button.pressed = pressed
-		root.push_input(button)
-
-func click_button(button: Button) -> void:
-	click_at(button.get_global_rect().get_center())
-
-func find_button(node: Node, caption: String) -> Button:
-	if node is Button and node.text == caption:
-		return node
-	for child in node.get_children():
-		var found := find_button(child, caption)
-		if found:
-			return found
-	return null
-
-func capture(label: String) -> void:
-	if captured.has(label) or DisplayServer.get_name() == "headless":
-		return
-	await RenderingServer.frame_post_draw
-	var img := root.get_texture().get_image()
-	if img and not img.is_empty():
-		img.save_png(output_dir.path_join(label + ".png"))
-		captured[label] = true
+func check(condition: bool, label: String) -> void:
+	checks += 1
+	if not condition:
+		failures.append(label)
+		print("FAIL: ", label)
 
 func _run() -> void:
-	var stamp := Time.get_datetime_string_from_system().replace(":", "-")
-	output_dir = ProjectSettings.globalize_path("res://../build/play-smoke-" + stamp)
-	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--seconds="):
-			duration = float(arg.trim_prefix("--seconds="))
-	if duration <= 0.0:
-		push_error("--seconds must be positive")
-		quit(1)
-		return
-	DirAccess.make_dir_recursive_absolute(output_dir)
+	OS.set_environment("SIKMUBYNCH_SEED", "20260921")
+	feel = root.get_node("GameFeel")
 	gm = root.get_node("GameManager")
-	seed(20260908)
-	change_scene_to_file("res://scenes/main/title.tscn")
+	change_scene_to_file("res://scenes/main/game.tscn")
 	await process_frame
 	await process_frame
-	await capture("title")
-	var start := find_button(current_scene, root.get_node("Locale").t("start_game"))
-	if start == null:
-		push_error("Start button missing")
-		quit(1)
-		return
-	click_button(start)
-	await process_frame
-	await process_frame
-	if current_scene.scene_file_path != "res://scenes/main/game.tscn":
-		push_error("Viewport click did not start game")
-		quit(1)
-		return
 	game = current_scene
-	game._debug_visible = true
-	game._ui.set_debug_visible(true)
-	started_ms = Time.get_ticks_msec()
-	print("PLAY START: duration=", duration, " display=", DisplayServer.get_name())
-	print("PLAY OUTPUT: ", output_dir)
-	while not ending:
+	check(game != null and game.sim != null, "game scene created a simulation")
+	check(game.run_seed == 20260921, "seed from environment")
+
+	# MultiMesh buffer 레이아웃 검증: 첫 인스턴스에 알려진 값을 쓰고 읽는다
+	var mmi: MultiMeshInstance2D = game._enemy_renderer._mmis[0]
+	var mm := mmi.multimesh
+	var buf: PackedFloat32Array = game._enemy_renderer._buffers[0]
+	buf[0] = 2.0
+	buf[1] = 0.0
+	buf[2] = 0.0
+	buf[3] = 123.0
+	buf[4] = 0.0
+	buf[5] = 2.0
+	buf[6] = 0.0
+	buf[7] = 456.0
+	buf[8] = 0.5
+	buf[9] = 0.25
+	buf[10] = 1.0
+	buf[11] = 1.0
+	mm.buffer = buf
+	if DisplayServer.get_name() != "headless":
+		# headless 더미 렌더러는 인스턴스 값을 돌려주지 않는다. 창 모드에서만 레이아웃을 검증한다.
+		var xf := mm.get_instance_transform_2d(0)
+		var col := mm.get_instance_color(0)
+		check(is_equal_approx(xf.origin.x, 123.0) and is_equal_approx(xf.origin.y, 456.0), "buffer layout: origin")
+		check(is_equal_approx(xf.x.x, 2.0) and is_equal_approx(xf.y.y, 2.0), "buffer layout: scale")
+		check(is_equal_approx(col.r, 0.5) and is_equal_approx(col.g, 0.25), "buffer layout: color")
+
+	# 몇 초 진행
+	for i in 120:
 		await process_frame
-		var elapsed := (Time.get_ticks_msec() - started_ms) / 1000.0
-		if elapsed >= duration:
-			ending = true
-			break
-		if elapsed >= next_sample:
-			next_sample = elapsed + 1.0
-			_sample(elapsed)
-		if elapsed < next_action:
-			continue
-		next_action = elapsed + 0.5
-		await _act(elapsed)
-	await capture("finish")
-	_record_run("time_limit")
-	var report := {"elapsed_seconds": (Time.get_ticks_msec() - started_ms) / 1000.0,
-		"builds": builds, "rewards": rewards, "runs": runs, "samples": samples, "failures": failures}
-	var file := FileAccess.open(output_dir.path_join("report.json"), FileAccess.WRITE)
-	file.store_string(JSON.stringify(report, "\t"))
-	file.close()
-	print("PLAY RESULT: builds=%d rewards=%d runs=%d failures=%d" % [builds, rewards, runs.size(), failures.size()])
-	print("PLAY RUNS: ", JSON.stringify(runs))
+	check(game.sim.tick_index > 15, "simulation ticks advance (%d)" % game.sim.tick_index)
+	check(game.sim.enemies_alive() > 0, "enemies exist after 2 seconds")
+	check(game._enemy_renderer.visible_total() == game.sim.enemies_alive(), "renderer shows every alive enemy")
+
+	# 건설: 마우스 위치를 타일로 바꿔 배치
+	var vp: Vector2 = game.get_viewport().get_visible_rect().size
+	var minerals: int = game.sim.minerals
+	game._select_slot(1)   # Gun Tower
+	var tile := Vector2i(60, 63)
+	var views_before: int = game._building_views.size()
+	check(views_before == game.sim.buildings.alive_count, "one view per starting building")
+	check(game._try_place(BuildingData.BuildingType.GUN_TOWER, tile), "place gun tower via scene")
+	check(game.sim.minerals == minerals - 50, "minerals spent")
+	check(game._building_views.size() == views_before + 1, "building view created")
+	check(not game._try_place(BuildingData.BuildingType.GUN_TOWER, tile), "occupied tile rejected")
+	check(game._try_demolish(tile), "demolish via scene")
+	check(game._building_views.size() == views_before, "building view removed")
+	check(not game._try_demolish(Vector2i(63, 63)), "HQ cannot be demolished via scene")
+
+	# 화면 좌표 → 타일 왕복
+	var center_tile: Vector2i = game._screen_to_tile(vp * 0.5)
+	check(center_tile == Vector2i(63, 63), "screen center maps to HQ tile (%s)" % str(center_tile))
+
+	# 일시정지: 틱이 멈춘다
+	var t0: int = game.sim.tick_index
+	feel.toggle_pause()
+	for i in 30:
+		await process_frame
+	check(game.sim.tick_index == t0, "Q-SYS-9 paused: no ticks")
+	feel.toggle_pause()
+	for i in 30:
+		await process_frame
+	check(game.sim.tick_index > t0, "Q-SYS-9 resumed: ticks continue")
+
+	# ESC 메뉴는 정지 사유를 유지한다
+	game._toggle_esc_menu()
+	check(feel.paused and game._esc_visible, "ESC pauses")
+	check(not game._try_place(BuildingData.BuildingType.BARRICADE, Vector2i(50, 50)), "ESC blocks placement")
+	game._on_esc_resume()
+	check(not feel.paused, "ESC resume unpauses")
+
+	# 배속
+	var s1: float = feel.cycle_speed()
+	check(s1 == 2.0, "speed cycles to 2x")
+	feel.set_game_speed(1.0)
+
+	# 게임오버 경로: HQ를 강제로 부순다
+	game.sim.buildings.hp[game.sim.buildings.hq_index] = 1.0
+	var e: int = game.sim.enemies.spawn(EnemyData.EnemyType.TANK, 63.5, 61.5, 1.0, 1.0, 1.0)
+	game.sim.enemies.attack_target[e] = game.sim.buildings.hq_index
+	game.sim.enemies.attack_timer[e] = 0.0
+	for i in 20:
+		await process_frame
+	check(game.sim.game_over, "HQ destroyed ends the run")
+	check(gm.is_game_over, "GameManager mirrors game over")
+	check(game._hud._game_over_panel.visible, "game over panel shown")
+	check(feel.paused, "game over pauses simulation")
+
+	# 재시작
+	game._on_restart()
+	await process_frame
+	await process_frame
+	game = current_scene
+	check(not game.sim.game_over and game.sim.minerals == 150, "restart resets run")
+	check(game.sim.buildings.alive_count == 5, "restart leaves HQ + starting defense")
+
+	# 스트레스: 500마리 추가 후 프레임 진행
+	game.sim.debug_spawn(500)
+	var worst_render := 0
+	for i in 60:
+		await process_frame
+		worst_render = maxi(worst_render, game._last_render_usec)
+	print("SMOKE: 500+ enemies render worst %.2f ms, tick %.2f ms" % [float(worst_render) / 1000.0, float(game.sim.last_tick_usec) / 1000.0])
+	check(game._enemy_renderer.visible_total() == game.sim.enemies_alive(), "renderer matches sim at 500+")
+
+	print("RESULT: %d checks, %d failures" % [checks, failures.size()])
+	# 씬을 먼저 내리고 오디오를 멈춰야 종료 시 누수 경고가 없다
+	root.get_node("AudioManager").stop_all()
+	game.queue_free()
+	await process_frame
+	await process_frame
 	quit(0 if failures.is_empty() else 1)
-
-func _sample(elapsed: float) -> void:
-	var living := get_nodes_in_group("enemies").filter(func(enemy): return not enemy._dead).size()
-	if living != game.enemies_alive:
-		var message := "Enemy count mismatch: %d != %d" % [living, game.enemies_alive]
-		if message not in failures:
-			failures.append(message)
-	var row := {"wall_s": snappedf(elapsed, 0.01), "run_s": snappedf(gm.game_time, 0.01),
-		"wave": gm.wave_number, "kills": gm.kill_count, "enemies": living,
-		"buildings": game._buildings_count, "minerals": gm.minerals,
-		"hq_hp": snappedf(game._hq.current_hp, 0.1), "fps": Engine.get_frames_per_second()}
-	samples.append(row)
-	if int(elapsed) % 30 == 0:
-		print("PLAY SAMPLE: ", JSON.stringify(row))
-
-func _record_run(reason: String) -> void:
-	runs.append({"reason": reason, "wave": gm.wave_number, "kills": gm.kill_count,
-		"run_seconds": gm.game_time, "hq_hp": game._hq.current_hp})
-
-func _act(elapsed: float) -> void:
-	var modal := "game_over" if gm.is_game_over else ("reward" if game._awaiting_card else ("choice" if game._awaiting_choice else ""))
-	if modal != last_modal:
-		modal_since = elapsed
-		last_modal = modal
-	if modal != "":
-		await capture(modal)
-		if elapsed - modal_since < 2.0:
-			return
-		if modal == "game_over":
-			_record_run("game_over")
-			var restart := find_button(game._ui._game_over_panel, root.get_node("Locale").t("restart"))
-			click_button(restart)
-			await process_frame
-			await process_frame
-			game = current_scene
-			game._debug_visible = true
-			game._ui.set_debug_visible(true)
-		elif modal == "reward":
-			var best := 0
-			var score := -1.0
-			for i in game._pending_cards.size():
-				var card = game._pending_cards[i]
-				var value: float = card.effect_value
-				if card.trait_type in [1, 3, 4]:
-					value += 100.0
-				if value > score:
-					score = value
-					best = i
-			click_button(game._ui._card_buttons[best])
-			rewards += 1
-		else:
-			# Use the safe/pass option; no forced challenge, resources, or damage.
-			click_button(game._ui._choice_buttons[game._pending_choices.size() - 1])
-		return
-	await capture("battle")
-	if gm.minerals < 50:
-		return
-	var sites := [Vector2i(126, 128), Vector2i(130, 128), Vector2i(128, 126), Vector2i(128, 130),
-		Vector2i(126, 126), Vector2i(130, 130), Vector2i(126, 130), Vector2i(130, 126)]
-	for tile in sites:
-		if game.building_grid.has(tile):
-			continue
-		click_button(game._ui._slot_buttons[1])
-		var before: int = game._buildings_count
-		click_at(game._camera.unproject_position(Vector3(tile.x + 0.5, 0, tile.y + 0.5)))
-		if game._buildings_count > before:
-			builds += 1
-		return
-	for tile in sites:
-		var building = game.building_grid.get(tile)
-		if is_instance_valid(building) and building.level < 3:
-			click_at(game._camera.unproject_position(building.position))
-			return

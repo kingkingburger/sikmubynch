@@ -1,11 +1,13 @@
 extends Node
 
 ## BGM/SFX 재생 관리. 볼륨 제어, BGM 크로스페이드, SFX 풀링.
+## 대량 처치는 개별 재생하지 않고 처치 수 구간별로 레이어를 쌓는다(play_kill_layer).
 
 var _bgm_player: AudioStreamPlayer
 var _bgm_fade_player: AudioStreamPlayer
 var _sfx_players: Array[AudioStreamPlayer] = []
-const SFX_POOL_SIZE := 8
+const SFX_POOL_SIZE := 12
+const SAME_SFX_MAX_CONCURRENT := 3
 
 var master_volume: float = 0.8:
 	set(v):
@@ -22,13 +24,15 @@ var sfx_volume: float = 0.8:
 	set(v):
 		sfx_volume = clampf(v, 0.0, 1.0)
 
-# Preloaded SFX cache
 var _sfx_cache: Dictionary = {}
 
-# Crossfade state
 var _fading: bool = false
 var _fade_time: float = 0.0
 const FADE_DURATION := 1.0
+
+# 같은 사운드가 짧은 시간에 몰리는 것을 막는 쿨다운
+var _sfx_last_play: Dictionary = {}
+const SFX_MIN_INTERVAL := 0.04
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -67,7 +71,6 @@ func play_bgm(stream: AudioStream) -> void:
 	if _bgm_player.playing and _bgm_player.stream == stream:
 		return
 	if _bgm_player.playing:
-		# Crossfade: old → fade player, new → main player
 		_bgm_fade_player.stream = _bgm_player.stream
 		_bgm_fade_player.volume_db = _bgm_player.volume_db
 		_bgm_fade_player.play(_bgm_player.get_playback_position())
@@ -86,21 +89,50 @@ func stop_bgm() -> void:
 	_bgm_fade_player.stop()
 	_fading = false
 
-func play_sfx(stream: AudioStream, volume_offset_db: float = 0.0) -> void:
+## 모든 재생 정지. 종료 직전(헤드리스 테스트 등)에 재생 중인 스트림이 누수로 잡히지 않게 한다.
+func stop_all() -> void:
+	stop_bgm()
+	_bgm_player.stream = null
+	_bgm_fade_player.stream = null
+	for p in _sfx_players:
+		p.stop()
+		p.stream = null
+	_sfx_cache.clear()
+
+func play_sfx(stream: AudioStream, volume_offset_db: float = 0.0, pitch: float = 1.0) -> void:
 	if not stream:
+		return
+	var same := 0
+	for p in _sfx_players:
+		if p.playing and p.stream == stream:
+			same += 1
+	if same >= SAME_SFX_MAX_CONCURRENT:
 		return
 	for p in _sfx_players:
 		if not p.playing:
 			p.stream = stream
 			p.volume_db = linear_to_db(sfx_volume) + volume_offset_db
+			p.pitch_scale = pitch
 			p.play()
 			return
-	# All busy — steal oldest
+	# All busy — steal first
 	_sfx_players[0].stream = stream
 	_sfx_players[0].volume_db = linear_to_db(sfx_volume) + volume_offset_db
+	_sfx_players[0].pitch_scale = pitch
 	_sfx_players[0].play()
 
-func play_sfx_by_name(sfx_name: String, volume_offset_db: float = 0.0) -> void:
+func play_sfx_by_name(sfx_name: String, volume_offset_db: float = 0.0, pitch: float = 1.0) -> void:
+	var now := Time.get_ticks_msec() * 0.001
+	var last: float = _sfx_last_play.get(sfx_name, -1.0)
+	if now - last < SFX_MIN_INTERVAL:
+		return
+	_sfx_last_play[sfx_name] = now
+	var stream := _load_sfx(sfx_name)
+	if stream == null:
+		return
+	play_sfx(stream, volume_offset_db, pitch)
+
+func _load_sfx(sfx_name: String) -> AudioStream:
 	if not _sfx_cache.has(sfx_name):
 		var base := "res://assets/audio/sfx/%s" % sfx_name
 		var stream: AudioStream = null
@@ -109,10 +141,25 @@ func play_sfx_by_name(sfx_name: String, volume_offset_db: float = 0.0) -> void:
 			if ResourceLoader.exists(path):
 				stream = load(path)
 				break
-		if stream == null:
-			return
 		_sfx_cache[sfx_name] = stream
-	play_sfx(_sfx_cache[sfx_name], volume_offset_db)
+	return _sfx_cache[sfx_name]
+
+## 틱 처치 수에 따라 사운드 레이어를 쌓는다. 1마리는 조용하고, 수십 마리는 폭발음이 겹친다.
+func play_kill_layer(kill_count: int, explosion_kills: int) -> void:
+	if kill_count <= 0:
+		return
+	if kill_count >= 30:
+		play_sfx_by_name("explosion", 2.0, 0.8)
+		play_sfx_by_name("death", 0.0, 0.7)
+	elif kill_count >= 10:
+		play_sfx_by_name("explosion", -3.0, 0.95)
+		play_sfx_by_name("death", -3.0, 0.85)
+	elif kill_count >= 3:
+		play_sfx_by_name("death", -4.0, 0.95)
+	else:
+		play_sfx_by_name("death", -9.0, 1.0 + randf_range(-0.05, 0.05))
+	if explosion_kills >= 5 and kill_count < 10:
+		play_sfx_by_name("explosion", -4.0, 1.0)
 
 func play_bgm_by_name(bgm_name: String) -> void:
 	var base := "res://assets/audio/bgm/%s" % bgm_name

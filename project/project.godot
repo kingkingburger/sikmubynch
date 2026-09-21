@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="SIKMUBYNCH"
-config/description="대규모 웨이브 디펜스 + 오토배틀 + 로그라이크"
+config/description="엄청난 물량이 몰려오고, 건설과 배치로 방어선을 유지하는 2D 쿼터뷰 대규모 디펜스"
 run/main_scene="res://scenes/main/title.tscn"
 config/features=PackedStringArray("4.6")
 
@@ -19,13 +19,8 @@ config/features=PackedStringArray("4.6")
 
 Locale="*res://autoloads/locale.gd"
 GameManager="*res://autoloads/game_manager.gd"
-FlowField="*res://autoloads/flow_field.gd"
-SynergyManager="*res://autoloads/synergy_manager.gd"
-EventManager="*res://autoloads/event_manager.gd"
 GameFeel="*res://autoloads/game_feel.gd"
 AudioManager="*res://autoloads/audio_manager.gd"
-SpatialGrid="*res://autoloads/spatial_grid.gd"
-EffectsManager="*res://autoloads/effects_manager.gd"
 
 [display]
 

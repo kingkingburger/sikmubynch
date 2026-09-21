@@ -1,625 +1,317 @@
-extends Node3D
+extends Node2D
 
-const RewardCard := preload("res://scripts/data/reward_card.gd")
+## 메인 게임 씬(코디네이터). 시뮬레이션을 고정 틱으로 돌리고, 렌더러·HUD·입력을 잇는다.
+## 시뮬레이션은 Node를 모르고, 여기서만 sim의 명령 함수를 호출한다.
+
+const SimConfig := preload("res://sim/sim_config.gd")
+const GameSimulation := preload("res://sim/game_simulation.gd")
+const Iso := preload("res://render/iso.gd")
+const GroundRenderer := preload("res://render/ground_renderer.gd")
+const EnemyRenderer := preload("res://render/enemy_renderer.gd")
+const ProjectileRenderer := preload("res://render/projectile_renderer.gd")
+const EffectRenderer := preload("res://render/effect_renderer.gd")
+const BuildingView := preload("res://render/building_view.gd")
+const PlacementView := preload("res://render/placement_view.gd")
+const WorldCamera := preload("res://render/world_camera.gd")
+const Hud := preload("res://scenes/ui/hud.gd")
 const BuildingCatalog := preload("res://scripts/building_catalog.gd")
-const GameUiController := preload("res://scripts/game_ui_controller.gd")
-const WaveDirector := preload("res://scripts/wave_director.gd")
 
-const MAP_SIZE := 256
-const WAVE_INTERVAL := 10.0
-const HQ_CENTER := Vector2(128.5, 128.5)
-const HQ_WORLD_POS := Vector3(128.5, 0.0, 128.5)
+const MAX_TICKS_PER_FRAME := 6
+const RIGHT_CLICK_DRAG_THRESHOLD := 6.0
 
-# Scenes
-var barricade_scene: PackedScene
-var tower_scene: PackedScene
-var barracks_scene: PackedScene
-var miner_scene: PackedScene
-var buff_tower_scene: PackedScene
-var enemy_scene: PackedScene
-var mineral_orb_scene: PackedScene
+var sim: GameSimulation
+var run_seed: int = 0
 
-# Building data templates
-var _building_datas: Array = []
+var _accum: float = 0.0
+var _alpha: float = 0.0
+var _ground: GroundRenderer
+var _buildings_root: Node2D
+var _enemy_renderer: EnemyRenderer
+var _projectile_renderer: ProjectileRenderer
+var _effect_renderer: EffectRenderer
+var _placement: PlacementView
+var _camera: WorldCamera
+var _hud
+var _building_views: Dictionary = {}     # sim index → BuildingView
+var _enemy_colors: Array = []
+
+var _slot_types: Array = []
 var _selected_slot: int = 0
-
-# State
-var building_grid: Dictionary = {}
-var enemies_alive: int = 0
-var _units_alive: int = 0
-var _buildings_count: int = 0
-var _wave_active: bool = false
-var _between_waves: bool = false
-var _wave_countdown: float = 0.0
-
-# Nodes
-var _camera: Camera3D
-var _hq: BaseBuilding
-
-# UI
-var _ui
-
-# Reward card UI
-var _pending_cards: Array = []
-
-# Pause during card/choice selection
-var _awaiting_card: bool = false
-var _awaiting_choice: bool = false
-var _queued_choice_event: Dictionary = {}
-
-# Camera control
-var _cam_center := Vector2(128.0, 128.0)
-var _cam_zoom: float = 18.0
-const CAM_SPEED := 35.0
-var _right_dragging: bool = false
-var _flow_dirty: bool = false
-var _flow_timer: float = 0.0
-const CAM_ZOOM_MIN := 14.0
-const CAM_ZOOM_MAX := 90.0
-const CAM_DIST := 50.0
-
-# Drag build
 var _dragging: bool = false
-var _drag_last_grid: Vector2i = Vector2i(-999, -999)
-
-# ESC menu
+var _drag_last_tile: Vector2i = Vector2i(-999, -999)
+var _right_pressed: bool = false
+var _right_press_pos: Vector2 = Vector2.ZERO
+var _right_dragged: bool = false
 var _esc_visible: bool = false
-
-# Debug overlay
 var _debug_visible: bool = false
-
-# Ghost
-var _mouse_grid_pos: Vector2i = Vector2i(-1, -1)
-var _ghost_mesh: MeshInstance3D
-var _ghost_mat: StandardMaterial3D
+var _last_render_usec: int = 0
+var _mouse_tile: Vector2i = Vector2i(-1, -1)
 
 func _ready() -> void:
-	_reset_all_managers()
-	barricade_scene = load("res://scenes/buildings/barricade.tscn")
-	tower_scene = load("res://scenes/buildings/tower.tscn")
-	barracks_scene = load("res://scenes/buildings/barracks.tscn")
-	miner_scene = load("res://scenes/buildings/miner.tscn")
-	buff_tower_scene = load("res://scenes/buildings/buff_tower.tscn")
-	enemy_scene = load("res://scenes/enemies/enemy.tscn")
-	mineral_orb_scene = load("res://scenes/effects/mineral_orb.tscn")
+	GameManager.reset()
+	GameFeel.reset()
+	run_seed = _pick_seed()
+	sim = GameSimulation.new()
+	sim.start(run_seed)
+	_slot_types = BuildingCatalog.buildable_types()
+	for ed in sim.enemy_datas:
+		_enemy_colors.append((ed as EnemyData).color)
 
-	_init_building_data()
-	_setup_camera()
-	_setup_lighting()
-	_setup_ground()
-	_setup_hq()
-	_setup_ghost()
-	_setup_ui()
-	_buildings_count = 1  # HQ
+	_ground = GroundRenderer.new()
+	add_child(_ground)
+	_ground.setup(SimConfig.MAP_SIZE, SimConfig.HQ_CENTER, run_seed)
 
-	GameManager.minerals_changed.connect(_on_minerals_changed)
+	_buildings_root = Node2D.new()
+	_buildings_root.y_sort_enabled = true
+	add_child(_buildings_root)
+
+	_enemy_renderer = EnemyRenderer.new()
+	add_child(_enemy_renderer)
+	_enemy_renderer.setup(sim.enemy_datas)
+
+	_projectile_renderer = ProjectileRenderer.new()
+	add_child(_projectile_renderer)
+	_projectile_renderer.setup()
+
+	_effect_renderer = EffectRenderer.new()
+	add_child(_effect_renderer)
+	_effect_renderer.setup()
+
+	_placement = PlacementView.new()
+	_placement.visible = false
+	add_child(_placement)
+
+	_camera = WorldCamera.new()
+	add_child(_camera)
+	_camera.setup(SimConfig.MAP_SIZE, SimConfig.HQ_CENTER)
+	_camera.make_current()
+
+	for idx in range(sim.buildings.high):
+		if sim.buildings.alive[idx] != 0:
+			_add_building_view(idx)
+
+	_hud = Hud.new()
+	_hud.slot_pressed.connect(_on_slot_pressed)
+	_hud.resume_requested.connect(_on_esc_resume)
+	_hud.restart_requested.connect(_on_restart)
+	_hud.title_requested.connect(_on_esc_title)
+	_hud.setup(self, sim.building_datas)
+	_hud.update_slot_highlight(_selected_slot, sim.building_datas)
+	_hud.update_hud(sim, GameFeel.paused)
+
 	GameManager.game_over_triggered.connect(_on_game_over)
-	EventManager.combat_event_triggered.connect(_on_combat_event)
-	EventManager.choice_event_triggered.connect(_on_choice_event)
-	SynergyManager.synergy_changed.connect(_update_synergy_bar)
-	GameFeel.setup(_camera, _ui.get_canvas())
-	_recalculate_flow_field()
-	# Battle BGM
 	AudioManager.play_bgm_by_name("battle")
-	_spawn_wave()
 
-func _init_building_data() -> void:
-	_building_datas = BuildingCatalog.create()
+func _pick_seed() -> int:
+	var env := OS.get_environment("SIKMUBYNCH_SEED")
+	if env != "" and env.is_valid_int():
+		return int(env)
+	randomize()
+	return randi() & 0x7FFFFFFF
+
+# ---------------------------------------------------------------------------
+# 프레임
+# ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
-	if GameManager.is_game_over or GameFeel.paused:
-		return
-	# Camera WASD
-	var cam_dir := Vector2.ZERO
-	if Input.is_key_pressed(KEY_W): cam_dir.y -= 1.0
-	if Input.is_key_pressed(KEY_S): cam_dir.y += 1.0
-	if Input.is_key_pressed(KEY_A): cam_dir.x -= 1.0
-	if Input.is_key_pressed(KEY_D): cam_dir.x += 1.0
-	if cam_dir != Vector2.ZERO:
-		var rotated := cam_dir.rotated(deg_to_rad(-45.0))
-		_cam_center += rotated.normalized() * CAM_SPEED * delta
-		var pad := _cam_zoom * 0.3
-		_cam_center.x = clampf(_cam_center.x, pad, float(MAP_SIZE) - pad)
-		_cam_center.y = clampf(_cam_center.y, pad, float(MAP_SIZE) - pad)
-		_update_camera_position()
-	if _ui:
-		_ui.tick(
-			delta,
-			MAP_SIZE,
-			get_tree().get_nodes_in_group("buildings"),
-			get_tree().get_nodes_in_group("enemies"),
-			_hq,
-			_debug_visible,
-			enemies_alive,
-			_units_alive,
-			_buildings_count,
-			GameFeel.game_speed
-		)
-	# Deferred FlowField recalculation (avoid lag on build)
-	if _flow_dirty:
-		_flow_timer += delta
-		if _flow_timer >= 0.3:
-			_flow_dirty = false
-			_flow_timer = 0.0
-			_recalculate_flow_field()
-	# Gradual enemy spawning
-	_process_spawn_queue()
-	# Pause wave countdown during card/choice selection
-	if _between_waves and not _awaiting_card and not _awaiting_choice:
-		_wave_countdown -= delta
-		_update_hud()
-		if _wave_countdown <= 0.0:
-			_between_waves = false
-			_spawn_wave()
-	elif _wave_active:
-		# Check wave completion using cached counter (no tree scan)
-		if enemies_alive <= 0 and _spawn_queue.is_empty():
-			_wave_active = false
-			enemies_alive = 0
-			_on_wave_cleared()
-		_update_hud()
+	if not _is_world_input_blocked():
+		_camera.frame_tick(delta)
+	else:
+		_camera.apply_shake()
 
-# ---------------------------------------------------------------------------
-# Scene setup
-# ---------------------------------------------------------------------------
+	var sim_time := GameFeel.consume_sim_time(delta)
+	if sim.game_over:
+		sim_time = 0.0
+	_accum += sim_time
+	var ticks := 0
+	while _accum >= SimConfig.TICK_DT and ticks < MAX_TICKS_PER_FRAME:
+		sim.tick()
+		_consume_tick_events()
+		_accum -= SimConfig.TICK_DT
+		ticks += 1
+	if ticks >= MAX_TICKS_PER_FRAME and _accum > SimConfig.TICK_DT:
+		_accum = 0.0   # 따라잡지 못하면 버린다 (죽음의 나선 방지)
+	_alpha = clampf(_accum / SimConfig.TICK_DT, 0.0, 1.0)
 
-func _setup_camera() -> void:
-	_camera = Camera3D.new()
-	_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	_camera.size = _cam_zoom
-	_camera.rotation_degrees = Vector3(-35.0, 45.0, 0.0)
-	add_child(_camera)
-	_update_camera_position()
+	var t0 := Time.get_ticks_usec()
+	_enemy_renderer.update_from_sim(sim.enemies, _alpha, sim.tick_index)
+	_projectile_renderer.update_from_sim(sim.combat, _alpha)
+	_effect_renderer.update_frame(delta if not GameFeel.paused else 0.0)
+	for view in _building_views.values():
+		view.update_from_sim(sim.buildings, delta, sim.tick_index)
+	_last_render_usec = Time.get_ticks_usec() - t0
 
-func _update_camera_position() -> void:
-	if not _camera:
-		return
-	var elev_rad := deg_to_rad(35.0)
-	var yaw_rad := deg_to_rad(45.0)
-	var pos := Vector3(
-		_cam_center.x + CAM_DIST * cos(elev_rad) * sin(yaw_rad),
-		CAM_DIST * sin(elev_rad),
-		_cam_center.y + CAM_DIST * cos(elev_rad) * cos(yaw_rad)
-	)
-	_camera.position = pos
-	_camera.size = _cam_zoom
-	GameFeel.update_camera_base(pos)
+	GameManager.sync(sim)
+	if _hud:
+		_hud.update_hud(sim, GameFeel.paused)
+		_hud.tick(delta, sim, _debug_visible, _debug_text() if _debug_visible else "")
 
-func _setup_lighting() -> void:
-	# Dim directional — barely visible, just for shadows
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55.0, 30.0, 0.0)
-	sun.light_color = Color(0.95, 0.9, 0.8)
-	sun.light_energy = 1.1
-	sun.shadow_enabled = true
-	add_child(sun)
-
-	# Dark environment —発光体 only
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.01, 0.01, 0.015)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.22, 0.24, 0.3)
-	env.ambient_light_energy = 0.5
-	# Glow/Bloom — makes emission pop
-	env.glow_enabled = true
-	env.glow_intensity = 0.8
-	env.glow_bloom = 0.15
-	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_ADDITIVE
-	env.glow_hdr_threshold = 0.8
-
-	var world_env := WorldEnvironment.new()
-	world_env.environment = env
-	add_child(world_env)
-
-func _setup_ground() -> void:
-	var ground := MeshInstance3D.new()
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(MAP_SIZE + 128, MAP_SIZE + 128)
-	var shader_mat := ShaderMaterial.new()
-	var shader := Shader.new()
-	shader.code = """
-shader_type spatial;
-
-uniform vec3 ground_dark : source_color = vec3(0.04, 0.045, 0.03);
-uniform vec3 ground_mid : source_color = vec3(0.08, 0.09, 0.06);
-uniform vec3 ground_light : source_color = vec3(0.12, 0.11, 0.07);
-uniform vec3 grid_color : source_color = vec3(0.10, 0.12, 0.07);
-uniform vec3 chunk_color : source_color = vec3(0.14, 0.11, 0.06);
-uniform vec3 crack_color : source_color = vec3(0.02, 0.02, 0.015);
-uniform vec3 moss_color : source_color = vec3(0.04, 0.08, 0.03);
-uniform vec3 hq_glow_color : source_color = vec3(0.15, 0.25, 0.5);
-uniform float map_size = 256.0;
-uniform float time_scale = 1.0;
-uniform vec2 hq_pos = vec2(128.5, 128.5);
-
-// Procedural noise functions
-float hash(vec2 p) {
-	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float hash2(vec2 p) {
-	return fract(sin(dot(p, vec2(269.5, 183.3))) * 43758.5453);
-}
-
-float value_noise(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	f = f * f * (3.0 - 2.0 * f); // smoothstep
-	float a = hash(i);
-	float b = hash(i + vec2(1.0, 0.0));
-	float c = hash(i + vec2(0.0, 1.0));
-	float d = hash(i + vec2(1.0, 1.0));
-	return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
-float fbm(vec2 p, int octaves) {
-	float val = 0.0;
-	float amp = 0.5;
-	float freq = 1.0;
-	for (int i = 0; i < octaves; i++) {
-		val += amp * value_noise(p * freq);
-		amp *= 0.5;
-		freq *= 2.0;
-	}
-	return val;
-}
-
-// Voronoi for cracks/stone pattern
-float voronoi(vec2 p) {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-	float min_dist = 1.0;
-	for (int x = -1; x <= 1; x++) {
-		for (int y = -1; y <= 1; y++) {
-			vec2 neighbor = vec2(float(x), float(y));
-			vec2 point = vec2(hash(i + neighbor), hash2(i + neighbor));
-			float d = length(neighbor + point - f);
-			min_dist = min(min_dist, d);
-		}
-	}
-	return min_dist;
-}
-
-void fragment() {
-	vec2 uv = UV * map_size;
-	vec2 world_uv = uv;
-	vec2 cell = floor(uv);
-
-	// Multi-layer noise for organic terrain
-	float n1 = fbm(uv * 0.15, 4);
-	float n2 = fbm(uv * 0.4 + 50.0, 3);
-	float n3 = value_noise(uv * 0.08);
-
-	// Base color: blend between dark/mid/light using noise
-	vec3 base = mix(ground_dark, ground_mid, n1 * 0.8 + 0.1);
-	base = mix(base, ground_light, smoothstep(0.55, 0.7, n2) * 0.4);
-
-	// Stone patches (voronoi-based)
-	float stone = voronoi(uv * 0.3);
-	float stone_edge = smoothstep(0.02, 0.06, stone);
-	base = mix(crack_color, base, stone_edge);
-
-	// Cracks (thin dark lines from voronoi)
-	float cracks = voronoi(uv * 0.12 + 100.0);
-	float crack_line = 1.0 - smoothstep(0.0, 0.03, cracks);
-	base = mix(base, crack_color, crack_line * 0.7);
-
-	// Moss patches (in low areas)
-	float moss = smoothstep(0.3, 0.5, n3) * smoothstep(0.4, 0.6, n1);
-	base = mix(base, moss_color, moss * 0.5);
-
-	// Per-tile hash variation (subtle)
-	float h = hash(cell);
-	base *= 0.9 + h * 0.2;
-
-	// Grid lines (subtle)
-	vec2 grid_uv = fract(uv);
-	float line_w = 0.025;
-	float is_line = 0.0;
-	if (grid_uv.x < line_w || grid_uv.x > 1.0 - line_w ||
-		grid_uv.y < line_w || grid_uv.y > 1.0 - line_w) {
-		is_line = 0.3;
-	}
-
-	// 4x4 chunk borders
-	vec2 chunk_uv = fract(uv / 4.0);
-	float chunk_w = 0.015;
-	float is_chunk = 0.0;
-	if (chunk_uv.x < chunk_w || chunk_uv.x > 1.0 - chunk_w ||
-		chunk_uv.y < chunk_w || chunk_uv.y > 1.0 - chunk_w) {
-		is_chunk = 0.5;
-	}
-
-	// HQ proximity glow
-	float hq_dist = length(world_uv - hq_pos);
-	float hq_glow = exp(-hq_dist * 0.08) * 0.3;
-	float hq_pulse = 1.0 + sin(TIME * time_scale * 1.5) * 0.15;
-
-	// Vignette — stronger edge darkening
-	vec2 center_uv = UV - 0.5;
-	float vignette = 1.0 - dot(center_uv, center_uv) * 1.2;
-	vignette = clamp(vignette, 0.2, 1.0);
-
-	// Compose
-	vec3 col = base;
-	col = mix(col, grid_color, is_line);
-	col = mix(col, chunk_color, is_chunk);
-	col += hq_glow_color * hq_glow * hq_pulse;
-	col *= vignette;
-
-	ALBEDO = col;
-	ROUGHNESS = 0.92 - stone_edge * 0.15;
-	SPECULAR = 0.1 + stone_edge * 0.1;
-}
-"""
-	shader_mat.shader = shader
-	ground.mesh = plane
-	ground.material_override = shader_mat
-	ground.position = Vector3(MAP_SIZE / 2.0, 0.0, MAP_SIZE / 2.0)
-	add_child(ground)
-	_add_border()
-
-func _add_border() -> void:
-	var border_color := Color(0.15, 0.12, 0.08, 1.0)
-	var thickness := 0.15
-	var height := 0.05
-	var s := float(MAP_SIZE)
-	var borders := [
-		[Vector3(s / 2.0, height, 0.0), Vector3(s, height, thickness)],
-		[Vector3(s / 2.0, height, s), Vector3(s, height, thickness)],
-		[Vector3(0.0, height, s / 2.0), Vector3(thickness, height, s)],
-		[Vector3(s, height, s / 2.0), Vector3(thickness, height, s)],
+func _debug_text() -> String:
+	return "FPS %d\n적 %d (최대 %d)\n발사체 %d  파티클 %d\n건물 %d\n틱 %.2f ms  렌더 %.2f ms\n스폰 큐 %d  그리드 %d  Flow 재계산 %d\n웨이브 %d 시간 %.1f  속도 %.1fx  seed %d" % [
+		Engine.get_frames_per_second(), sim.enemies_alive(), sim.peak_alive(),
+		sim.combat.p_alive_count, _effect_renderer.particle_count(),
+		sim.buildings.alive_count,
+		float(sim.last_tick_usec) / 1000.0, float(_last_render_usec) / 1000.0,
+		sim.waves.queue_size(), sim.grid.registered, sim.flow.recalc_count,
+		sim.waves.wave_number, sim.waves.wave_time, GameFeel.game_speed, run_seed
 	]
-	for b in borders:
-		var mi := MeshInstance3D.new()
-		var bx := BoxMesh.new()
-		bx.size = b[1]
-		mi.mesh = bx
-		mi.position = b[0]
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = border_color
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mi.material_override = mat
-		add_child(mi)
 
-func _setup_hq() -> void:
-	var hq_scene := load("res://scenes/buildings/hq.tscn") as PackedScene
-	_hq = hq_scene.instantiate() as BaseBuilding
-	_hq.position = HQ_WORLD_POS
-	_hq.add_to_group("buildings")
-	add_child(_hq)
+## 틱 결과를 표현 계층으로 넘긴다. 규모에 비례하되 개별 재생하지 않는다.
+func _consume_tick_events() -> void:
+	var e := sim.enemies
+	var c := sim.combat
+	_effect_renderer.begin_tick()
+	if e.death_count > 0:
+		_effect_renderer.on_deaths(e.death_count, e.death_x, e.death_y, e.death_type, _enemy_colors)
+	if c.hit_count > 0:
+		_effect_renderer.on_hits(c.hit_count, c.hit_x, c.hit_y, c.hit_kind)
+		AudioManager.play_sfx_by_name("hit", -14.0, 1.0 + randf_range(-0.08, 0.08))
+	var max_explosion_kills := 0
+	if c.explosion_count > 0:
+		_effect_renderer.on_explosions(c.explosion_count, c.explosion_x, c.explosion_y, c.explosion_radius, c.explosion_kills)
+		for i in range(mini(c.explosion_count, SimConfig.MAX_EXPLOSION_EVENTS)):
+			max_explosion_kills = maxi(max_explosion_kills, c.explosion_kills[i])
+	GameFeel.report_kills(c.tick_kills, max_explosion_kills)
+	AudioManager.play_kill_layer(c.tick_kills, max_explosion_kills)
 
-	for dx in 3:
-		for dz in 3:
-			var cell := Vector2i(127 + dx, 127 + dz)
-			building_grid[cell] = _hq
+	for idx in sim.buildings_destroyed:
+		var view: BuildingView = _building_views.get(idx)
+		if view:
+			var bd := view.data
+			var cx := float(view.tile_x) + float(view.size) * 0.5
+			var cy := float(view.tile_y) + float(view.size) * 0.5
+			_effect_renderer.on_building_destroyed(cx, cy, float(view.size), bd.color)
+			GameFeel.report_building_destroyed(bd.building_type == BuildingData.BuildingType.HQ)
+			view.queue_free()
+			_building_views.erase(idx)
+		AudioManager.play_sfx_by_name("destroy", -2.0)
+	if sim.hq_hit_this_tick:
+		_hud.show_hq_warning()
+		GameFeel.shake(2.0)
 
-var _range_ring: MeshInstance3D
-var _range_shader_mat: ShaderMaterial
-
-func _setup_ghost() -> void:
-	_ghost_mesh = MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(1.0, 0.4, 1.0)
-	_ghost_mesh.mesh = box
-	_ghost_mat = StandardMaterial3D.new()
-	_ghost_mat.albedo_color = Color(0.4, 0.8, 0.4, 0.4)
-	_ghost_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_ghost_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_ghost_mesh.material_override = _ghost_mat
-	_ghost_mesh.visible = false
-	add_child(_ghost_mesh)
-	# Range indicator ring
-	_range_ring = MeshInstance3D.new()
-	var ring_plane := PlaneMesh.new()
-	ring_plane.size = Vector2(2.0, 2.0)
-	_range_ring.mesh = ring_plane
-	_range_shader_mat = ShaderMaterial.new()
-	var ring_shader := Shader.new()
-	ring_shader.code = """
-shader_type spatial;
-render_mode unshaded, cull_disabled;
-
-uniform vec4 ring_color : source_color = vec4(0.3, 0.7, 1.0, 0.5);
-uniform float ring_width = 0.04;
-uniform float pulse_speed = 2.5;
-
-void fragment() {
-	vec2 uv = UV * 2.0 - 1.0;
-	float dist = length(uv);
-	// Outer edge ring
-	float ring = smoothstep(1.0, 1.0 - ring_width, dist)
-			   - smoothstep(1.0 - ring_width, 1.0 - ring_width * 2.5, dist);
-	// Inner fill (very faint)
-	float fill = smoothstep(1.0, 0.0, dist) * 0.08;
-	// Pulse animation
-	float pulse = 0.7 + 0.3 * sin(TIME * pulse_speed);
-	// Radial scan line
-	float angle = atan(uv.y, uv.x);
-	float scan = smoothstep(0.0, 0.15, fract(angle / 6.283 + TIME * 0.3)) * 0.3;
-	float a = (ring * pulse + fill + scan * smoothstep(1.0, 0.3, dist)) * ring_color.a;
-	ALBEDO = ring_color.rgb;
-	ALPHA = a * step(dist, 1.0);
-}
-"""
-	_range_shader_mat.shader = ring_shader
-	_range_ring.material_override = _range_shader_mat
-	_range_ring.visible = false
-	add_child(_range_ring)
+	if sim.waves.wave_started_flag:
+		_hud.show_wave_banner(sim.waves.wave_number, sim.waves.wave_type, sim.waves.spawn_sides, sim.waves.total_planned)
+		AudioManager.play_sfx_by_name("wave_start")
+	if sim.waves.wave_cleared_flag:
+		AudioManager.play_sfx_by_name("mineral", -2.0)
 
 # ---------------------------------------------------------------------------
-# UI (Diablo-style dark)
+# 건물 표현
 # ---------------------------------------------------------------------------
 
-func _setup_ui() -> void:
-	_ui = GameUiController.new()
-	_ui.slot_pressed.connect(_on_slot_pressed)
-	_ui.card_selected.connect(_on_card_selected)
-	_ui.card_skipped.connect(_on_card_skip)
-	_ui.choice_selected.connect(_on_choice_selected)
-	_ui.resume_requested.connect(_on_esc_resume)
-	_ui.restart_requested.connect(_on_restart)
-	_ui.title_requested.connect(_on_esc_title)
-	_ui.setup(self, _building_datas)
-	_update_slot_highlight()
-	_update_hud()
-	_update_synergy_bar()
-
-func _update_slot_highlight() -> void:
-	if _ui:
-		_ui.update_slot_highlight(_selected_slot)
-
-# ---------------------------------------------------------------------------
-# Wave system
-# ---------------------------------------------------------------------------
-
-var _spawn_queue: Array = []
-const SPAWN_PER_FRAME := 3  # max enemies to spawn per frame
-
-func _spawn_wave() -> void:
-	var wave_num := GameManager.wave_number
-	var enemy_count := WaveDirector.enemy_count(wave_num, EventManager.get_challenge_enemy_mult())
-
-	var templates := WaveDirector.create_enemy_templates(wave_num)
-
-	# Queue enemies for gradual spawning instead of all at once
-	for i in enemy_count:
-		var template: EnemyData = templates[randi() % templates.size()]
-		var edge := WaveDirector.spawn_position(wave_num, MAP_SIZE, HQ_CENTER)
-		queue_enemy_spawn(template, Vector3(edge.x, 0.0, edge.y))
-
-	_wave_active = true
-	_update_hud()
-
-func queue_enemy_spawn(template: EnemyData, spawn_pos: Vector3) -> void:
-	_spawn_queue.append({"template": template, "position": spawn_pos})
-
-func _process_spawn_queue() -> void:
-	if GameManager.is_game_over or GameFeel.paused or _spawn_queue.is_empty():
+func _add_building_view(idx: int) -> void:
+	if idx < 0:
 		return
-	var count := mini(SPAWN_PER_FRAME, _spawn_queue.size())
-	for i in count:
-		var info: Dictionary = _spawn_queue.pop_front()
-		var enemy: Node3D = enemy_scene.instantiate()
-		enemy.set("data", info["template"])
-		enemy.set("target_position", HQ_WORLD_POS)
-		enemy.position = info["position"]
-		enemy.connect("died", _on_enemy_died)
-		if enemy.has_signal("drop_mineral"):
-			enemy.connect("drop_mineral", _on_enemy_drop_mineral)
-		add_child(enemy)
-		enemies_alive += 1
+	var type: int = sim.buildings.type_id[idx]
+	var view := BuildingView.new()
+	_buildings_root.add_child(view)
+	view.setup(idx, sim.building_datas[type], sim.buildings.tile_x[idx], sim.buildings.tile_y[idx])
+	_building_views[idx] = view
 
-func _on_wave_cleared() -> void:
-	AudioManager.play_sfx_by_name("wave_start")
-	EffectsManager.spawn_reward_sparkle(Vector3(128.5, 1.0, 128.5))
-	var bonus := 25 + GameManager.wave_number * 10
-	var reward_mult := EventManager.get_challenge_reward_mult()
-	GameManager.add_minerals(int(bonus * reward_mult))
-	EventManager.clear_combat_effects()
-	EventManager.clear_challenge()
-	GameManager.wave_number += 1
-	_between_waves = true
-	_wave_countdown = WAVE_INTERVAL
+func _try_place(type: int, tile: Vector2i) -> bool:
+	if _is_world_input_blocked():
+		return false
+	if not SimConfig.in_bounds(tile.x, tile.y):
+		return false
+	if not sim.can_place(type, tile.x, tile.y):
+		return false
+	if not sim.can_afford(type):
+		return false
+	var idx := sim.place_building(type, tile.x, tile.y)
+	if idx < 0:
+		return false
+	_add_building_view(idx)
+	var bd := sim.building_datas[type] as BuildingData
+	AudioManager.play_sfx_by_name("build", -3.0)
+	_effect_renderer.on_building_placed(float(tile.x) + float(bd.size) * 0.5, float(tile.y) + float(bd.size) * 0.5, bd.color)
+	_update_ghost_at_tile(tile)
+	return true
 
-	# Trigger reward cards
-	_show_reward_cards()
-
-	# 30% chance of combat event on next wave
-	if randf() < 0.3:
-		EventManager.trigger_random_combat_event()
-
-	# 25% chance of choice event between waves (wave 3+)
-	if GameManager.wave_number >= 3 and randf() < 0.25:
-		EventManager.trigger_random_choice_event()
+func _try_demolish(tile: Vector2i) -> bool:
+	if _is_world_input_blocked():
+		return false
+	var idx := sim.buildings.building_at(tile.x, tile.y)
+	if idx < 0 or idx == sim.buildings.hq_index:
+		return false
+	var view: BuildingView = _building_views.get(idx)
+	var refund := sim.demolish_at(tile.x, tile.y)
+	if refund < 0:
+		return false
+	if view:
+		view.queue_free()
+		_building_views.erase(idx)
+	AudioManager.play_sfx_by_name("ui_click", -4.0)
+	_update_ghost_at_tile(tile)
+	return true
 
 # ---------------------------------------------------------------------------
-# Input
+# 입력
 # ---------------------------------------------------------------------------
 
 func _input(event: InputEvent) -> void:
-	# Releases must cancel gestures even when a modal has opened since the press.
 	if event is InputEventMouseButton and not event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_dragging = false
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			_right_dragging = false
+			if _right_pressed and not _right_dragged and not _is_world_input_blocked():
+				_try_demolish(_screen_to_tile(event.position))
+			_right_pressed = false
+			_right_dragged = false
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_F3:
 			_debug_visible = not _debug_visible
-			if _ui:
-				_ui.set_debug_visible(_debug_visible)
+			_hud.set_debug_visible(_debug_visible)
 			return
 		if event.keycode == KEY_ESCAPE:
-			if not GameManager.is_game_over:
+			if not sim.game_over:
 				_toggle_esc_menu()
 			return
 		if event.keycode == KEY_SPACE:
 			if not _is_world_input_blocked():
 				GameFeel.toggle_pause()
-				_update_hud()
+			return
+		if event.keycode == KEY_F4 and OS.is_debug_build():
+			# 스트레스: HQ 주변 링에 500마리
+			if not _is_world_input_blocked():
+				sim.debug_spawn(500, EnemyData.EnemyType.RUSHER, 26.0)
 			return
 	if _is_world_input_blocked():
 		_cancel_world_drag()
 		return
 	if event is InputEventMouseMotion:
 		if get_viewport().gui_get_hovered_control() != null:
-			_cancel_world_drag()
+			_placement.hide_ghost()
+			_dragging = false
 			return
-		_update_ghost(event.position)
-		# Right-click drag camera (StarCraft style)
-		if _right_dragging:
-			var spd := _cam_zoom * 0.004
-			var cam_delta := Vector2(-event.relative.x, -event.relative.y) * spd
-			cam_delta = cam_delta.rotated(deg_to_rad(-45.0))
-			_cam_center += cam_delta
-			var pad := _cam_zoom * 0.3
-			_cam_center.x = clampf(_cam_center.x, pad, float(MAP_SIZE) - pad)
-			_cam_center.y = clampf(_cam_center.y, pad, float(MAP_SIZE) - pad)
-			_update_camera_position()
-		# Drag build for barricades
-		if _dragging and _selected_slot == 0:
-			_try_drag_build(event.position)
-
-	if event is InputEventMouseButton:
-		# Zoom
-		if event.button_index == MOUSE_BUTTON_WHEEL_UP and event.pressed:
-			_cam_zoom = maxf(_cam_zoom - 3.0, CAM_ZOOM_MIN)
-			_update_camera_position()
-		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN and event.pressed:
-			_cam_zoom = minf(_cam_zoom + 3.0, CAM_ZOOM_MAX)
-			_update_camera_position()
+		if _right_pressed:
+			if _right_dragged or event.position.distance_to(_right_press_pos) > RIGHT_CLICK_DRAG_THRESHOLD:
+				_right_dragged = true
+				_camera.pan_screen(-event.relative)
+		var tile := _screen_to_tile(event.position)
+		_mouse_tile = tile
+		_update_ghost_at_tile(tile)
+		if _dragging and _is_drag_buildable(_slot_types[_selected_slot]):
+			if tile != _drag_last_tile:
+				_drag_last_tile = tile
+				_try_place(_slot_types[_selected_slot], tile)
+	if event is InputEventMouseButton and event.pressed:
+		var vp := get_viewport().get_visible_rect().size
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_camera.zoom_by(WorldCamera.ZOOM_STEP, event.position, vp)
+			_update_ghost_at_tile(_screen_to_tile(event.position))
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_camera.zoom_by(1.0 / WorldCamera.ZOOM_STEP, event.position, vp)
+			_update_ghost_at_tile(_screen_to_tile(event.position))
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
-			KEY_1:
-				_selected_slot = 0
-				_update_slot_highlight()
-			KEY_2:
-				_selected_slot = 1
-				_update_slot_highlight()
-			KEY_3:
-				_selected_slot = 2
-				_update_slot_highlight()
-			KEY_4:
-				_selected_slot = 3
-				_update_slot_highlight()
-			KEY_5:
-				_selected_slot = 4
-				_update_slot_highlight()
+			KEY_1: _select_slot(0)
+			KEY_2: _select_slot(1)
+			KEY_3: _select_slot(2)
+			KEY_4: _select_slot(3)
+			KEY_5: _select_slot(4)
 			KEY_F:
 				var spd := GameFeel.cycle_speed()
-				if _ui:
-					_ui.set_speed_label(spd)
-
-func _is_world_input_blocked() -> bool:
-	return GameManager.is_game_over or _esc_visible or _awaiting_card or _awaiting_choice
-
-func _cancel_world_drag() -> void:
-	_dragging = false
-	_right_dragging = false
-	_ghost_mesh.visible = false
-	_range_ring.visible = false
+				_hud.set_speed_label(spd)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if _is_world_input_blocked():
@@ -627,426 +319,87 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_dragging = true
-			_drag_last_grid = Vector2i(-999, -999)
-			_handle_left_click(event.position)
+			var tile := _screen_to_tile(event.position)
+			_drag_last_tile = tile
+			_try_place(_slot_types[_selected_slot], tile)
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			_right_dragging = true
-			_handle_right_click(event.position)
+			_right_pressed = true
+			_right_dragged = false
+			_right_press_pos = event.position
 
-func _handle_left_click(screen_pos: Vector2) -> void:
-	if _is_world_input_blocked():
+func _is_drag_buildable(type: int) -> bool:
+	return type == BuildingData.BuildingType.BARRICADE or type == BuildingData.BuildingType.WALL
+
+func _select_slot(slot: int) -> void:
+	if slot < 0 or slot >= _slot_types.size():
 		return
-	var world_pos := _screen_to_ground(screen_pos)
-	if world_pos.x < 0.0:
-		return
-	var gx := int(floor(world_pos.x))
-	var gz := int(floor(world_pos.z))
-	var grid_pos := Vector2i(gx, gz)
-
-	if gx < 0 or gx >= MAP_SIZE or gz < 0 or gz >= MAP_SIZE:
-		return
-
-	# Existing building -> level up
-	if building_grid.has(grid_pos):
-		var existing := building_grid[grid_pos] as BaseBuilding
-		if existing and is_instance_valid(existing) and existing != _hq:
-			existing.level_up()
-			_update_hud()
-		return
-
-	# Place new building
-	var bd := _building_datas[_selected_slot] as BuildingData
-	if not GameManager.spend_minerals(bd.cost):
-		return
-
-	var building: BaseBuilding
-	match _selected_slot:
-		0:
-			building = barricade_scene.instantiate() as BaseBuilding
-		1:
-			building = tower_scene.instantiate() as BaseBuilding
-		2:
-			building = barracks_scene.instantiate() as BaseBuilding
-		3:
-			building = miner_scene.instantiate() as BaseBuilding
-		4:
-			building = buff_tower_scene.instantiate() as BaseBuilding
-		_:
-			building = barricade_scene.instantiate() as BaseBuilding
-
-	building.data = bd
-	building.grid_position = grid_pos
-	building.position = Vector3(float(gx) + 0.5, 0.0, float(gz) + 0.5)
-	building.add_to_group("buildings")
-	building.destroyed.connect(_on_building_destroyed.bind(grid_pos))
-	add_child(building)
-	_buildings_count += 1
-	building_grid[grid_pos] = building
-	FlowField.set_obstacle(grid_pos, true)
-	_flow_dirty = true
-	AudioManager.play_sfx_by_name("build")
-	EffectsManager.spawn_build_effect(building.position + Vector3(0, 0.2, 0), bd.color)
-	if bd.trait_type >= 0:
-		SynergyManager.add_trait(bd.trait_type)
-
-func _handle_right_click(screen_pos: Vector2) -> void:
-	if _is_world_input_blocked():
-		return
-	var world_pos := _screen_to_ground(screen_pos)
-	if world_pos.x < 0.0:
-		return
-	var gx := int(floor(world_pos.x))
-	var gz := int(floor(world_pos.z))
-	var grid_pos := Vector2i(gx, gz)
-
-	if not building_grid.has(grid_pos):
-		return
-	var building := building_grid[grid_pos] as BaseBuilding
-	if building and is_instance_valid(building) and building != _hq:
-		building.demolish()
-		_update_hud()
-
-func _update_ghost(screen_pos: Vector2) -> void:
-	var world_pos := _screen_to_ground(screen_pos)
-	if world_pos.x < 0.0:
-		_ghost_mesh.visible = false
-		_range_ring.visible = false
-		return
-	var gx := int(floor(world_pos.x))
-	var gz := int(floor(world_pos.z))
-	_mouse_grid_pos = Vector2i(gx, gz)
-	var in_bounds := gx >= 0 and gx < MAP_SIZE and gz >= 0 and gz < MAP_SIZE
-
-	if not in_bounds:
-		_ghost_mesh.visible = false
-		_range_ring.visible = false
-		return
-
-	# Hide ghost over existing buildings
-	if building_grid.has(_mouse_grid_pos):
-		_ghost_mesh.visible = false
-		_range_ring.visible = false
-		return
-
-	_ghost_mesh.visible = true
-	var bd := _building_datas[_selected_slot] as BuildingData
-	var h := 0.4
-	match bd.building_name:
-		"Tower": h = 1.0
-		"Barracks": h = 0.8
-		"Miner": h = 0.6
-		"Buff Tower": h = 0.9
-	var ghost_box := _ghost_mesh.mesh as BoxMesh
-	if ghost_box:
-		ghost_box.size = Vector3(1.0, h, 1.0)
-	var center := Vector3(float(gx) + 0.5, h / 2.0, float(gz) + 0.5)
-	_ghost_mesh.position = center
-
-	if GameManager.minerals >= bd.cost:
-		_ghost_mat.albedo_color = Color(0.4, 0.85, 0.4, 0.38)
-	else:
-		_ghost_mat.albedo_color = Color(0.9, 0.2, 0.2, 0.38)
-
-	# Range indicator
-	var range_val := 0.0
-	var ring_col := Color(0.3, 0.7, 1.0, 0.5)
-	if bd.attack_range > 0.0:
-		range_val = bd.attack_range
-		ring_col = Color(1.0, 0.4, 0.2, 0.45)
-	elif bd.buff_range > 0.0:
-		range_val = bd.buff_range
-		ring_col = Color(0.9, 0.8, 0.2, 0.45)
-	if range_val > 0.0:
-		_range_ring.visible = true
-		_range_ring.position = Vector3(center.x, 0.05, center.z)
-		_range_ring.scale = Vector3(range_val, 1.0, range_val)
-		_range_shader_mat.set_shader_parameter("ring_color", ring_col)
-	else:
-		_range_ring.visible = false
-
-# ---------------------------------------------------------------------------
-# Mouse-to-ground ray
-# ---------------------------------------------------------------------------
-
-func _screen_to_ground(screen_pos: Vector2) -> Vector3:
-	var from := _camera.project_ray_origin(screen_pos)
-	var dir := _camera.project_ray_normal(screen_pos)
-	if abs(dir.y) < 0.001:
-		return Vector3(-1.0, 0.0, -1.0)
-	var t := -from.y / dir.y
-	return from + dir * t
-
-# ---------------------------------------------------------------------------
-# Callbacks
-# ---------------------------------------------------------------------------
-
-func _try_drag_build(screen_pos: Vector2) -> void:
-	if _is_world_input_blocked():
-		return
-	var world_pos := _screen_to_ground(screen_pos)
-	if world_pos.x < 0.0:
-		return
-	var gx := int(floor(world_pos.x))
-	var gz := int(floor(world_pos.z))
-	var grid_pos := Vector2i(gx, gz)
-
-	if grid_pos == _drag_last_grid:
-		return
-	_drag_last_grid = grid_pos
-
-	if gx < 0 or gx >= MAP_SIZE or gz < 0 or gz >= MAP_SIZE:
-		return
-	if building_grid.has(grid_pos):
-		return
-
-	var bd := _building_datas[0] as BuildingData
-	if not GameManager.spend_minerals(bd.cost):
-		return
-
-	var building: BaseBuilding = barricade_scene.instantiate() as BaseBuilding
-	building.data = bd
-	building.grid_position = grid_pos
-	building.position = Vector3(float(gx) + 0.5, 0.0, float(gz) + 0.5)
-	building.add_to_group("buildings")
-	building.destroyed.connect(_on_building_destroyed.bind(grid_pos))
-	add_child(building)
-	_buildings_count += 1
-	building_grid[grid_pos] = building
-	FlowField.set_obstacle(grid_pos, true)
-	_flow_dirty = true
-
-func _on_unit_spawned() -> void:
-	_units_alive += 1
-
-func _on_unit_died() -> void:
-	_units_alive -= 1
-
-func _on_building_destroyed(grid_pos: Vector2i) -> void:
-	AudioManager.play_sfx_by_name("destroy")
-	var destroy_pos := Vector3(float(grid_pos.x) + 0.5, 0.0, float(grid_pos.y) + 0.5)
-	EffectsManager.spawn_destroy_effect(destroy_pos)
-	_buildings_count -= 1
-	if building_grid.has(grid_pos):
-		var b = building_grid[grid_pos]
-		if is_instance_valid(b) and b.data and b.data.trait_type >= 0:
-			SynergyManager.remove_trait(b.data.trait_type)
-	building_grid.erase(grid_pos)
-	FlowField.set_obstacle(grid_pos, false)
-	_flow_dirty = true
-
-func _on_enemy_died() -> void:
-	enemies_alive -= 1
-	GameFeel.shake(0.12)
-	AudioManager.play_sfx_by_name("death", -6.0)
-	# Split children enter the same queue before the parent's death signal.
-	_check_wave_completion.call_deferred()
-	_update_hud()
-
-func _check_wave_completion() -> void:
-	if not _wave_active:
-		return
-	if enemies_alive <= 0 and _spawn_queue.is_empty():
-		_wave_active = false
-		enemies_alive = 0
-		_on_wave_cleared()
-		_update_hud()
-
-func _on_enemy_drop_mineral(pos: Vector3, amount: int) -> void:
-	var orb: Node3D = mineral_orb_scene.instantiate()
-	orb.position = pos + Vector3(0.0, 0.3, 0.0)
-	orb.set("amount", amount)
-	orb.set("target_position", Vector3(128.5, 0.5, 128.5))
-	add_child(orb)
-
-func _on_minerals_changed(_amount: int) -> void:
-	_update_hud()
-
-func _recalculate_flow_field() -> void:
-	# HQ occupies 3x3 at (127,127)-(129,129), use center cells as targets
-	var targets: Array = []
-	for dx in 3:
-		for dz in 3:
-			targets.append(Vector2i(127 + dx, 127 + dz))
-	FlowField.recalculate(targets)
+	_selected_slot = slot
+	_hud.update_slot_highlight(_selected_slot, sim.building_datas)
+	_update_ghost_at_tile(_mouse_tile)
 
 func _on_slot_pressed(slot_index: int) -> void:
 	if _is_world_input_blocked():
 		return
 	AudioManager.play_sfx_by_name("ui_click", -3.0)
-	_selected_slot = slot_index
-	_update_slot_highlight()
+	_select_slot(slot_index)
 
-func _update_hud() -> void:
-	if not _ui:
+func _is_world_input_blocked() -> bool:
+	return sim.game_over or _esc_visible
+
+func _cancel_world_drag() -> void:
+	_dragging = false
+	_right_pressed = false
+	_right_dragged = false
+	_placement.hide_ghost()
+
+func _screen_to_tile(screen_pos: Vector2) -> Vector2i:
+	var world := _camera.screen_to_world(screen_pos, get_viewport().get_visible_rect().size)
+	return Vector2i(int(floor(world.x)), int(floor(world.y)))
+
+func _update_ghost_at_tile(tile: Vector2i) -> void:
+	if _is_world_input_blocked() or not SimConfig.in_bounds(tile.x, tile.y):
+		_placement.hide_ghost()
 		return
-	var hp := int(_hq.current_hp) if _hq and is_instance_valid(_hq) else 0
-	_ui.update_hud(
-		GameManager.minerals,
-		GameManager.wave_number,
-		GameManager.kill_count,
-		enemies_alive,
-		_between_waves,
-		_wave_countdown,
-		GameFeel.paused,
-		hp
-	)
+	var type: int = _slot_types[_selected_slot]
+	_placement.show_at(sim.building_datas[type], tile.x, tile.y,
+		sim.can_place(type, tile.x, tile.y), sim.can_afford(type))
+
+# ---------------------------------------------------------------------------
+# 메뉴·게임오버
+# ---------------------------------------------------------------------------
+
+func _toggle_esc_menu() -> void:
+	_esc_visible = not _esc_visible
+	_hud.set_esc_visible(_esc_visible)
+	GameFeel.set_pause_reason("esc", _esc_visible)
+	_cancel_world_drag()
+
+func _on_esc_resume() -> void:
+	_esc_visible = false
+	_hud.set_esc_visible(false)
+	GameFeel.set_pause_reason("esc", false)
 
 func _on_game_over() -> void:
 	GameFeel.set_pause_reason("game_over", true)
 	_cancel_world_drag()
-	_awaiting_card = false
-	_awaiting_choice = false
-	_pending_cards.clear()
-	_pending_choices.clear()
-	_queued_choice_event.clear()
 	_esc_visible = false
 	AudioManager.stop_bgm()
 	AudioManager.play_sfx_by_name("destroy", 3.0)
-	_ghost_mesh.visible = false
 	var secs := int(GameManager.game_time)
 	var result_text := Locale.t_fmt("result_format", [
-		GameManager.wave_number, GameManager.kill_count, secs / 60, secs % 60
+		sim.waves.wave_number, sim.kills, sim.peak_alive(), secs / 60, secs % 60
 	])
-	if _ui:
-		_ui.hide_reward_cards()
-		_ui.hide_choice_panel()
-		_ui.set_esc_visible(false)
-		_ui.show_game_over(result_text)
+	_hud.set_esc_visible(false)
+	_hud.show_game_over(result_text)
 
-# ---------------------------------------------------------------------------
-# Reward cards
-# ---------------------------------------------------------------------------
-
-func _show_reward_cards() -> void:
-	_pending_cards = RewardCard.pick_cards(GameManager.wave_number)
-	if _pending_cards.is_empty():
-		return
-	if _ui:
-		_ui.show_reward_cards(_pending_cards)
-	_awaiting_card = true
-	GameFeel.set_pause_reason("reward", true)
-	_cancel_world_drag()
-
-func _on_card_selected(index: int) -> void:
-	if GameManager.is_game_over or _esc_visible or not _awaiting_card or index < 0 or index >= _pending_cards.size():
-		return
-	AudioManager.play_sfx_by_name("reward")
-	EffectsManager.spawn_reward_sparkle(Vector3(128.5, 1.0, 128.5))
-	var card: RewardCard = _pending_cards[index]
-	_apply_card(card)
-	_finish_reward()
-
-func _on_card_skip() -> void:
-	if GameManager.is_game_over or _esc_visible or not _awaiting_card:
-		return
-	_finish_reward()
-
-func _finish_reward() -> void:
-	if _ui:
-		_ui.hide_reward_cards()
-	_awaiting_card = false
-	_pending_cards.clear()
-	if not _queued_choice_event.is_empty():
-		var queued := _queued_choice_event.duplicate()
-		_queued_choice_event.clear()
-		_on_choice_event(queued["name"], queued["description"], queued["choices"])
-	GameFeel.set_pause_reason("reward", false)
-	_update_hud()
-
-func _apply_card(card: RewardCard) -> void:
-	match card.effect_type:
-		RewardCard.EffectType.MINERAL_BONUS:
-			GameManager.add_minerals(int(card.effect_value))
-		RewardCard.EffectType.TRAIT_GRANT:
-			if card.trait_type >= 0:
-				SynergyManager.add_trait(card.trait_type)
-		RewardCard.EffectType.BUILDING_HP:
-			var buildings := get_tree().get_nodes_in_group("buildings")
-			var old_max_hp: Dictionary = {}
-			for b in buildings:
-				if is_instance_valid(b) and b is BaseBuilding:
-					old_max_hp[b] = b.get_effective_max_hp()
-			EventManager.add_building_hp_perm_bonus(card.effect_value)
-			for b in buildings:
-				if is_instance_valid(b) and b is BaseBuilding:
-					var max_hp: float = b.get_effective_max_hp()
-					var increase: float = max_hp - old_max_hp[b]
-					b.current_hp = minf(b.current_hp + increase + max_hp * card.heal_fraction, max_hp)
-					b._update_hp_bar()
-		RewardCard.EffectType.UNIT_BUFF:
-			# Store as permanent bonus in EventManager
-			EventManager.add_unit_dps_perm_bonus(card.effect_value)
-
-# ---------------------------------------------------------------------------
-# Synergy bar
-# ---------------------------------------------------------------------------
-
-func _update_synergy_bar() -> void:
-	if _ui:
-		_ui.update_synergy_bar()
-
-# ---------------------------------------------------------------------------
-# Events
-# ---------------------------------------------------------------------------
-
-func _on_combat_event(event_name: String, description: String) -> void:
-	if _ui:
-		_ui.show_combat_event(event_name, description)
-
-var _pending_choices: Array = []
-
-func _on_choice_event(event_name: String, description: String, choices: Array) -> void:
-	if _awaiting_card:
-		_queued_choice_event = {"name": event_name, "description": description, "choices": choices}
-		return
-	_pending_choices = choices
-	if _ui:
-		_ui.show_choice_event(event_name, description, choices)
-	_awaiting_choice = true
-	GameFeel.set_pause_reason("choice", true)
-	_cancel_world_drag()
-
-func _on_choice_selected(index: int) -> void:
-	if GameManager.is_game_over or _esc_visible or not _awaiting_choice or index < 0 or index >= _pending_choices.size():
-		return
-	AudioManager.play_sfx_by_name("ui_click")
-	var choice_id: String = _pending_choices[index]["id"]
-	var result := EventManager.resolve_choice(choice_id)
-	if _ui:
-		_ui.hide_choice_panel()
-	_awaiting_choice = false
-	_pending_choices.clear()
-	GameFeel.set_pause_reason("choice", false)
-	if _ui:
-		_ui.show_event_result(result)
-
-func _toggle_esc_menu() -> void:
-	_esc_visible = not _esc_visible
-	if _ui:
-		_ui.set_esc_visible(_esc_visible)
-	GameFeel.set_pause_reason("esc", _esc_visible)
-	_cancel_world_drag()
-	_update_hud()
-
-func _on_esc_resume() -> void:
-	_esc_visible = false
-	if _ui:
-		_ui.set_esc_visible(false)
-	GameFeel.set_pause_reason("esc", false)
-	_update_hud()
-
-func _reset_all_managers() -> void:
+func _reset_managers() -> void:
 	GameManager.reset()
-	SynergyManager.reset()
-	EventManager.reset()
 	GameFeel.reset()
-	SpatialGrid.reset()
-	FlowField.reset()
 
 func _on_esc_title() -> void:
-	_reset_all_managers()
+	_reset_managers()
 	get_tree().change_scene_to_file("res://scenes/main/title.tscn")
 
 func _on_restart() -> void:
-	_reset_all_managers()
+	_reset_managers()
 	get_tree().reload_current_scene()

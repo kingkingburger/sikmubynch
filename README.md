@@ -31,7 +31,9 @@ SIKMUBYNCH는 플레이어가 한 런 동안 본진을 지키며 자원을 모�
 - **2026-09-16**: 3D를 버리고 2D 쿼터뷰로 전환하며, 적·발사체를 Node에서 떼어내 시뮬레이션 배열로 옮기기로 결정했다. 엔진은 Godot을 유지한다.
 - **2026-09-21**: 증강·보상 카드·시너지·이벤트·유닛·메타를 보류하고, 첫 프로토타입을 맵 1/본진 1/방어물 1~2/타워 3/적 3/자원 1/무한 웨이브로 축소했다. 물량은 100 → 500 → 1,000 → 5,000 → 10,000 순서로 올리며, 500마리에서 재미를 증명한 뒤 콘텐츠를 다시 얹는다.
 
-현재 코드는 아직 3D 프로토타입이며 보류 시스템도 그대로 남아 있다. 전환 순서는 [기술 설계](docs/technical-design.md)를 따른다.
+- **2026-09-21 코드 전환**: 3D 씬·GLB 모델·보류 시스템 코드를 제거하고, `project/sim`(Node 없는 시뮬레이션)과 `project/render`(MultiMesh 2D 렌더러)로 재구성했다. 축소 범위(본진, 바리케이드·강화벽, 타워 3종, 적 3종+분열체, 미네랄, 무한 웨이브)가 2D 쿼터뷰에서 돌아간다. headless 소크에서 800~1,000마리 동시 생존 시 시뮬레이션 틱 평균 0.25 ms, 창 모드 895마리 렌더 약 1 ms를 확인했다. Flow Field 재계산(건물 배치·파괴 시) 30~40 ms 히치는 단계 D에서 다룬다.
+
+전환 순서와 구조는 [기술 설계](docs/technical-design.md)를 따른다.
 
 ## 문서
 
@@ -54,40 +56,67 @@ Godot 에디터에서 `project/` 폴더를 열고 F5로 실행한다.
 ./tools/run-gameplay-tests.ps1 -GodotPath 'D:/Godot_v4.6.1-stable_win64.exe/Godot_v4.6.1-stable_win64_console.exe'
 ```
 
-현재 검증은 3D 프로토타입 기준이며 분열 적, 길찾기, 재시작, 일시정지, 보상 선택, 시너지·영구 보너스를 다룬다. 2D 전환 후에는 headless 시뮬레이션 기준으로 다시 작성한다. 상세 실행·플레이 결과는 [런 안정화 검증 기록](docs/verification/2026-09-08-run-stability.md)에 남긴다.
+검증은 네 스크립트로 나뉜다. 실행기는 headless 회귀와 headless 스모크를 순서대로 돌린다.
+
+| 스크립트 | 실행 방식 | 다루는 것 |
+| --- | --- | --- |
+| `tools/tests/gameplay_regression.gd` | headless | 시작 상태, Flow Field, 배치·철거, 본진 도달·공격, 타워 처치·분열체, 웨이브 완료, 결정론(같은 seed 같은 해시), 봉쇄 돌파, 포격 광역·감속, 500마리 틱 예산 |
+| `tools/tests/play_smoke.gd` | headless / 창 모드 | 게임 씬 로드, MultiMesh 버퍼, 씬을 통한 배치·철거, 화면→타일, 일시정지·ESC·속도, 게임오버·재시작, 500마리 렌더 |
+| `tools/tests/soak_waves.gd` | headless | 스크립트 방어선으로 N웨이브(`SOAK_WAVES`)를 돌리며 웨이브별 규모·틱 시간·본진 HP 추세 기록 |
+| `tools/tests/capture_screenshot.gd` | 창 모드 | 시작·방어선·줌아웃 800마리·줌인 스크린샷을 `build/shot-*.png`로 저장 |
+
+```powershell
+# 창 모드 스모크·스크린샷은 Godot을 직접 실행한다
+D:/Godot_v4.6.1-stable_win64.exe/Godot_v4.6.1-stable_win64_console.exe --path project --script ../tools/tests/play_smoke.gd
+D:/Godot_v4.6.1-stable_win64.exe/Godot_v4.6.1-stable_win64_console.exe --path project --script ../tools/tests/capture_screenshot.gd
+```
+
+과거 3D 프로토타입의 실행·플레이 결과는 [런 안정화 검증 기록](docs/verification/2026-09-08-run-stability.md)에 남아 있다.
 
 ## 조작
 
 | 키 | 동작 |
 | --- | --- |
-| 1~5 | 건물 선택 |
-| 좌클릭 (빈 타일) | 건물 배치 |
-| 좌클릭 (기존 건물) | 레벨업 |
-| 우클릭 (기존 건물) | 철거 |
+| 1~5 | 건물 선택 (바리케이드, 속사 타워, 포격 타워, 감속 타워, 강화벽) |
+| 좌클릭 (빈 타일) | 건물 배치. 바리케이드·강화벽은 드래그로 연속 배치 |
+| 우클릭 (기존 건물) | 철거 (비용 50% 회수) |
+| 우클릭 드래그 | 카메라 이동 |
 | WASD | 카메라 이동 |
 | 마우스 휠 | 줌 |
-| F | 게임 속도 전환 |
-| F3 | 디버그 오버레이 |
+| Space | 일시정지 (건설 판단 가능, 전투·스폰 정지) |
+| F | 게임 속도 전환 (1x → 2x → 3x) |
+| ESC | 메뉴 (재개, 다시 시작, 타이틀) |
+| F3 | 디버그 오버레이 (FPS, 적 수, 틱·렌더 시간, seed) |
+| F4 | 디버그 빌드 전용: 본진 주변에 러셔 500마리 즉시 스폰 |
 
-조작표는 현재 3D 프로토타입 기준이다. 2D 전환 후 첫 프로토타입에서는 건물 선택이 방어물 1~2종과 타워 3종으로 바뀌고 레벨업은 빠진다.
+레벨업은 없다. 시작 시 본진 4방향에 속사 타워가 하나씩 있고 미네랄 150으로 시작한다. `SIKMUBYNCH_SEED` 환경변수로 런 seed를 고정할 수 있다.
 
 ## 프로젝트 구조
 
-2D 전환 후 목표 구조다. 현재 저장소에는 3D 프로토타입의 `scenes/enemies`, `scenes/units`, `scenes/projectiles`, `assets/models`와 보류 시스템 코드가 남아 있으며 전환 단계에서 제거한다.
-
 ```text
 project/
-├── autoloads/          # 게임 상태, 게임 필, 사운드 등 싱글톤
-├── sim/                # Node 없는 시뮬레이션: 적, 전투, 웨이브, Flow Field, Spatial Grid
-├── render/             # 시뮬레이션 상태를 2D로 배칭 그리는 렌더러
+├── autoloads/          # Locale, GameManager(런 상태 미러), GameFeel, AudioManager
+├── sim/                # Node 없는 시뮬레이션 (RefCounted + PackedArray)
+│   ├── game_simulation.gd   # 고정 30Hz 틱, 하위 Sim 호출 순서, 런 상태, 결정론 해시
+│   ├── enemy_sim.gd         # 적 배열, Flow Field 이동, 건물 접촉·공격 슬롯
+│   ├── combat_sim.gd        # 타워 타겟팅, 발사체, 피해, 광역·감속
+│   ├── wave_sim.gd          # 웨이브 규모·타입·방향, 스폰 큐
+│   ├── building_sim.gd      # 건물 HP·타일 점유·공격자 상한
+│   ├── flow_field.gd        # BFS 비용 필드 + 8방향 이동 벡터
+│   ├── spatial_grid.gd      # 근접 탐색 셀 그리드
+│   └── sim_config.gd        # 맵 크기, 틱, 상한 상수
+├── render/             # 시뮬레이션 상태를 2D 쿼터뷰로 그린다
+│   ├── enemy_renderer.gd    # 적 MultiMesh (타입별), 보간, 피격 플래시
+│   ├── projectile_renderer.gd / effect_renderer.gd
+│   ├── building_view.gd     # 건물 Node2D (이소 블록, HP 바)
+│   ├── ground_renderer.gd / placement_view.gd / world_camera.gd
+│   └── iso.gd / sprite_factory.gd   # 2:1 투영, 폴백 스프라이트
 ├── scenes/
-│   ├── main/           # 타이틀, 메인 게임 씬
-│   ├── buildings/      # HQ, 방어물, 타워 3종 (Node 허용)
-│   └── ui/             # HUD, 메뉴, 레이더
-├── scripts/            # 게임플레이 helper와 데이터 클래스
-│   └── data/           # Resource 데이터 정의
-└── assets/             # 스프라이트 아틀라스, 사운드
+│   ├── main/           # 타이틀, 메인 게임 씬(코디네이터)
+│   └── ui/             # HUD (자원, 본진 체력, 슬롯, 웨이브 배너, 위협 레이더, 메뉴, 결과)
+├── scripts/            # 건물·적 카탈로그, 위협 레이더, Resource 데이터 정의(data/)
+└── assets/audio/       # BGM, SFX
 
-docs/                   # 상용 개발 기준 문서와 제작 가이드
-tools/                  # 에셋 생성 및 보조 도구
+docs/                   # 제품·설계·검증 문서와 제작 가이드
+tools/tests/            # headless 회귀, 씬 스모크, 소크, 스크린샷 캡처
 ```
