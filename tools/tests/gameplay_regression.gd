@@ -42,6 +42,7 @@ func _run() -> void:
 	test_enemy_reaches_and_attacks_hq()
 	test_towers_kill_and_splitter_children()
 	test_pressure_never_rests()
+	test_director_keeps_the_crowd()
 	test_pressure_curve_and_scaling()
 	test_determinism()
 	test_building_destroyed_unblocks_path()
@@ -181,45 +182,33 @@ func test_towers_kill_and_splitter_children() -> void:
 	check(mini_found, "children are MINI type")
 
 ## 압박은 쉬지 않는다: 웨이브·급증 없이 한 흐름으로 온다.
-## 5분 동안 10초 창마다 스폰 수가 그 시점 기본 유입률×압박 바닥 아래로 내려가지 않고(잦아듦 없음),
-## 압박 천장 위로 튀지도 않는다(덩어리 없음). 그리고 항상 사방에서 온다.
+## 압도적 방어 앞에서도 3분 동안 5초 창마다 스폰이 있고(멈춤 없음), 항상 사방에서 온다.
+## (방어가 스폰 링까지 닿으면 적이 나오자마자 죽으므로 살아 있는 수는 여기서 보지 않는다. 무리 유지는 아래 스텁 테스트가 본다.)
 func test_pressure_never_rests() -> void:
 	var sim := new_sim(4321)
-	sim.minerals = 100000
-	# 적이 쌓이지 않게 강한 방어를 두고 스폰만 관찰
-	for x in range(50, 78, 2):
-		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, x, 52)
-		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, x, 74)
-	for y in range(54, 74, 2):
-		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, 50, y)
-		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, 76, y)
-	var window := 10.0
-	var lulls := 0
-	var bursts := 0
+	sim.minerals = 1000000
+	# 적이 무한히 쌓이지 않게 압도적 방어(속사 격자 + 저격 링)를 두고 스폰만 관찰. 3분 무리(300+)를 도착 즉시 지운다
+	for x in range(52, 76, 2):
+		for y in range(54, 74, 2):
+			sim.place_building(BuildingData.BuildingType.GUN_TOWER, x, y)
+	for x in range(48, 80, 2):
+		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, x, 50)
+		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, x, 78)
+	for y in range(52, 78, 2):
+		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, 48, y)
+		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, 78, y)
+	var gaps := 0
 	var windows := 0
-	var lowest_ratio := 999.0
-	var highest_ratio := 0.0
 	var last_total := sim.waves.stream_spawned
-	for w in range(30):   # 300초를 10초 창으로
-		var t0 := sim.waves.time
-		run_ticks(sim, int(30 * window))
+	for w in range(36):   # 180초를 5초 창으로
+		run_ticks(sim, 30 * 5)
 		windows += 1
-		var got := sim.waves.stream_spawned - last_total
+		if sim.waves.stream_spawned == last_total:
+			gaps += 1
 		last_total = sim.waves.stream_spawned
-		if w == 0:
-			continue   # 첫 창은 시작 무리(STREAM_INITIAL_BURST)가 섞인다
-		var base := WaveSim.base_rate(t0 + window * 0.5) * window
-		var ratio := float(got) / base
-		lowest_ratio = minf(lowest_ratio, ratio)
-		highest_ratio = maxf(highest_ratio, ratio)
-		if ratio < WaveSim.PRESSURE_MIN * 0.9:
-			lulls += 1
-		if ratio > WaveSim.PRESSURE_MAX * 1.1:
-			bursts += 1
-	check(lulls == 0, "no 10-second window fell below the pressure floor (%d lulls of %d, lowest %.2f)" % [lulls, windows, lowest_ratio])
-	check(bursts == 0, "no 10-second window spiked above the pressure ceiling (%d bursts, highest %.2f)" % [bursts, highest_ratio])
-	check(sim.waves.stream_spawned > 1500, "5 minutes of stream is a horde (%d)" % sim.waves.stream_spawned)
-	check(not sim.game_over, "strong defense survives 5 minutes")
+	check(gaps == 0, "stream spawned in every 5-second window (%d gaps of %d)" % [gaps, windows])
+	check(sim.waves.stream_spawned > 1500, "3 minutes of stream is a horde (%d)" % sim.waves.stream_spawned)
+	check(not sim.game_over, "strong defense survives 3 minutes")
 	# 스트림은 항상 사방: 어느 변도 전체의 15% 아래로 떨어지지 않는다
 	var total_sides := 0
 	for c in sim.waves.stream_side_counts:
@@ -229,12 +218,68 @@ func test_pressure_never_rests() -> void:
 		min_share = minf(min_share, float(c) / maxf(float(total_sides), 1.0))
 	check(min_share >= 0.15, "stream comes from all four sides (min share %.2f, counts %s)" % [min_share, str(sim.waves.stream_side_counts)])
 
+## 디렉터는 무리를 목표 근처로 유지한다. 가짜 Enemy Sim에 일정 처치율을 걸고 WaveSim만 돌린다.
+##  - 강한 방어(매초 살아 있는 적의 30% 처치 ≈ 도착 3초 뒤 사망): 30초 이후 살아 있는 수가 목표의 50%~120%+64 안에 머문다.
+##    첫 틱 무리를 빼면 한 틱에 상한 넘게 쏟지 않는다.
+##  - 방어 없음(처치 0): 살아 있는 수가 목표 아래로 내려가지 않고 바닥 유입이 계속 쌓인다.
+class FakeEnemies extends RefCounted:
+	var alive_count: int = 0
+	func spawn(_t: int, _x: float, _y: float, _hs: float, _ds: float, _ss: float) -> int:
+		alive_count += 1
+		return 0
+
+func test_director_keeps_the_crowd() -> void:
+	var dt := SimConfig.TICK_DT
+	for kill_share in [0.3, 0.0]:
+		var waves := WaveSim.new()
+		var fake := FakeEnemies.new()
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 7
+		var kill_accum := 0.0
+		var low := 0
+		var high := 0
+		var max_per_tick := 0
+		var window_spawn := 0
+		var lulls := 0
+		var last_spawned := 0
+		for i in range(30 * 300):
+			var n := waves.drain_spawns(dt, fake, rng)
+			if i > 0:
+				max_per_tick = maxi(max_per_tick, n)
+			waves.tick(dt, fake.alive_count, rng)
+			kill_accum += kill_share * float(fake.alive_count) * dt
+			var k := mini(int(kill_accum), fake.alive_count)
+			kill_accum -= float(k)
+			fake.alive_count -= k
+			if (i + 1) % 300 == 0:   # 10초 창
+				window_spawn = waves.stream_spawned - last_spawned
+				last_spawned = waves.stream_spawned
+				if i > 300 and float(window_spawn) < waves.base_rate(waves.time - 5.0) * WaveSim.PRESSURE_MIN * 10.0 * 0.9:
+					lulls += 1
+			if waves.time >= 30.0:
+				var target := WaveSim.target_alive(waves.time)
+				if float(fake.alive_count) < target * 0.5:
+					low += 1
+				if float(fake.alive_count) > target * 1.2 + 64.0:
+					high += 1
+		var label := "kill %d%%/s" % int(kill_share * 100.0)
+		check(lulls == 0, "%s: every 10-second window spawned at least the floor (%d lulls)" % [label, lulls])
+		var cap_per_tick := int(ceil((waves.base_rate(300.0) * WaveSim.PRESSURE_MAX + maxf(WaveSim.DIRECTOR_MIN_CAP, WaveSim.target_alive(300.0) * WaveSim.DIRECTOR_CAP_FRACTION)) * dt)) + 1
+		check(max_per_tick <= cap_per_tick, "%s: never dumped more than the cap in one tick (%d > %d)" % [label, max_per_tick, cap_per_tick])
+		if kill_share > 0.0:
+			check(low == 0, "%s: crowd never fell below 50%% of target after 30s (%d ticks)" % [label, low])
+			check(high == 0, "%s: crowd never overshot the target by 20%%+64 (%d ticks)" % [label, high])
+		else:
+			check(low == 0, "%s: with no kills the crowd never drops below half the target (%d ticks)" % [label, low])
+			check(fake.alive_count > WaveSim.target_alive(300.0), "%s: floor keeps piling past the target (%d > %d)" % [label, fake.alive_count, int(WaveSim.target_alive(300.0))])
+
 ## 유입 곡선·배율·드리프트. 압박 배율과 변 가중치는 범위 안에서 천천히만 움직이고, 스폰 링은 가장자리까지 닿는다.
 func test_pressure_curve_and_scaling() -> void:
 	check(WaveSim.base_rate(0.0) >= 4.0, "stream starts thick (%.1f/s)" % WaveSim.base_rate(0.0))
 	check(WaveSim.base_rate(600.0) > WaveSim.base_rate(0.0) * 3.0, "base rate rises over 10 minutes")
 	check(WaveSim.base_rate(300.0) > WaveSim.base_rate(120.0) and WaveSim.base_rate(120.0) > WaveSim.base_rate(0.0), "base rate is monotonic")
 	check(WaveSim.hp_scale(0.0) == 1.0 and WaveSim.hp_scale(600.0) > 2.0, "HP scales with time")
+	check(WaveSim.target_alive(0.0) >= 50.0 and WaveSim.target_alive(300.0) >= 500.0 and WaveSim.target_alive(600.0) > WaveSim.target_alive(300.0) * 2.0, "target crowd: 50+ at start, 500+ at 5 minutes, keeps doubling (%d/%d/%d)" % [int(WaveSim.target_alive(0.0)), int(WaveSim.target_alive(300.0)), int(WaveSim.target_alive(600.0))])
 	var comp0 := WaveSim.composition(0.0)
 	check(comp0[1] == 0.0 and comp0[2] == 0.0, "no tanks or splitters at time 0")
 	var comp5 := WaveSim.composition(300.0)
@@ -268,24 +313,26 @@ func test_pressure_curve_and_scaling() -> void:
 	check(p_jump <= WaveSim.PRESSURE_DRIFT_PER_SEC * dt + 0.0001, "pressure never jumps (max per-tick %.4f)" % p_jump)
 	check(w_min >= WaveSim.SIDE_WEIGHT_MIN - 0.001 and w_max <= WaveSim.SIDE_WEIGHT_MAX + 0.001, "side weights stay in range (%.2f..%.2f)" % [w_min, w_max])
 	check(w_jump <= WaveSim.SIDE_DRIFT_PER_SEC * dt + 0.0001, "side weights never jump (max per-tick %.4f)" % w_jump)
-	# 스폰 링: 시작은 본진 근처, 3분 뒤에는 가장자리에도 닿는다. 항상 맵 안.
+	# 스폰 링: 시작은 본진 근처, 이후 기본 줌 화면 바로 바깥(RING_RADIUS_MAX)에 머문다. 항상 맵 안.
 	var near := WaveSim.new()
 	var far := WaveSim.new()
 	far.time = 240.0
 	var near_max := 0.0
-	var edge_hits := 0
+	var far_min := 999.0
+	var far_max := 0.0
 	var inside := true
 	var c := SimConfig.HQ_CENTER
 	for i in range(300):
 		var p := near._spawn_position(rng)
 		near_max = maxf(near_max, (p - c).length())
 		var q := far._spawn_position(rng)
-		if q.x <= 1.0 or q.y <= 1.0 or q.x >= float(SimConfig.MAP_SIZE) - 1.0 or q.y >= float(SimConfig.MAP_SIZE) - 1.0:
-			edge_hits += 1
+		var d := (q - c).length()
+		far_min = minf(far_min, d)
+		far_max = maxf(far_max, d)
 		if q.x < 0.0 or q.y < 0.0 or q.x > float(SimConfig.MAP_SIZE) or q.y > float(SimConfig.MAP_SIZE):
 			inside = false
-	check(near_max < 32.0, "first spawns are close to the HQ (max %.1f tiles)" % near_max)
-	check(edge_hits > 60, "after 4 minutes many spawns come from the map edge (%d of 300)" % edge_hits)
+	check(near_max < 22.0, "first spawns are inside the default view (max %.1f tiles)" % near_max)
+	check(far_min >= WaveSim.RING_RADIUS_MAX - 3.5 and far_max <= WaveSim.RING_RADIUS_MAX + 3.5, "later spawns sit on the ring just outside the view (%.1f..%.1f)" % [far_min, far_max])
 	check(inside, "spawns never leave the map")
 
 func test_determinism() -> void:

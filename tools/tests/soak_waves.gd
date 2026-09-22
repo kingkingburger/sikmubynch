@@ -24,10 +24,10 @@ func _run() -> void:
 	var max_ticks := 30 * 60 * target_minutes
 	var build_timer := 0.0
 	while not sim.game_over and ticks < max_ticks:
-		# 4초마다 자원이 허락하는 만큼 짓는다 (플레이어가 계속 손을 움직이는 것을 흉내)
+		# 1초마다 자원이 허락하는 만큼 짓는다 (플레이어가 계속 손을 움직이는 것을 흉내)
 		build_timer -= SimConfig.TICK_DT
 		if build_timer <= 0.0:
-			build_timer = 4.0
+			build_timer = 1.0
 			_build_defense(sim)
 		sim.tick()
 		ticks += 1
@@ -40,8 +40,13 @@ func _run() -> void:
 			min_alive_after_start = sim.enemies_alive()
 			min_alive_at = ticks / 30
 		if ticks % (30 * 10) == 0:
-			print("  t=%4ds inflow=%5.1f/s (x%.2f) alive=%4d peak=%4d hq=%4d kills=%5d minerals=%5d towers=%3d tick=%.2fms" % [
-				ticks / 30, sim.waves.spawn_rate(), sim.waves.pressure, sim.enemies_alive(), peak, int(sim.hq_hp()), sim.kills, sim.minerals,
+			var near := 0
+			for i in range(sim.enemies.high):
+				if sim.enemies.alive[i] != 0 and Vector2(sim.enemies.pos_x[i], sim.enemies.pos_y[i]).distance_to(SimConfig.HQ_CENTER) <= 22.0:
+					near += 1
+			print("  t=%4ds inflow=%5.1f/s (floor %4.1f + dir %5.1f) target=%4d alive=%4d near22=%4d peak=%4d hq=%4d kills=%5d minerals=%5d towers=%3d tick=%.2fms" % [
+				ticks / 30, sim.waves.spawn_rate(), sim.waves.floor_rate(), sim.waves.director_rate, int(sim.waves.target_alive(sim.waves.time)),
+				sim.enemies_alive(), near, peak, int(sim.hq_hp()), sim.kills, sim.minerals,
 				sim.buildings.alive_count, float(sim.last_tick_usec) / 1000.0])
 	print("SOAK: time %ds, game_over=%s, kills=%d, peak_alive=%d, min_alive_after_30s=%d (at %ds), avg tick %.2f ms, worst %.2f ms" % [
 		ticks / 30, str(sim.game_over), sim.kills, sim.peak_alive(), min_alive_after_start, min_alive_at, float(total) / float(n) / 1000.0, float(worst) / 1000.0])
@@ -71,7 +76,8 @@ func _prepare_slots() -> void:
 	cands.sort_custom(func(a, b): return a[0] < b[0])
 	_slots = cands
 
-## 타워 종류 순환: 속사 3 → 화염 → 속사 2 → 전격 → 포격 → 감속 → 저격 (돈이 되면)
+## 타워 종류 순환: 처음 GUN_ONLY_COUNT개는 싼 속사만(사람이 초반에 하는 것), 그 뒤 속사 3 → 화염 → 속사 2 → 전격 → 포격 → 감속 → 저격
+const GUN_ONLY_COUNT := 20
 const ROTATION := [
 	BuildingData.BuildingType.GUN_TOWER, BuildingData.BuildingType.GUN_TOWER, BuildingData.BuildingType.GUN_TOWER,
 	BuildingData.BuildingType.FLAME_TOWER, BuildingData.BuildingType.GUN_TOWER, BuildingData.BuildingType.GUN_TOWER,
@@ -99,8 +105,8 @@ func _build_defense(sim) -> void:
 				_barricades += 1
 	# 타워: 순환표의 다음 타워를 살 수 있으면 짓는다. 못 사면 다음 수입까지 기다린다.
 	var built := 0
-	while _slot_head < _slots.size() and built < 6:
-		var type: int = ROTATION[_tower_count % ROTATION.size()]
+	while _slot_head < _slots.size() and built < 3:
+		var type: int = BuildingData.BuildingType.GUN_TOWER if _tower_count < GUN_ONLY_COUNT else ROTATION[_tower_count % ROTATION.size()]
 		if not sim.can_afford(type):
 			break
 		var slot: Array = _slots[_slot_head]

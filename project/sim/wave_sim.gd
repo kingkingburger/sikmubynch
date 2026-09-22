@@ -1,13 +1,17 @@
 extends RefCounted
 
 ## 압박 스트림 — 웨이브·급증·휴식·카운트다운이 없다. 런 시작부터 끝까지 한 흐름으로 몰려온다.
-## 2026-09-22 플레이 판단: "중간에 몰아치지 않는다. 웨이브 개념이 없어야 한다." 주기적 급증은 예고·덩어리·잦아듦으로
+## 2026-09-22 플레이 판단 1: "중간에 몰아치지 않는다. 웨이브 개념이 없어야 한다." 주기적 급증은 예고·덩어리·잦아듦으로
 ## 결국 웨이브였다. 그래서 급증을 없애고 그 물량을 스트림에 녹였다.
-##  - 유입률: 초당 스폰 수 = base_rate(경과 시간) × pressure. 경과 시간에 따라 계속 오른다.
+## 2026-09-22 플레이 판단 2: "여전히 적다. 처음엔 많았는데 갈수록 준다." 처치 보상 경제에서는 방어력이 누적 처치 수에
+## 비례해 커지므로 시간 곡선 유입은 몇 분이면 따라잡혀 적이 도착 즉시 죽는다. 그래서 유입을 두 겹으로 만든다.
+##  - 바닥 유입: 초당 스폰 수 = base_rate(경과 시간) × pressure. 방어가 약하면 이것만으로 넘친다.
+##  - 무리 유지(디렉터): 살아 있는 적 수가 target_alive(경과 시간)보다 적으면 부족분을 몇 초에 걸쳐 채운다.
+##    방어가 강할수록 빨리 죽고 빨리 채워져, 화면에는 항상 목표만큼의 무리가 있다. 목표는 시간에 따라 계속 오른다.
 ##  - 압박 배율(pressure): PRESSURE_MIN~MAX 사이를 천천히 떠돈다. 바닥이 0.9라 잦아드는 순간이 없고, 정점은 예고 없이 온다.
 ##  - 방향 가중치: 변마다 SIDE_WEIGHT_MIN~MAX를 천천히 떠돈다. 항상 사방에서 오되 한동안 한쪽이 더 두껍다.
 ##  - 진입로: 변마다 몇 개가 천천히 옮겨가며 스폰이 그 근처에 모여 기둥처럼 보인다.
-##  - 스폰 거리: 본진 주변 링에서 시작해 맵 가장자리까지 연속으로 넓어진다. 끊기는 전환이 없다.
+##  - 스폰 거리: 본진 주변 링에서 시작해 기본 줌 화면 바로 바깥까지 연속으로 넓어진다. 걸어오는 무리가 보인다.
 ## 개체 추가는 drain_spawns()가 Enemy Sim에 넘긴다. 파일·필드 이름(waves)은 호출처 호환을 위해 유지한다.
 
 const SimConfig := preload("res://sim/sim_config.gd")
@@ -17,8 +21,13 @@ enum Side { NORTH, EAST, SOUTH, WEST }
 const STREAM_INITIAL_BURST := 64.0    # 첫 틱에 바로 보이는 적 수 (시작부터 무리가 보여야 한다)
 const INITIAL_RING_RADIUS := 17.0     # 첫 무리는 더 가까이
 const RING_RADIUS_MIN := 24.0         # 이후 스폰 링 시작 반지름 (타일)
-const RING_RADIUS_GROWTH := 0.25      # 초당 링 반지름 증가. 약 3분이면 가장자리에 닿는다
-const RING_RADIUS_MAX := 72.0         # 맵 절반(64)보다 커서 정면 진입로는 가장자리에 붙는다. 맵 밖은 잘라낸다
+const RING_RADIUS_GROWTH := 0.25      # 초당 링 반지름 증가. 약 30초면 최대에 닿는다
+const RING_RADIUS_MAX := 32.0         # 기본 줌(0.7) 화면 반경(22~28타일) 바로 바깥. 러셔 기준 약 9초 행군, 대부분이 화면에 보인다.
+                                      # 행군이 길수록 "걸어오는 중"인 적이 목표 무리를 잡아먹어 방어선 앞 덩어리가 줄어든다
+const DIRECTOR_REFILL_SECONDS := 2.0  # 무리 부족분을 이 시간에 걸쳐 채운다. 짧을수록 처치 직후 빈자리가 빨리 메워지고 무리가 목표에 가깝다
+const DIRECTOR_MIN_CAP := 8.0         # 디렉터 초당 스폰 상한의 바닥
+const DIRECTOR_CAP_FRACTION := 0.3    # 디렉터 초당 스폰 상한 = 목표 무리 수 × 이 값 (대량 처치 직후 한 번에 쏟아지지 않게)
+const DIRECTOR_RAMP_SECONDS := 60.0   # 디렉터는 첫 1분 동안 0→100%로 켜진다. 시작 방어만으로 버틸 시간
 const LANES_PER_SIDE := 3             # 변마다 진입로 수. 스트림은 항상 사방 12갈래에서 온다
 const LANE_SHIFT_INTERVAL := 4.0      # 이 주기마다 진입로 하나가 옮겨간다
 const LANE_SPREAD := 0.12             # 진입로 각도 폭 (라디안). 좁을수록 기둥처럼 몰려온다
@@ -38,6 +47,7 @@ const SIZE := SimConfig.MAP_SIZE
 var enabled: bool = true              # false면 스폰하지 않는다 (테스트용)
 var time: float = 0.0
 var pressure: float = 1.0             # 현재 압박 배율
+var director_rate: float = 0.0        # 이번 틱 디렉터가 더한 초당 스폰 수 (HUD·디버그)
 var side_weight: PackedFloat32Array   # 변별 현재 가중치
 var stream_spawned: int = 0
 var stream_side_counts: PackedInt32Array   # 변별 스폰 수 (사방 분포 검증용)
@@ -59,6 +69,7 @@ func clear_all() -> void:
 	enabled = true
 	time = 0.0
 	pressure = 1.0
+	director_rate = 0.0
 	_pressure_target = 1.0
 	_pressure_timer = PRESSURE_SHIFT_INTERVAL
 	side_weight = PackedFloat32Array([1.0, 1.0, 1.0, 1.0])
@@ -87,9 +98,30 @@ static func base_rate(t: float) -> float:
 	var m := t / 60.0
 	return 4.0 + 1.1 * m + 0.13 * m * m
 
-## 지금 이 순간의 유입률 (HUD·디버그)
-func spawn_rate() -> float:
+## 목표 무리 수(살아 있는 적). m = 경과 분. 0분 60 → 1분 128 → 2분 212 → 3분 312 → 5분 560 → 8분 1,052 → 10분 1,460 → 15분 2,760
+## 방어가 이보다 빨리 죽이면 디렉터가 채우고, 못 죽이면 바닥 유입이 쌓여 이보다 많아진다.
+## 행군 중인 적도 이 수에 들어가므로 방어선 앞 덩어리 = 목표 − 유입률 × 행군 시간(약 9초).
+static func target_alive(t: float) -> float:
+	var m := t / 60.0
+	return 60.0 + 60.0 * m + 8.0 * m * m
+
+## 바닥 유입률 (배율 포함)
+func floor_rate() -> float:
 	return base_rate(time) * pressure
+
+## 지금 이 순간의 총 유입률 = 바닥 + 디렉터 (HUD·디버그)
+func spawn_rate() -> float:
+	return floor_rate() + director_rate
+
+## 살아 있는 적이 alive일 때 디렉터가 더할 초당 스폰 수
+func _director_rate_for(alive: int) -> float:
+	var target := target_alive(time)
+	var deficit := target - float(alive)
+	if deficit <= 0.0:
+		return 0.0
+	var cap := maxf(DIRECTOR_MIN_CAP, target * DIRECTOR_CAP_FRACTION)
+	var ramp := clampf(time / DIRECTOR_RAMP_SECONDS, 0.0, 1.0)
+	return minf(deficit / DIRECTOR_REFILL_SECONDS, cap) * ramp
 
 static func hp_scale(t: float) -> float:
 	var m := t / 60.0
@@ -175,6 +207,7 @@ func drain_spawns(dt: float, enemies, rng: RandomNumberGenerator) -> int:
 	var ds := dps_scale(time)
 	var ss := speed_scale(time)
 	var spawned := 0
+	director_rate = _director_rate_for(enemies.alive_count)
 	_stream_accum += spawn_rate() * dt
 	var n := int(_stream_accum)
 	if n > 0:

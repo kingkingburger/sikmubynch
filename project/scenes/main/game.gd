@@ -148,13 +148,13 @@ func _process(delta: float) -> void:
 		_hud.tick(delta, sim, _debug_visible, _debug_text() if _debug_visible else "")
 
 func _debug_text() -> String:
-	return "FPS %d\n적 %d (최대 %d)\n발사체 %d  파티클 %d\n건물 %d\n틱 %.2f ms  렌더 %.2f ms\n그리드 %d  Flow 재계산 %d\n유입 %.1f/s (기본 %.1f × 압박 %.2f)  변 %s\n시간 %.0f  속도 %.1fx  seed %d" % [
+	return "FPS %d\n적 %d (최대 %d)\n발사체 %d  파티클 %d\n건물 %d\n틱 %.2f ms  렌더 %.2f ms\n그리드 %d  Flow 재계산 %d\n유입 %.1f/s (바닥 %.1f × %.2f + 디렉터 %.1f, 목표 무리 %d)  변 %s\n시간 %.0f  속도 %.1fx  seed %d" % [
 		Engine.get_frames_per_second(), sim.enemies_alive(), sim.peak_alive(),
 		sim.combat.p_alive_count, _effect_renderer.particle_count(),
 		sim.buildings.alive_count,
 		float(sim.last_tick_usec) / 1000.0, float(_last_render_usec) / 1000.0,
 		sim.grid.registered, sim.flow.recalc_count,
-		sim.waves.spawn_rate(), sim.waves.base_rate(sim.waves.time), sim.waves.pressure,
+		sim.waves.spawn_rate(), sim.waves.base_rate(sim.waves.time), sim.waves.pressure, sim.waves.director_rate, int(sim.waves.target_alive(sim.waves.time)),
 		"%.1f/%.1f/%.1f/%.1f" % [sim.waves.side_weight[0], sim.waves.side_weight[1], sim.waves.side_weight[2], sim.waves.side_weight[3]],
 		sim.waves.time, GameFeel.game_speed, run_seed
 	]
