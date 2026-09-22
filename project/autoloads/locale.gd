@@ -15,10 +15,9 @@ var _strings: Dictionary = {
 	"hq_hp": ["본진 체력", "HQ HP"],
 	"hq_under_attack": ["본진 공격받는 중!", "HQ UNDER ATTACK!"],
 	"selected": ["선택", "SELECTED"],
-	"wave_label": ["급증 %d", "SURGE %d"],
 	"kills_label": ["처치 %d", "KILLS %d"],
 	"enemies_label": ["적 %d", "ENEMIES %d"],
-	"next_wave": ["다음 급증 %d초", "NEXT SURGE %ds"],
+	"inflow_label": ["유입 %d/초", "INFLOW %d/s"],
 	"income_label": ["+%d/초", "+%d/s"],
 	"gain_popup": ["+$%d", "+$%d"],
 	"time_survived": ["생존 %d:%02d", "%d:%02d"],
@@ -44,22 +43,10 @@ var _strings: Dictionary = {
 	"desc_Tesla Tower": ["연쇄 번개. 무리 관통", "Chain lightning. Jumps the pack"],
 	"desc_Sniper Tower": ["장거리 관통. 탱크 처리", "Long piercing shot. Kills tanks"],
 
-	# Surge types
-	"wave_scout": ["스트림", "Stream"],
-	"wave_density": ["밀도 급증", "Density Surge"],
-	"wave_breach": ["돌파 급증", "Breach Surge"],
-	"wave_storm": ["폭풍 급증", "Storm Surge"],
-	"side_north": ["북", "N"],
-	"side_east": ["동", "E"],
-	"side_south": ["남", "S"],
-	"side_west": ["서", "W"],
-	"side_all": ["사방", "ALL SIDES"],
-	"from_side": ["%s에서 %d마리", "%s: %d incoming"],
-
 	# Game over
 	"game_over": ["본진 파괴", "HQ DESTROYED"],
 	"restart": ["재시작", "RESTART"],
-	"result_format": ["생존 %d:%02d\n급증 %d회 버팀\n처치 %d\n최대 동시 적 %d", "Survived %d:%02d\nSurges Held %d\nKills %d\nPeak Enemies %d"],
+	"result_format": ["생존 %d:%02d\n처치 %d\n최대 동시 적 %d", "Survived %d:%02d\nKills %d\nPeak Enemies %d"],
 
 	# ESC menu
 	"resume": ["계속하기", "RESUME"],

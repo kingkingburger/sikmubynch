@@ -40,7 +40,7 @@ func _init(parent: Control, title: String) -> void:
 	_tex = ImageTexture.create_from_image(_img)
 	_texture_rect.texture = _tex
 
-## spawn_sides: 진행 중인 급증의 변(붉게). 스트림은 항상 사방이라 따로 표시하지 않는다
+## spawn_sides: 지금 압박이 두꺼운 변(붉게). 스트림은 항상 사방이라 나머지는 따로 표시하지 않는다
 func tick(delta: float, sim, spawn_sides: int) -> void:
 	if not _texture_rect:
 		return
@@ -59,7 +59,7 @@ func _render(sim, spawn_sides: int) -> void:
 		for x in range(PIXELS):
 			if absf(x - c) + absf(y - c) * 2.0 <= c:
 				_img.set_pixel(x, y, Color(0.05, 0.07, 0.05, 1.0))
-	# 급증 변 경고 (붉게)
+	# 두꺼운 변 경고 (붉게)
 	var warn := Color(0.95, 0.2, 0.15, 1.0)
 	for side in range(4):
 		if spawn_sides & (1 << side):

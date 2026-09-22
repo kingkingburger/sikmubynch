@@ -181,7 +181,7 @@ func tick() -> void:
 	var dt := SimConfig.TICK_DT
 	_clear_tick_results()
 
-	# 1. 스폰 (스트림 + 급증 큐)
+	# 1. 스폰 (압박 스트림)
 	waves.drain_spawns(dt, enemies, rng)
 
 	# 2. Flow Field
@@ -231,7 +231,7 @@ func tick() -> void:
 		minerals += gained
 		minerals_gained_this_tick += gained
 
-	# 8. 압박 진행 (급증 시작, 스트림 방향 전환)
+	# 8. 압박 진행 (배율·방향 가중치·진입로 드리프트)
 	waves.tick(dt, enemies.alive_count, rng)
 
 	tick_index += 1
@@ -241,7 +241,6 @@ func tick() -> void:
 func _clear_tick_results() -> void:
 	enemies.clear_tick_results()
 	combat.clear_tick_results()
-	waves.clear_tick_flags()
 	hq_hit_this_tick = false
 	buildings_destroyed = PackedInt32Array()
 	buildings_hit = PackedInt32Array()
@@ -286,7 +285,7 @@ func state_hash() -> int:
 	var h := enemies.state_hash()
 	h = (h * 31 + minerals) & 0x7FFFFFFF
 	h = (h * 31 + kills) & 0x7FFFFFFF
-	h = (h * 31 + waves.wave_number) & 0x7FFFFFFF
+	h = (h * 31 + waves.stream_spawned) & 0x7FFFFFFF
 	h = (h * 31 + int(hq_hp())) & 0x7FFFFFFF
 	h = (h * 31 + combat.p_alive_count) & 0x7FFFFFFF
 	return h

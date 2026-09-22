@@ -148,13 +148,15 @@ func _process(delta: float) -> void:
 		_hud.tick(delta, sim, _debug_visible, _debug_text() if _debug_visible else "")
 
 func _debug_text() -> String:
-	return "FPS %d\n적 %d (최대 %d)\n발사체 %d  파티클 %d\n건물 %d\n틱 %.2f ms  렌더 %.2f ms\n급증 큐 %d  그리드 %d  Flow 재계산 %d\n급증 %d  스트림 %.1f/s  시간 %.0f  속도 %.1fx  seed %d" % [
+	return "FPS %d\n적 %d (최대 %d)\n발사체 %d  파티클 %d\n건물 %d\n틱 %.2f ms  렌더 %.2f ms\n그리드 %d  Flow 재계산 %d\n유입 %.1f/s (기본 %.1f × 압박 %.2f)  변 %s\n시간 %.0f  속도 %.1fx  seed %d" % [
 		Engine.get_frames_per_second(), sim.enemies_alive(), sim.peak_alive(),
 		sim.combat.p_alive_count, _effect_renderer.particle_count(),
 		sim.buildings.alive_count,
 		float(sim.last_tick_usec) / 1000.0, float(_last_render_usec) / 1000.0,
-		sim.waves.queue_size(), sim.grid.registered, sim.flow.recalc_count,
-		sim.waves.wave_number, sim.waves.stream_rate(sim.waves.time), sim.waves.time, GameFeel.game_speed, run_seed
+		sim.grid.registered, sim.flow.recalc_count,
+		sim.waves.spawn_rate(), sim.waves.base_rate(sim.waves.time), sim.waves.pressure,
+		"%.1f/%.1f/%.1f/%.1f" % [sim.waves.side_weight[0], sim.waves.side_weight[1], sim.waves.side_weight[2], sim.waves.side_weight[3]],
+		sim.waves.time, GameFeel.game_speed, run_seed
 	]
 
 ## 틱 결과를 표현 계층으로 넘긴다. 규모에 비례하되 개별 재생하지 않는다.
@@ -224,10 +226,6 @@ func _consume_tick_events() -> void:
 		_hud.show_hq_warning()
 		GameFeel.shake(2.0)
 
-	if sim.waves.wave_started_flag:
-		_hud.show_wave_banner(sim.waves.wave_number, sim.waves.wave_type, sim.waves.spawn_sides, sim.waves.total_planned)
-		AudioManager.play_sfx_by_name("wave_start")
-		GameFeel.shake(2.5)
 
 # ---------------------------------------------------------------------------
 # 건물 표현
@@ -424,7 +422,7 @@ func _on_game_over() -> void:
 	AudioManager.play_sfx_by_name("destroy", 3.0)
 	var secs := int(sim.waves.time)
 	var result_text := Locale.t_fmt("result_format", [
-		secs / 60, secs % 60, sim.waves.wave_number, sim.kills, sim.peak_alive()
+		secs / 60, secs % 60, sim.kills, sim.peak_alive()
 	])
 	_hud.set_esc_visible(false)
 	_hud.show_game_over(result_text)

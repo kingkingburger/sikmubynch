@@ -1,8 +1,8 @@
 extends SceneTree
 
-## 헤드리스 소크: 스크립트로 방어선을 짓고 N번째 급증까지 돌리며 규모·틱 시간·HQ 상태를 기록한다.
+## 헤드리스 소크: 스크립트로 방어선을 짓고 N분까지 돌리며 유입률·동시 적 수·틱 시간·HQ 상태를 기록한다.
 ## 밸런스 감각과 성능 추세를 보는 용도. 실패 판정은 하지 않는다.
-## SOAK_WAVES=N 으로 목표 급증 수를 바꾼다 (기본 12).
+## SOAK_MINUTES=N 으로 목표 시간을 바꾼다 (기본 6). 본진이 죽으면 그 전에 끝난다.
 
 const GameSimulation := preload("res://sim/game_simulation.gd")
 const SimConfig := preload("res://sim/sim_config.gd")
@@ -13,38 +13,38 @@ func _initialize() -> void:
 func _run() -> void:
 	var sim := GameSimulation.new()
 	sim.start(20260921)
-	var target_surge := int(OS.get_environment("SOAK_WAVES")) if OS.get_environment("SOAK_WAVES") != "" else 12
-	var last_surge := -1
+	var target_minutes := int(OS.get_environment("SOAK_MINUTES")) if OS.get_environment("SOAK_MINUTES") != "" else 6
+	var min_alive_after_start := 999999
+	var min_alive_at := 0
 	var worst := 0
 	var total := 0
 	var n := 0
 	var peak := 0
 	var ticks := 0
-	var max_ticks := 30 * 60 * 25
+	var max_ticks := 30 * 60 * target_minutes
 	var build_timer := 0.0
-	while sim.waves.wave_number <= target_surge and not sim.game_over and ticks < max_ticks:
+	while not sim.game_over and ticks < max_ticks:
 		# 4초마다 자원이 허락하는 만큼 짓는다 (플레이어가 계속 손을 움직이는 것을 흉내)
 		build_timer -= SimConfig.TICK_DT
 		if build_timer <= 0.0:
 			build_timer = 4.0
 			_build_defense(sim)
-		if sim.waves.wave_number != last_surge:
-			last_surge = sim.waves.wave_number
-			print("S%2d at %4ds: type=%d planned=%d hp_scale=%.2f stream=%.1f/s minerals=%d buildings=%d" % [
-				last_surge, int(sim.waves.time), sim.waves.wave_type, sim.waves.total_planned,
-				sim.waves.hp_scale(sim.waves.time), sim.waves.stream_rate(sim.waves.time), sim.minerals, sim.buildings.alive_count])
 		sim.tick()
 		ticks += 1
 		n += 1
 		total += sim.last_tick_usec
 		worst = maxi(worst, sim.last_tick_usec)
 		peak = maxi(peak, sim.enemies_alive())
+		# 30초 이후 동시 적 수의 바닥: 잦아드는 구간이 있는지 본다
+		if ticks > 30 * 30 and sim.enemies_alive() < min_alive_after_start:
+			min_alive_after_start = sim.enemies_alive()
+			min_alive_at = ticks / 30
 		if ticks % (30 * 10) == 0:
-			print("  t=%4ds surge=%d alive=%4d peak=%4d hq=%4d kills=%5d minerals=%5d towers=%3d tick=%.2fms" % [
-				ticks / 30, sim.waves.wave_number, sim.enemies_alive(), peak, int(sim.hq_hp()), sim.kills, sim.minerals,
+			print("  t=%4ds inflow=%5.1f/s (x%.2f) alive=%4d peak=%4d hq=%4d kills=%5d minerals=%5d towers=%3d tick=%.2fms" % [
+				ticks / 30, sim.waves.spawn_rate(), sim.waves.pressure, sim.enemies_alive(), peak, int(sim.hq_hp()), sim.kills, sim.minerals,
 				sim.buildings.alive_count, float(sim.last_tick_usec) / 1000.0])
-	print("SOAK: reached surge %d, game_over=%s, kills=%d, peak_alive=%d, avg tick %.2f ms, worst %.2f ms, time %ds" % [
-		sim.waves.wave_number, str(sim.game_over), sim.kills, sim.peak_alive(), float(total) / float(n) / 1000.0, float(worst) / 1000.0, ticks / 30])
+	print("SOAK: time %ds, game_over=%s, kills=%d, peak_alive=%d, min_alive_after_30s=%d (at %ds), avg tick %.2f ms, worst %.2f ms" % [
+		ticks / 30, str(sim.game_over), sim.kills, sim.peak_alive(), min_alive_after_start, min_alive_at, float(total) / float(n) / 1000.0, float(worst) / 1000.0])
 	quit(0)
 
 ## 자원이 허락하는 만큼 타워를 본진 주변 나선으로 늘리고, 바깥에 바리케이드 링(틈 있음)을 둔다.

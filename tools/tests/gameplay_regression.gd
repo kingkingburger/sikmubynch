@@ -42,7 +42,7 @@ func _run() -> void:
 	test_enemy_reaches_and_attacks_hq()
 	test_towers_kill_and_splitter_children()
 	test_pressure_never_rests()
-	test_surge_schedule_and_scaling()
+	test_pressure_curve_and_scaling()
 	test_determinism()
 	test_building_destroyed_unblocks_path()
 	test_cannon_splash_and_frost_slow()
@@ -69,7 +69,7 @@ func test_start_state() -> void:
 	check(sim.flow.is_reachable(0, 0), "corner is reachable from HQ")
 	check(sim.flow.cost_at(63, 63) == 0, "HQ cell cost 0")
 	check(not sim.game_over, "not game over at start")
-	check(sim.waves.wave_number == 0, "no surge before the run starts")
+	check(sim.waves.stream_spawned == 0, "no spawn before the run starts")
 	sim.tick()
 	check(sim.enemies_alive() >= 30, "a horde is visible on the very first tick (%d)" % sim.enemies_alive())
 	run_ticks(sim, 30 * 10)
@@ -180,7 +180,9 @@ func test_towers_kill_and_splitter_children() -> void:
 			mini_found = true
 	check(mini_found, "children are MINI type")
 
-## 압박은 쉬지 않는다: 어떤 5초 구간에도 스폰이 있고, 급증 사이에도 스트림이 흐른다.
+## 압박은 쉬지 않는다: 웨이브·급증 없이 한 흐름으로 온다.
+## 5분 동안 10초 창마다 스폰 수가 그 시점 기본 유입률×압박 바닥 아래로 내려가지 않고(잦아듦 없음),
+## 압박 천장 위로 튀지도 않는다(덩어리 없음). 그리고 항상 사방에서 온다.
 func test_pressure_never_rests() -> void:
 	var sim := new_sim(4321)
 	sim.minerals = 100000
@@ -191,20 +193,33 @@ func test_pressure_never_rests() -> void:
 	for y in range(54, 74, 2):
 		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, 50, y)
 		sim.place_building(BuildingData.BuildingType.SNIPER_TOWER, 76, y)
-	var gaps := 0
+	var window := 10.0
+	var lulls := 0
+	var bursts := 0
 	var windows := 0
+	var lowest_ratio := 999.0
+	var highest_ratio := 0.0
 	var last_total := sim.waves.stream_spawned
-	for w in range(24):   # 120초를 5초 창으로
-		run_ticks(sim, 30 * 5)
+	for w in range(30):   # 300초를 10초 창으로
+		var t0 := sim.waves.time
+		run_ticks(sim, int(30 * window))
 		windows += 1
-		var total := sim.waves.stream_spawned
-		if total == last_total:
-			gaps += 1
-		last_total = total
-	check(gaps == 0, "stream spawned in every 5-second window (%d gaps of %d)" % [gaps, windows])
-	check(sim.waves.wave_number >= 3, "at least 3 surges in 120 seconds (%d)" % sim.waves.wave_number)
-	check(sim.waves.stream_spawned > 60, "stream alone spawned a crowd (%d)" % sim.waves.stream_spawned)
-	check(not sim.game_over, "strong defense survives 2 minutes")
+		var got := sim.waves.stream_spawned - last_total
+		last_total = sim.waves.stream_spawned
+		if w == 0:
+			continue   # 첫 창은 시작 무리(STREAM_INITIAL_BURST)가 섞인다
+		var base := WaveSim.base_rate(t0 + window * 0.5) * window
+		var ratio := float(got) / base
+		lowest_ratio = minf(lowest_ratio, ratio)
+		highest_ratio = maxf(highest_ratio, ratio)
+		if ratio < WaveSim.PRESSURE_MIN * 0.9:
+			lulls += 1
+		if ratio > WaveSim.PRESSURE_MAX * 1.1:
+			bursts += 1
+	check(lulls == 0, "no 10-second window fell below the pressure floor (%d lulls of %d, lowest %.2f)" % [lulls, windows, lowest_ratio])
+	check(bursts == 0, "no 10-second window spiked above the pressure ceiling (%d bursts, highest %.2f)" % [bursts, highest_ratio])
+	check(sim.waves.stream_spawned > 1500, "5 minutes of stream is a horde (%d)" % sim.waves.stream_spawned)
+	check(not sim.game_over, "strong defense survives 5 minutes")
 	# 스트림은 항상 사방: 어느 변도 전체의 15% 아래로 떨어지지 않는다
 	var total_sides := 0
 	for c in sim.waves.stream_side_counts:
@@ -214,27 +229,64 @@ func test_pressure_never_rests() -> void:
 		min_share = minf(min_share, float(c) / maxf(float(total_sides), 1.0))
 	check(min_share >= 0.15, "stream comes from all four sides (min share %.2f, counts %s)" % [min_share, str(sim.waves.stream_side_counts)])
 
-func test_surge_schedule_and_scaling() -> void:
-	check(WaveSim.type_for_surge(1) == WaveSim.WaveType.DENSITY, "surge 1 is density")
-	check(WaveSim.type_for_surge(2) == WaveSim.WaveType.BREACH, "surge 2 is breach")
-	check(WaveSim.type_for_surge(3) == WaveSim.WaveType.STORM, "surge 3 is storm")
-	check(WaveSim.surge_count(3) > WaveSim.surge_count(1), "surges grow")
-	check(WaveSim.surge_count(15) >= 400 and WaveSim.surge_count(15) <= 800, "15th storm is a 400-800 crowd (%d)" % WaveSim.surge_count(15))
+## 유입 곡선·배율·드리프트. 압박 배율과 변 가중치는 범위 안에서 천천히만 움직이고, 스폰 링은 가장자리까지 닿는다.
+func test_pressure_curve_and_scaling() -> void:
+	check(WaveSim.base_rate(0.0) >= 4.0, "stream starts thick (%.1f/s)" % WaveSim.base_rate(0.0))
+	check(WaveSim.base_rate(600.0) > WaveSim.base_rate(0.0) * 3.0, "base rate rises over 10 minutes")
+	check(WaveSim.base_rate(300.0) > WaveSim.base_rate(120.0) and WaveSim.base_rate(120.0) > WaveSim.base_rate(0.0), "base rate is monotonic")
 	check(WaveSim.hp_scale(0.0) == 1.0 and WaveSim.hp_scale(600.0) > 2.0, "HP scales with time")
-	check(WaveSim.stream_rate(600.0) > WaveSim.stream_rate(0.0) * 3.0, "stream rate rises over 10 minutes")
-	var comp0 := WaveSim.composition(0.0, WaveSim.WaveType.STORM)
+	var comp0 := WaveSim.composition(0.0)
 	check(comp0[1] == 0.0 and comp0[2] == 0.0, "no tanks or splitters at time 0")
-	var comp5 := WaveSim.composition(300.0, WaveSim.WaveType.BREACH)
-	check(comp5[1] > 0.4, "breach surge is tank-heavy after 5 minutes")
-	var sim := new_sim(99)
-	var started_at := -1.0
-	for t in range(30 * 30):
-		sim.tick()
-		if sim.waves.wave_started_flag and started_at < 0.0:
-			started_at = sim.waves.time
-	check(started_at > 0.0 and absf(started_at - WaveSim.SURGE_FIRST_AT) < 0.2, "first surge at %.0fs" % WaveSim.SURGE_FIRST_AT)
-	check(sim.waves.wave_type == WaveSim.WaveType.DENSITY and sim.waves.total_planned > 0, "first surge is a density crowd")
-	check(sim.waves.seconds_to_surge() > 0.0 and sim.waves.seconds_to_surge() <= WaveSim.SURGE_INTERVAL, "countdown to next surge running")
+	var comp5 := WaveSim.composition(300.0)
+	check(comp5[1] > 0.15 and comp5[2] > 0.15, "tanks and splitters join the stream after 5 minutes")
+	# 배율·가중치 드리프트: 10분을 돌리며 범위와 틱당 변화량을 본다
+	var waves := WaveSim.new()
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 99
+	var dt := SimConfig.TICK_DT
+	var p_min := 99.0
+	var p_max := 0.0
+	var p_jump := 0.0
+	var w_min := 99.0
+	var w_max := 0.0
+	var w_jump := 0.0
+	var last_p := waves.pressure
+	var last_w := waves.side_weight.duplicate()
+	for i in range(30 * 600):
+		waves.tick(dt, 0, rng)
+		p_min = minf(p_min, waves.pressure)
+		p_max = maxf(p_max, waves.pressure)
+		p_jump = maxf(p_jump, absf(waves.pressure - last_p))
+		last_p = waves.pressure
+		for sd in range(4):
+			w_min = minf(w_min, waves.side_weight[sd])
+			w_max = maxf(w_max, waves.side_weight[sd])
+			w_jump = maxf(w_jump, absf(waves.side_weight[sd] - last_w[sd]))
+			last_w[sd] = waves.side_weight[sd]
+	check(p_min >= WaveSim.PRESSURE_MIN - 0.001 and p_max <= WaveSim.PRESSURE_MAX + 0.001, "pressure stays in [%.2f, %.2f] (saw %.2f..%.2f)" % [WaveSim.PRESSURE_MIN, WaveSim.PRESSURE_MAX, p_min, p_max])
+	check(p_max - p_min > 0.25, "pressure actually drifts (%.2f..%.2f)" % [p_min, p_max])
+	check(p_jump <= WaveSim.PRESSURE_DRIFT_PER_SEC * dt + 0.0001, "pressure never jumps (max per-tick %.4f)" % p_jump)
+	check(w_min >= WaveSim.SIDE_WEIGHT_MIN - 0.001 and w_max <= WaveSim.SIDE_WEIGHT_MAX + 0.001, "side weights stay in range (%.2f..%.2f)" % [w_min, w_max])
+	check(w_jump <= WaveSim.SIDE_DRIFT_PER_SEC * dt + 0.0001, "side weights never jump (max per-tick %.4f)" % w_jump)
+	# 스폰 링: 시작은 본진 근처, 3분 뒤에는 가장자리에도 닿는다. 항상 맵 안.
+	var near := WaveSim.new()
+	var far := WaveSim.new()
+	far.time = 240.0
+	var near_max := 0.0
+	var edge_hits := 0
+	var inside := true
+	var c := SimConfig.HQ_CENTER
+	for i in range(300):
+		var p := near._spawn_position(rng)
+		near_max = maxf(near_max, (p - c).length())
+		var q := far._spawn_position(rng)
+		if q.x <= 1.0 or q.y <= 1.0 or q.x >= float(SimConfig.MAP_SIZE) - 1.0 or q.y >= float(SimConfig.MAP_SIZE) - 1.0:
+			edge_hits += 1
+		if q.x < 0.0 or q.y < 0.0 or q.x > float(SimConfig.MAP_SIZE) or q.y > float(SimConfig.MAP_SIZE):
+			inside = false
+	check(near_max < 32.0, "first spawns are close to the HQ (max %.1f tiles)" % near_max)
+	check(edge_hits > 60, "after 4 minutes many spawns come from the map edge (%d of 300)" % edge_hits)
+	check(inside, "spawns never leave the map")
 
 func test_determinism() -> void:
 	var a := new_sim(777)

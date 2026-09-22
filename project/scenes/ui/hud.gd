@@ -1,6 +1,6 @@
 extends RefCounted
 
-## HUD. 우선순위: 자원(가장 크고 먼저 읽힘) → 본진 위험 → 급증/스트림 경고 → 슬롯 → 레이더.
+## HUD. 우선순위: 자원(가장 크고 먼저 읽힘) → 본진 위험 → 유입 경고 → 슬롯 → 레이더.
 ## 어두운 디아블로풍 패널 스타일. 전체 화면 플래시는 쓰지 않는다.
 ## 자원은 얻을 때 커졌다 돌아오고, 틱 단위로 합산한 "+$N" 팝업이 뜬다. 슬롯은 살 수 있으면 밝고 못 사면 어둡다.
 
@@ -30,7 +30,7 @@ var _mineral_pulse: float = 0.0
 var _last_minerals: int = -1
 
 var _info_label: Label
-var _surge_label: Label
+var _inflow_label: Label
 var _hp_label: Label
 var _hp_bar: ProgressBar
 var _hq_warn_label: Label
@@ -45,8 +45,6 @@ var _slot_types: Array = []
 var _slot_affordable: Array = []
 var _selected_slot: int = 0
 var _threat_radar
-var _banner_label: Label
-var _banner_timer: float = 0.0
 var _speed_label: Label
 var _esc_panel: PanelContainer
 var _debug_label: Label
@@ -61,7 +59,6 @@ func setup(root: Node, building_datas: Array) -> void:
 	for i in _slot_types.size():
 		_slot_affordable.append(true)
 	_setup_hud(building_datas)
-	_setup_banner()
 	_setup_game_over_panel()
 	_setup_speed_label()
 	_setup_esc_menu()
@@ -72,10 +69,6 @@ func setup(root: Node, building_datas: Array) -> void:
 # ---------------------------------------------------------------------------
 
 func tick(delta: float, sim, debug_visible: bool, debug_text: String) -> void:
-	if _banner_timer > 0.0:
-		_banner_timer -= delta
-		if _banner_timer <= 0.0 and _banner_label:
-			_banner_label.visible = false
 	if _hq_warn_timer > 0.0:
 		_hq_warn_timer -= delta
 		if _hq_warn_timer <= 0.0 and _hq_warn_label:
@@ -83,7 +76,7 @@ func tick(delta: float, sim, debug_visible: bool, debug_text: String) -> void:
 	if debug_visible and _debug_label:
 		_debug_label.text = debug_text
 	if _threat_radar:
-		_threat_radar.tick(delta, sim, sim.waves.spawn_sides if sim.waves.active else 0)
+		_threat_radar.tick(delta, sim, sim.waves.heavy_sides())
 	_tick_money(delta)
 
 ## 이번 틱에 얻은 미네랄 (게임 씬이 틱마다 호출)
@@ -158,17 +151,16 @@ func update_hud(sim, paused: bool) -> void:
 	if _info_label:
 		var secs := int(sim.waves.time)
 		var text := Locale.t_fmt("time_survived", [secs / 60, secs % 60])
-		text += "  |  " + Locale.t_fmt("wave_label", [sim.waves.wave_number])
 		text += "  |  " + Locale.t_fmt("kills_label", [sim.kills])
 		text += "  |  " + Locale.t_fmt("enemies_label", [sim.enemies_alive()])
 		if paused:
 			text += "  ||"
 		_info_label.text = text
-	if _surge_label:
-		var left := int(ceil(sim.waves.seconds_to_surge()))
-		_surge_label.text = Locale.t_fmt("next_wave", [left])
-		var urgent := left <= 5
-		_surge_label.add_theme_color_override("font_color", Color(1.0, 0.45, 0.3) if urgent else Color(0.75, 0.65, 0.4))
+	if _inflow_label:
+		# 유입률은 계속 오르고 예고 없이 두꺼워진다. 압박 배율이 높을수록 붉게.
+		_inflow_label.text = Locale.t_fmt("inflow_label", [int(round(sim.waves.spawn_rate()))])
+		var heat := clampf((sim.waves.pressure - 1.0) / 0.5, 0.0, 1.0)
+		_inflow_label.add_theme_color_override("font_color", Color(0.75, 0.65, 0.4).lerp(Color(1.0, 0.45, 0.3), heat))
 	if _hp_label:
 		var hp := int(sim.hq_hp())
 		var max_hp := int(sim.hq_max_hp())
@@ -219,41 +211,6 @@ func show_hq_warning() -> void:
 	if _hq_warn_label:
 		_hq_warn_label.visible = true
 	_hq_warn_timer = 1.2
-
-func show_wave_banner(wave_number: int, wave_type: int, sides: int, count: int) -> void:
-	if not _banner_label:
-		return
-	var type_key := "wave_scout"
-	match wave_type:
-		1: type_key = "wave_density"
-		2: type_key = "wave_breach"
-		3: type_key = "wave_storm"
-	_banner_label.text = "%s  —  %s\n%s" % [
-		Locale.t_fmt("wave_label", [wave_number]), Locale.t(type_key),
-		Locale.t_fmt("from_side", [_side_text(sides), count])
-	]
-	var col := Color(1.0, 0.9, 0.4)
-	if wave_type == 3:
-		col = Color(1.0, 0.4, 0.3)
-	elif wave_type == 2:
-		col = Color(1.0, 0.65, 0.3)
-	_banner_label.add_theme_color_override("font_color", col)
-	_banner_label.visible = true
-	_banner_timer = 3.0
-
-func _side_text(sides: int) -> String:
-	if sides == 0xF:
-		return Locale.t("side_all")
-	var names: Array = []
-	if sides & 1:
-		names.append(Locale.t("side_north"))
-	if sides & 2:
-		names.append(Locale.t("side_east"))
-	if sides & 4:
-		names.append(Locale.t("side_south"))
-	if sides & 8:
-		names.append(Locale.t("side_west"))
-	return "/".join(names)
 
 func update_slot_highlight(selected_slot: int, building_datas: Array) -> void:
 	_selected_slot = selected_slot
@@ -332,7 +289,7 @@ func _setup_hud(building_datas: Array) -> void:
 	_popup_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_canvas.add_child(_popup_root)
 
-	# 우상단: 시간·급증·처치·적 + 다음 급증
+	# 우상단: 시간·처치·적 + 현재 유입률
 	var tr_panel := PanelContainer.new()
 	tr_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
 	tr_panel.offset_left = -340.0
@@ -349,11 +306,11 @@ func _setup_hud(building_datas: Array) -> void:
 	_info_label.add_theme_font_size_override("font_size", 13)
 	_info_label.add_theme_color_override("font_color", Color(0.85, 0.78, 0.5))
 	tr_vbox.add_child(_info_label)
-	_surge_label = Label.new()
-	_surge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_surge_label.add_theme_font_size_override("font_size", 15)
-	_surge_label.add_theme_color_override("font_color", Color(0.75, 0.65, 0.4))
-	tr_vbox.add_child(_surge_label)
+	_inflow_label = Label.new()
+	_inflow_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_inflow_label.add_theme_font_size_override("font_size", 15)
+	_inflow_label.add_theme_color_override("font_color", Color(0.75, 0.65, 0.4))
+	tr_vbox.add_child(_inflow_label)
 
 	# 본진 경고 (화면 상단 중앙)
 	_hq_warn_label = Label.new()
@@ -501,20 +458,6 @@ func _setup_hud(building_datas: Array) -> void:
 		_apply_slot_style(i)
 
 	_threat_radar = ThreatRadar.new(grid, Locale.t("threat_radar"))
-
-func _setup_banner() -> void:
-	_banner_label = Label.new()
-	_banner_label.visible = false
-	_banner_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	_banner_label.offset_top = 80.0
-	_banner_label.offset_left = -320.0
-	_banner_label.offset_right = 320.0
-	_banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_banner_label.add_theme_font_size_override("font_size", 24)
-	_banner_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.3))
-	_banner_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
-	_banner_label.add_theme_constant_override("outline_size", 5)
-	_canvas.add_child(_banner_label)
 
 func _setup_game_over_panel() -> void:
 	_game_over_panel = PanelContainer.new()

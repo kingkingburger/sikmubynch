@@ -8,7 +8,6 @@ signal game_over_triggered()
 
 var minerals: int = 150
 var kill_count: int = 0
-var wave_number: int = 1
 var game_time: float = 0.0
 var peak_enemies: int = 0
 var is_game_over: bool = false
@@ -22,7 +21,6 @@ func sync(sim) -> void:
 		minerals = sim.minerals
 		minerals_changed.emit(minerals)
 	kill_count = sim.kills
-	wave_number = sim.waves.wave_number
 	peak_enemies = sim.peak_alive()
 	if sim.game_over and not is_game_over:
 		is_game_over = true
@@ -31,7 +29,6 @@ func sync(sim) -> void:
 func reset() -> void:
 	minerals = 150
 	kill_count = 0
-	wave_number = 1
 	game_time = 0.0
 	peak_enemies = 0
 	is_game_over = false
