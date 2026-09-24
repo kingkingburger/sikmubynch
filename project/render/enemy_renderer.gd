@@ -21,6 +21,7 @@ const LUNGE_BACK := 0.12      # 물기 전 뒤로 빼는 거리 (칸)
 const LUNGE_FORWARD := 0.32   # 무는 순간 앞으로 뻗는 거리 (칸)
 const WALK_TICKS_PER_FRAME := 4   # 걷기 프레임 전환 주기 (틱). 30Hz에서 7.5fps
 const BOB_PX := 1.2           # 걷는 동안 위아래 흔들림 (px)
+const START_CAPACITY := 512   # 타입별 버퍼 시작 크기. 넘치면 두 배로 늘린다 (매 프레임 올리는 양을 실제 물량에 맞춘다)
 
 const FRAME_SHADER := """
 shader_type canvas_item;
@@ -39,6 +40,7 @@ void fragment() {
 var _mmis: Array = []          # MultiMeshInstance2D per type
 var _buffers: Array = []       # PackedFloat32Array per type
 var _counts: PackedInt32Array
+var _caps: PackedInt32Array    # 타입별 현재 버퍼 용량 (인스턴스 수)
 var _type_px: PackedInt32Array
 var _type_frames: PackedInt32Array
 var max_per_type: int = SimConfig.MAX_ENEMIES
@@ -52,6 +54,7 @@ func setup(enemy_datas: Array) -> void:
 	_buffers.clear()
 	_counts = PackedInt32Array()
 	_counts.resize(enemy_datas.size())
+	_caps = PackedInt32Array()
 	_type_px = PackedInt32Array()
 	_type_frames = PackedInt32Array()
 	if _shader == null:
@@ -88,7 +91,8 @@ func setup(enemy_datas: Array) -> void:
 		mm.transform_format = MultiMesh.TRANSFORM_2D
 		mm.use_colors = true
 		mm.mesh = quad
-		mm.instance_count = max_per_type
+		var cap := mini(START_CAPACITY, max_per_type)
+		mm.instance_count = cap
 		mm.visible_instance_count = 0
 		mm.custom_aabb = SpriteFactory.map_aabb(SimConfig.MAP_SIZE)
 		var mmi := MultiMeshInstance2D.new()
@@ -103,8 +107,9 @@ func setup(enemy_datas: Array) -> void:
 		add_child(mmi)
 		_mmis.append(mmi)
 		var buf := PackedFloat32Array()
-		buf.resize(max_per_type * STRIDE)
+		buf.resize(cap * STRIDE)
 		_buffers.append(buf)
+		_caps.append(cap)
 		_type_px.append(px)
 		_type_frames.append(frames)
 
@@ -144,8 +149,10 @@ func update_from_sim(enemies, alpha: float, tick_index: int, buildings = null) -
 			continue
 		var t := type_id[i]
 		var n := _counts[t]
-		if n >= max_per_type:
-			continue
+		if n >= _caps[t]:
+			if n >= max_per_type:
+				continue
+			_grow(t, n + 1)
 		_counts[t] = n + 1
 		var x := ppx[i] + (px[i] - ppx[i]) * alpha
 		var y := ppy[i] + (py[i] - ppy[i]) * alpha
@@ -216,8 +223,26 @@ func update_from_sim(enemies, alpha: float, tick_index: int, buildings = null) -
 	for t in range(types):
 		var mmi: MultiMeshInstance2D = _mmis[t]
 		var mm := mmi.multimesh
+		if mm.instance_count != _caps[t]:
+			mm.instance_count = _caps[t]
 		mm.buffer = _buffers[t]
 		mm.visible_instance_count = _counts[t]
+
+## 타입 t의 버퍼를 need 이상으로 늘린다 (두 배씩, 상한 max_per_type). 기존 내용은 유지된다.
+func _grow(t: int, need: int) -> void:
+	var cap := _caps[t]
+	while cap < need:
+		cap *= 2
+	cap = mini(cap, max_per_type)
+	_caps[t] = cap
+	var buf: PackedFloat32Array = _buffers[t]
+	buf.resize(cap * STRIDE)
+	_buffers[t] = buf
+
+func capacity_for_type(t: int) -> int:
+	if t < 0 or t >= _caps.size():
+		return 0
+	return _caps[t]
 
 func visible_total() -> int:
 	var s := 0

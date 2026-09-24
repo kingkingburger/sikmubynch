@@ -8,7 +8,7 @@ const CELLS := MAP_SIZE * MAP_SIZE
 const TICK_RATE := 30
 const TICK_DT := 1.0 / 30.0
 
-const MAX_ENEMIES := 8192
+const MAX_ENEMIES := 12288   # 10,000 목표 + 분열 여유
 const MAX_PROJECTILES := 4096
 const MAX_BUILDINGS := 2048
 

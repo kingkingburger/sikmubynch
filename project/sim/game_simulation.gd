@@ -39,6 +39,9 @@ var buildings_destroyed: PackedInt32Array   # 이번 틱 파괴된 건물 인덱
 var buildings_hit: PackedInt32Array         # 이번 틱 피격된 건물 인덱스 (중복 제거 안 함)
 var minerals_gained_this_tick: int = 0
 var last_tick_usec: int = 0                 # 프로파일용
+## 틱 단계별 소요 시간 (F3·스트레스 측정용). PHASE_* 순서
+var phase_usec: PackedInt32Array = PackedInt32Array([0, 0, 0, 0, 0, 0])
+const PHASE_NAMES: Array[String] = ["spawn", "flow", "grid", "enemies", "combat", "rest"]
 var flow_recalc_timer: int = -1
 var _income_accum: float = 0.0              # 기본 수입 소수 누적
 
@@ -184,6 +187,9 @@ func tick() -> void:
 	# 1. 스폰 (압박 스트림)
 	waves.drain_spawns(dt, enemies, rng)
 
+	var t_mark := Time.get_ticks_usec()
+	phase_usec[0] = t_mark - start_usec
+
 	# 2. Flow Field — 건설이 잦아든 뒤 뒤쪽 버퍼에서 틱마다 조금씩 계산하고, 끝나면 바꾼다
 	if flow_recalc_timer >= 0:
 		flow_recalc_timer -= 1
@@ -192,14 +198,26 @@ func tick() -> void:
 		flow.begin()
 	flow.step()
 
+	var t_now := Time.get_ticks_usec()
+	phase_usec[1] = t_now - t_mark
+	t_mark = t_now
+
 	# 3. 공간 그리드
 	grid.rebuild(enemies.pos_x, enemies.pos_y, enemies.alive, enemies.high)
+
+	t_now = Time.get_ticks_usec()
+	phase_usec[2] = t_now - t_mark
+	t_mark = t_now
 
 	# 4. 적 이동·건물 공격 (근처 건물 표는 배치·철거 직후 바로 갱신한다)
 	if buildings.near_dirty:
 		buildings.rebuild_near()
 	enemies.tick(dt, flow, buildings, tick_index)
 	_resolve_building_damage()
+
+	t_now = Time.get_ticks_usec()
+	phase_usec[3] = t_now - t_mark
+	t_mark = t_now
 
 	# 5. 전투
 	if not game_over:
@@ -208,6 +226,10 @@ func tick() -> void:
 		for b in enemies.pending_detach:
 			buildings.detach_attacker(b)
 		buildings.regen_hq(dt)
+
+	t_now = Time.get_ticks_usec()
+	phase_usec[4] = t_now - t_mark
+	t_mark = t_now
 
 	# 6. 분열 스폰
 	var sr := enemies.split_requests
@@ -236,7 +258,9 @@ func tick() -> void:
 
 	tick_index += 1
 	time += dt
-	last_tick_usec = Time.get_ticks_usec() - start_usec
+	t_now = Time.get_ticks_usec()
+	phase_usec[5] = t_now - t_mark
+	last_tick_usec = t_now - start_usec
 
 func _clear_tick_results() -> void:
 	enemies.clear_tick_results()

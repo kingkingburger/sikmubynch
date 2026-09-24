@@ -136,6 +136,13 @@ func _run() -> void:
 		worst_render = maxi(worst_render, game._last_render_usec)
 	print("SMOKE: 500+ enemies render worst %.2f ms, tick %.2f ms" % [float(worst_render) / 1000.0, float(game.sim.last_tick_usec) / 1000.0])
 	check(game._enemy_renderer.visible_total() == game.sim.enemies_alive(), "renderer matches sim at 500+")
+	var cap_total := 0
+	for t in range(game.sim.enemy_datas.size()):
+		cap_total += game._enemy_renderer.capacity_for_type(t)
+	check(cap_total < game._enemy_renderer.max_per_type, "enemy buffers grow with the crowd instead of the cap (%d)" % cap_total)
+	# F3 디버그 오버레이 문자열: 포맷 인자 수가 어긋나면 여기서 오류가 난다
+	var debug_text: String = game._debug_text()
+	check(debug_text.contains("Flow 재계산") and debug_text.contains("이동"), "F3 debug text formats with phase timings")
 
 	print("RESULT: %d checks, %d failures" % [checks, failures.size()])
 	# 씬을 먼저 내리고 오디오를 멈춰야 종료 시 누수 경고가 없다
