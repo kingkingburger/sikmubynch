@@ -153,7 +153,7 @@ func _debug_text() -> String:
 		sim.combat.p_alive_count, _effect_renderer.particle_count(),
 		sim.buildings.alive_count,
 		float(sim.last_tick_usec) / 1000.0, float(_last_render_usec) / 1000.0,
-		sim.grid.registered, sim.flow.recalc_count,
+		sim.grid.registered, sim.flow.recalc_count, float(sim.flow.last_step_usec) / 1000.0, " 계산 중" if sim.flow.is_busy() else "",
 		sim.waves.spawn_rate(), sim.waves.base_rate(sim.waves.time), sim.waves.pressure, sim.waves.director_rate, int(sim.waves.target_alive(sim.waves.time)),
 		"%.1f/%.1f/%.1f/%.1f" % [sim.waves.side_weight[0], sim.waves.side_weight[1], sim.waves.side_weight[2], sim.waves.side_weight[3]],
 		sim.waves.time, GameFeel.game_speed, run_seed

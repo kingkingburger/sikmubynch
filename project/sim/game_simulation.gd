@@ -184,13 +184,13 @@ func tick() -> void:
 	# 1. 스폰 (압박 스트림)
 	waves.drain_spawns(dt, enemies, rng)
 
-	# 2. Flow Field
+	# 2. Flow Field — 건설이 잦아든 뒤 뒤쪽 버퍼에서 틱마다 조금씩 계산하고, 끝나면 바꾼다
 	if flow_recalc_timer >= 0:
 		flow_recalc_timer -= 1
-		if flow_recalc_timer < 0 and flow.dirty:
-			flow.recalculate()
-	elif flow.dirty:
-		flow.recalculate()
+	# 진행 중인 계산은 끝까지 간다 (연속 건설 중 계속 재시작하면 영영 안 끝난다). 남은 변경은 다음 계산이 반영한다
+	if flow_recalc_timer < 0 and flow.dirty and not flow.is_busy():
+		flow.begin()
+	flow.step()
 
 	# 3. 공간 그리드
 	grid.rebuild(enemies.pos_x, enemies.pos_y, enemies.alive, enemies.high)

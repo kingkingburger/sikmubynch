@@ -35,6 +35,16 @@ func run_ticks(sim: GameSimulation, n: int) -> void:
 	for i in range(n):
 		sim.tick()
 
+## 건설 뒤 분산 재계산이 끝나 새 필드가 적용될 때까지 돌린다. 걸린 틱 수를 반환한다.
+func settle_flow(sim: GameSimulation) -> int:
+	var n := 0
+	run_ticks(sim, SimConfig.FLOW_RECALC_DELAY_TICKS + 1)
+	n += SimConfig.FLOW_RECALC_DELAY_TICKS + 1
+	while (sim.flow.is_busy() or sim.flow.dirty) and n < 120:
+		sim.tick()
+		n += 1
+	return n
+
 func _run() -> void:
 	test_start_state()
 	test_flow_field()
@@ -110,6 +120,26 @@ func test_flow_field() -> void:
 	var idx := 61 * SimConfig.MAP_SIZE + 61
 	var d2 := Vector2(f2.dir_x[idx], f2.dir_y[idx])
 	check(not (d2.x > 0.5 and d2.y > 0.5), "no diagonal corner cutting between two blocked orthogonals")
+	# 분산 재계산: 틱마다 조금씩 진행해도 한 번에 한 것과 같은 필드가 나오고, 도중에는 이전 필드를 유지한다
+	var fa := new_sim().flow
+	var fb := new_sim().flow
+	for x in range(40, 90):
+		fa.set_blocked(x, 50, true)
+		fb.set_blocked(x, 50, true)
+	fb.recalculate()
+	var before_cost := fa.cost_at(63, 30)
+	fa.begin()
+	var steps := 0
+	var kept_old := true
+	while fa.is_busy() and steps < 100:
+		fa.step()
+		steps += 1
+		if fa.is_busy() and fa.cost_at(63, 30) != before_cost:
+			kept_old = false
+	check(steps > 1 and steps <= 16, "distributed recalculation spreads over several ticks (%d)" % steps)
+	check(kept_old, "old field stays in use until the new one is complete")
+	check(fa.cost == fb.cost and fa.dir_x == fb.dir_x and fa.dir_y == fb.dir_y, "distributed result matches a full recalculation")
+	check(fa.cost_at(63, 30) > before_cost, "wall detour is applied after the swap")
 
 func test_placement_and_demolish() -> void:
 	var sim := quiet_sim()
@@ -134,8 +164,9 @@ func test_placement_and_demolish() -> void:
 	sim.minerals = 500
 	var recalcs := sim.flow.recalc_count
 	sim.place_building(BuildingData.BuildingType.WALL, 63, 58)
-	run_ticks(sim, SimConfig.FLOW_RECALC_DELAY_TICKS + 2)
+	var settle := settle_flow(sim)
 	check(sim.flow.recalc_count == recalcs + 1, "flow recalculates once after placement delay")
+	check(settle <= SimConfig.FLOW_RECALC_DELAY_TICKS + 16, "new field applies within about half a second (%d ticks)" % settle)
 	# 기본 수입
 	var m0 := sim.minerals
 	run_ticks(sim, 30 * 5)
@@ -369,7 +400,7 @@ func test_building_destroyed_unblocks_path() -> void:
 	for y in range(59, 69):
 		sim.place_building(BuildingData.BuildingType.BARRICADE, 58, y)
 		sim.place_building(BuildingData.BuildingType.BARRICADE, 69, y)
-	run_ticks(sim, SimConfig.FLOW_RECALC_DELAY_TICKS + 2)
+	settle_flow(sim)
 	check(not sim.flow.is_reachable(63, 40), "walled HQ unreachable")
 	for i in range(12):
 		sim.enemies.spawn(EnemyData.EnemyType.TANK, 62.0 + float(i % 3), 50.0, 3.0, 3.0, 1.0)
@@ -379,7 +410,7 @@ func test_building_destroyed_unblocks_path() -> void:
 		sim.tick()
 		ticks += 1
 	check(sim.buildings.alive_count < buildings_before, "tanks break a barricade when path is blocked")
-	run_ticks(sim, SimConfig.FLOW_RECALC_DELAY_TICKS + 2)
+	settle_flow(sim)
 	check(sim.flow.is_reachable(63, 40), "destroyed barricade reopens the path")
 
 func test_cannon_splash_and_frost_slow() -> void:
