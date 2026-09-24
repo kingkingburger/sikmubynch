@@ -60,6 +60,7 @@ func _run() -> void:
 	test_flame_tesla_sniper()
 	test_attacker_cap_and_hq_regen()
 	test_enemies_bite_nearby_towers()
+	test_run_summary()
 	test_stress_500()
 	print("RESULT: %d checks, %d failures" % [checks, failures.size()])
 	quit(0 if failures.is_empty() else 1)
@@ -559,3 +560,22 @@ func test_stress_500() -> void:
 	print("STRESS 500: avg tick %.2f ms, worst %.2f ms, alive %d, kills %d" % [
 		float(total) / float(n) / 1000.0, float(worst) / 1000.0, sim.enemies_alive(), sim.kills])
 	check(float(total) / float(n) < 33000.0, "500 enemies: average tick under 33 ms (30Hz budget)")
+
+func test_run_summary() -> void:
+	var sim := quiet_sim()
+	sim.minerals = 1000
+	var gun := BuildingData.BuildingType.GUN_TOWER
+	sim.place_building(gun, 60, 63)
+	sim.place_building(BuildingData.BuildingType.BARRICADE, 63, 50)
+	var s0 := sim.run_summary()
+	check(s0["built"] == 2 and s0["spent"] == sim.buildings.t_cost[gun] + sim.buildings.t_cost[BuildingData.BuildingType.BARRICADE], "summary counts buildings built and minerals spent")
+	check(s0["breach_side"] == -1, "no breach side before the HQ is hit")
+	# 북쪽(y 작음)에서 본진을 무는 적 → 뚫린 쪽은 북(0)
+	for i in range(4):
+		sim.enemies.spawn(EnemyData.EnemyType.TANK, 62.5 + float(i) * 0.6, 58.0, 1.0, 1.0, 1.0)
+	var ticks := 0
+	while sim.enemies.hq_damage_by_side[0] <= 0.0 and ticks < 30 * 30:
+		sim.tick()
+		ticks += 1
+	var s1 := sim.run_summary()
+	check(s1["breach_side"] == 0 and s1["breach_share"] > 0.5, "breach side is north when attacked from north (%d, %.2f)" % [s1["breach_side"], s1["breach_share"]])

@@ -421,12 +421,40 @@ func _on_game_over() -> void:
 	_esc_visible = false
 	AudioManager.stop_bgm()
 	AudioManager.play_sfx_by_name("destroy", 3.0)
-	var secs := int(sim.waves.time)
-	var result_text := Locale.t_fmt("result_format", [
-		secs / 60, secs % 60, sim.kills, sim.peak_alive()
-	])
+	var summary := sim.run_summary()
+	var records := GameManager.submit_run(summary)
 	_hud.set_esc_visible(false)
-	_hud.show_game_over(result_text)
+	_hud.show_game_over(result_text(summary, records))
+
+## 결과 화면 문구: 기록(이번 런 · 최고 · 갱신)과 실패 원인 단서(뚫린 방향, 건물 손실, 쓰지 않은 미네랄)
+static func result_text(summary: Dictionary, records: Dictionary) -> String:
+	var lines: PackedStringArray = []
+	lines.append(_record_line(Locale.t_fmt("result_time", [int(summary["time"]) / 60, int(summary["time"]) % 60]),
+		_clock(float(records.get("best_time", 0.0))), bool(records.get("new_time", false))))
+	lines.append(_record_line(Locale.t_fmt("result_kills", [int(summary["kills"])]),
+		str(int(records.get("best_kills", 0.0))), bool(records.get("new_kills", false))))
+	lines.append(_record_line(Locale.t_fmt("result_peak", [int(summary["peak"])]),
+		str(int(records.get("best_peak", 0.0))), bool(records.get("new_peak", false))))
+	lines.append("")
+	var side := int(summary["breach_side"])
+	if side >= 0:
+		lines.append(Locale.t_fmt("result_breach", [Locale.t("side_%d" % side), int(round(float(summary["breach_share"]) * 100.0))]))
+	lines.append(Locale.t_fmt("result_lines", [int(summary["built"]), int(summary["lost"])]))
+	if int(summary["minerals_left"]) >= UNSPENT_HINT_MINERALS:
+		lines.append(Locale.t_fmt("result_unspent", [int(summary["minerals_left"])]))
+	return "\n".join(lines)
+
+## 이만큼 남기고 죽었으면 "더 지을 수 있었다"를 보여준다 (타워 몇 개 값)
+const UNSPENT_HINT_MINERALS := 100
+
+static func _clock(seconds: float) -> String:
+	var s := int(seconds)
+	return "%d:%02d" % [s / 60, s % 60]
+
+static func _record_line(current: String, best: String, is_new: bool) -> String:
+	if is_new:
+		return "%s   %s" % [current, Locale.t("result_new_best")]
+	return "%s   (%s)" % [current, Locale.t_fmt("result_best", [best])]
 
 func _reset_managers() -> void:
 	GameManager.reset()

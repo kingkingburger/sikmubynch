@@ -22,6 +22,9 @@ func _run() -> void:
 	OS.set_environment("SIKMUBYNCH_SEED", "20260921")
 	feel = root.get_node("GameFeel")
 	gm = root.get_node("GameManager")
+	# 실제 개인 기록을 건드리지 않는다
+	gm.records_path = "user://test_records.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(gm.records_path))
 	change_scene_to_file("res://scenes/main/game.tscn")
 	await process_frame
 	await process_frame
@@ -118,6 +121,9 @@ func _run() -> void:
 	check(game.sim.game_over, "HQ destroyed ends the run")
 	check(gm.is_game_over, "GameManager mirrors game over")
 	check(game._hud._game_over_panel.visible, "game over panel shown")
+	var result: String = game._hud._result_label.text
+	check(result.contains(root.get_node("Locale").t("result_lines").split(" ")[0]), "result shows building stats")
+	check(gm.load_records()["runs"] == 1, "run recorded to personal records")
 	check(feel.paused, "game over pauses simulation")
 
 	# 재시작
@@ -143,6 +149,18 @@ func _run() -> void:
 	# F3 디버그 오버레이 문자열: 포맷 인자 수가 어긋나면 여기서 오류가 난다
 	var debug_text: String = game._debug_text()
 	check(debug_text.contains("Flow 재계산") and debug_text.contains("이동"), "F3 debug text formats with phase timings")
+
+	# 최고 기록: 두 번째 런이 더 길면 갱신, 짧으면 이전 최고를 보여준다
+	var rec_short: Dictionary = gm.submit_run({"time": 1.0, "kills": 0, "peak": 0})
+	check(not rec_short["new_time"] and rec_short["best_time"] > 1.0, "shorter run keeps previous best")
+	var rec_long: Dictionary = gm.submit_run({"time": 99999.0, "kills": 1, "peak": 1})
+	check(rec_long["new_time"] and rec_long["best_time"] == 99999.0, "longer run sets a new best")
+	var summary := {"time": 125.0, "kills": 10, "peak": 20, "built": 7, "lost": 3, "spent": 300,
+		"minerals_left": 400, "breach_side": 0, "breach_share": 0.62}
+	var text: String = game.result_text(summary, rec_long)
+	check(text.contains("2:05") and text.contains("62%") and text.contains(root.get_node("Locale").t("side_0")), "result text shows time, breach side and share")
+	check(text.contains("400"), "result text hints unspent minerals")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(gm.records_path))
 
 	print("RESULT: %d checks, %d failures" % [checks, failures.size()])
 	# 씬을 먼저 내리고 오디오를 멈춰야 종료 시 누수 경고가 없다

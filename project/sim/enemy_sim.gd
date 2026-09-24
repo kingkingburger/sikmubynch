@@ -41,6 +41,8 @@ var free_list: PackedInt32Array
 var high: int = 0
 var alive_count: int = 0
 var peak_alive: int = 0
+## 런 누적: 본진에 들어간 피해를 공격자가 선 변(WaveSim.Side 순서: 북·동·남·서)별로 나눈다. 결과 화면의 "뚫린 방향"
+var hq_damage_by_side: PackedFloat32Array
 
 # 이번 틱 결과 (Game Simulation이 소비하고 비운다)
 var split_requests: PackedFloat32Array    # [type, x, y, hp_scale, dps_scale, speed_scale] * n
@@ -105,6 +107,7 @@ func clear_all() -> void:
 	last_hit_tick.fill(-100)
 	generation.fill(0)
 	free_list = PackedInt32Array()
+	hq_damage_by_side = PackedFloat32Array([0.0, 0.0, 0.0, 0.0])
 	high = 0
 	alive_count = 0
 	peak_alive = 0
@@ -116,6 +119,17 @@ func clear_tick_results() -> void:
 	pending_detach = PackedInt32Array()
 	death_count = 0
 	reward_pending = 0
+
+## 공격자 위치가 본진 중심에서 어느 변 쪽인지로 나눈다 (가로·세로 중 큰 축)
+func _record_hq_damage(x: float, y: float, amount: float, hq_x: float, hq_y: float) -> void:
+	var dx := x - hq_x
+	var dy := y - hq_y
+	var side := 0
+	if absf(dx) > absf(dy):
+		side = 1 if dx > 0.0 else 3
+	else:
+		side = 2 if dy > 0.0 else 0
+	hq_damage_by_side[side] += amount
 
 func set_types(datas: Array) -> void:
 	type_count = datas.size()
@@ -261,6 +275,8 @@ func tick(dt: float, flow, buildings, tick_index: int) -> void:
 					attack_timer[i] = ATTACK_INTERVAL
 					buildings.damage(target, dps[i], tick_index)
 					building_hits.append(target)
+					if target == buildings.hq_index:
+						_record_hq_damage(x, y, dps[i], hq_x, hq_y)
 				continue
 
 		var cx := int(x)

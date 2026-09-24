@@ -69,6 +69,20 @@ func _run() -> void:
 	for i in 30:
 		await process_frame
 	await _shot("04-zoomin")
+
+	# 장면 5: 결과 화면 (기록·뚫린 방향·손실). 실제 개인 기록은 건드리지 않는다
+	game.get_node("/root/GameManager").records_path = "user://shot_records.cfg"
+	game._debug_visible = false
+	game._hud.set_debug_visible(false)
+	var hq: int = game.sim.buildings.hq_index
+	game.sim.buildings.hp[hq] = 1.0
+	var e: int = game.sim.enemies.spawn(EnemyData.EnemyType.TANK, 63.5, 61.5, 1.0, 1.0, 1.0)
+	game.sim.enemies.attack_target[e] = hq
+	game.sim.enemies.attack_timer[e] = 0.0
+	for i in 30:
+		await process_frame
+	await _shot("05-result")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://shot_records.cfg"))
 	quit(0)
 
 func _shot(name: String) -> void:

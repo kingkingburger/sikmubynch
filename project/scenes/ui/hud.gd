@@ -463,11 +463,11 @@ func _setup_game_over_panel() -> void:
 	_game_over_panel = PanelContainer.new()
 	_game_over_panel.visible = false
 	_game_over_panel.set_anchors_preset(Control.PRESET_CENTER)
-	_game_over_panel.custom_minimum_size = Vector2(460, 320)
-	_game_over_panel.offset_left = -230.0
-	_game_over_panel.offset_top = -160.0
-	_game_over_panel.offset_right = 230.0
-	_game_over_panel.offset_bottom = 160.0
+	_game_over_panel.custom_minimum_size = Vector2(560, 420)
+	_game_over_panel.offset_left = -280.0
+	_game_over_panel.offset_top = -210.0
+	_game_over_panel.offset_right = 280.0
+	_game_over_panel.offset_bottom = 210.0
 	_game_over_panel.add_theme_stylebox_override("panel", _create_panel_style(
 		Color(0.04, 0.03, 0.06, 0.96), Color(0.6, 0.5, 0.2), 3))
 	_canvas.add_child(_game_over_panel)

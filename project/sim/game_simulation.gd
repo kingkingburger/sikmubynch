@@ -43,6 +43,10 @@ var last_tick_usec: int = 0                 # 프로파일용
 var phase_usec: PackedInt32Array = PackedInt32Array([0, 0, 0, 0, 0, 0])
 const PHASE_NAMES: Array[String] = ["spawn", "flow", "grid", "enemies", "combat", "rest"]
 var flow_recalc_timer: int = -1
+# 런 통계 (결과 화면이 실패 원인을 읽는 재료)
+var buildings_built: int = 0
+var buildings_lost: int = 0
+var minerals_spent: int = 0
 var _income_accum: float = 0.0              # 기본 수입 소수 누적
 
 func _init() -> void:
@@ -73,6 +77,9 @@ func start(seed: int, starting_defense: bool = true) -> void:
 	minerals = SimConfig.START_MINERALS
 	kills = 0
 	game_over = false
+	buildings_built = 0
+	buildings_lost = 0
+	minerals_spent = 0
 	hq_hit_this_tick = false
 	buildings_destroyed = PackedInt32Array()
 	buildings_hit = PackedInt32Array()
@@ -140,6 +147,8 @@ func place_building(type: int, tx: int, ty: int) -> int:
 	if idx < 0:
 		return -1
 	minerals -= buildings.t_cost[type]
+	minerals_spent += buildings.t_cost[type]
+	buildings_built += 1
 	var s := buildings.t_size[type]
 	for dy in range(s):
 		for dx in range(s):
@@ -286,6 +295,7 @@ func _resolve_building_damage() -> void:
 				game_over = true
 			else:
 				buildings_destroyed.append(idx)
+				buildings_lost += 1
 				_remove_building(idx)
 
 # ---------------------------------------------------------------------------
@@ -303,6 +313,29 @@ func enemies_alive() -> int:
 
 func peak_alive() -> int:
 	return enemies.peak_alive
+
+## 결과 화면용 런 요약. breach_side는 본진 피해가 가장 컸던 변(WaveSim.Side), 피해가 없으면 -1
+func run_summary() -> Dictionary:
+	var by_side := enemies.hq_damage_by_side
+	var total := 0.0
+	var best_side := -1
+	var best := 0.0
+	for s in range(by_side.size()):
+		total += by_side[s]
+		if by_side[s] > best:
+			best = by_side[s]
+			best_side = s
+	return {
+		"time": waves.time,
+		"kills": kills,
+		"peak": peak_alive(),
+		"built": buildings_built,
+		"lost": buildings_lost,
+		"spent": minerals_spent,
+		"minerals_left": minerals,
+		"breach_side": best_side,
+		"breach_share": best / total if total > 0.0 else 0.0,
+	}
 
 ## 결정론 검증용 상태 해시
 func state_hash() -> int:

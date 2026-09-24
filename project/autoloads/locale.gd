@@ -46,7 +46,18 @@ var _strings: Dictionary = {
 	# Game over
 	"game_over": ["본진 파괴", "HQ DESTROYED"],
 	"restart": ["재시작", "RESTART"],
-	"result_format": ["생존 %d:%02d\n처치 %d\n최대 동시 적 %d", "Survived %d:%02d\nKills %d\nPeak Enemies %d"],
+	"result_time": ["생존 %d:%02d", "Survived %d:%02d"],
+	"result_kills": ["처치 %d", "Kills %d"],
+	"result_peak": ["최대 동시 적 %d", "Peak Enemies %d"],
+	"result_best": ["최고 %s", "Best %s"],
+	"result_new_best": ["새 기록!", "NEW BEST!"],
+	"result_breach": ["가장 많이 뚫린 쪽: %s (본진 피해 %d%%)", "Most breached: %s (%d%% of HQ damage)"],
+	"result_lines": ["지은 건물 %d · 잃은 건물 %d", "Built %d · Lost %d"],
+	"result_unspent": ["남은 미네랄 %d — 더 지을 수 있었다", "%d minerals unspent — you could have built more"],
+	"side_0": ["화면 오른쪽 위", "upper right"],
+	"side_1": ["화면 오른쪽 아래", "lower right"],
+	"side_2": ["화면 왼쪽 아래", "lower left"],
+	"side_3": ["화면 왼쪽 위", "upper left"],
 
 	# ESC menu
 	"resume": ["계속하기", "RESUME"],
