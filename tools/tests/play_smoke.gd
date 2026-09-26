@@ -157,7 +157,7 @@ func _run() -> void:
 	check(rec_long["new_time"] and rec_long["best_time"] == 99999.0, "longer run sets a new best")
 	var summary := {"time": 125.0, "kills": 10, "peak": 20, "built": 7, "lost": 3, "spent": 300,
 		"minerals_left": 400, "breach_side": 0, "breach_share": 0.62}
-	var text: String = game.result_text(summary, rec_long)
+	var text: String = load("res://scenes/ui/result_text.gd").build(summary, rec_long)
 	check(text.contains("2:05") and text.contains("62%") and text.contains(root.get_node("Locale").t("side_0")), "result text shows time, breach side and share")
 	check(text.contains("400"), "result text hints unspent minerals")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(gm.records_path))

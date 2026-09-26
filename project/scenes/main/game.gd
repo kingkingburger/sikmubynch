@@ -14,6 +14,7 @@ const BuildingView := preload("res://render/building_view.gd")
 const PlacementView := preload("res://render/placement_view.gd")
 const WorldCamera := preload("res://render/world_camera.gd")
 const Hud := preload("res://scenes/ui/hud.gd")
+const ResultText := preload("res://scenes/ui/result_text.gd")
 const BuildingCatalog := preload("res://scripts/building_catalog.gd")
 
 const MAX_TICKS_PER_FRAME := 6
@@ -147,13 +148,16 @@ func _process(delta: float) -> void:
 		_hud.update_hud(sim, GameFeel.paused)
 		_hud.tick(delta, sim, _debug_visible, _debug_text() if _debug_visible else "")
 
+func _phase_ms(phase: int) -> float:
+	return float(sim.phase_usec[phase]) / 1000.0
+
 func _debug_text() -> String:
 	return "FPS %d\n적 %d (최대 %d)\n발사체 %d  파티클 %d\n건물 %d\n틱 %.2f ms  렌더 %.2f ms\n  이동 %.2f  전투 %.2f  그리드 %.2f  Flow %.2f\n그리드 등록 %d  Flow 재계산 %d (%.2f ms%s)\n유입 %.1f/s (바닥 %.1f × %.2f + 디렉터 %.1f, 목표 무리 %d)  변 %s\n시간 %.0f  속도 %.1fx  seed %d" % [
 		Engine.get_frames_per_second(), sim.enemies_alive(), sim.peak_alive(),
 		sim.combat.p_alive_count, _effect_renderer.particle_count(),
 		sim.buildings.alive_count,
 		float(sim.last_tick_usec) / 1000.0, float(_last_render_usec) / 1000.0,
-		float(sim.phase_usec[3]) / 1000.0, float(sim.phase_usec[4]) / 1000.0, float(sim.phase_usec[2]) / 1000.0, float(sim.phase_usec[1]) / 1000.0,
+		_phase_ms(GameSimulation.Phase.ENEMIES), _phase_ms(GameSimulation.Phase.COMBAT), _phase_ms(GameSimulation.Phase.GRID), _phase_ms(GameSimulation.Phase.FLOW),
 		sim.grid.registered, sim.flow.recalc_count, float(sim.flow.last_step_usec) / 1000.0, " 계산 중" if sim.flow.is_busy() else "",
 		sim.waves.spawn_rate(), sim.waves.base_rate(sim.waves.time), sim.waves.pressure, sim.waves.director_rate, int(sim.waves.target_alive(sim.waves.time)),
 		"%.1f/%.1f/%.1f/%.1f" % [sim.waves.side_weight[0], sim.waves.side_weight[1], sim.waves.side_weight[2], sim.waves.side_weight[3]],
@@ -424,37 +428,7 @@ func _on_game_over() -> void:
 	var summary := sim.run_summary()
 	var records := GameManager.submit_run(summary)
 	_hud.set_esc_visible(false)
-	_hud.show_game_over(result_text(summary, records))
-
-## 결과 화면 문구: 기록(이번 런 · 최고 · 갱신)과 실패 원인 단서(뚫린 방향, 건물 손실, 쓰지 않은 미네랄)
-static func result_text(summary: Dictionary, records: Dictionary) -> String:
-	var lines: PackedStringArray = []
-	lines.append(_record_line(Locale.t_fmt("result_time", [int(summary["time"]) / 60, int(summary["time"]) % 60]),
-		_clock(float(records.get("best_time", 0.0))), bool(records.get("new_time", false))))
-	lines.append(_record_line(Locale.t_fmt("result_kills", [int(summary["kills"])]),
-		str(int(records.get("best_kills", 0.0))), bool(records.get("new_kills", false))))
-	lines.append(_record_line(Locale.t_fmt("result_peak", [int(summary["peak"])]),
-		str(int(records.get("best_peak", 0.0))), bool(records.get("new_peak", false))))
-	lines.append("")
-	var side := int(summary["breach_side"])
-	if side >= 0:
-		lines.append(Locale.t_fmt("result_breach", [Locale.t("side_%d" % side), int(round(float(summary["breach_share"]) * 100.0))]))
-	lines.append(Locale.t_fmt("result_lines", [int(summary["built"]), int(summary["lost"])]))
-	if int(summary["minerals_left"]) >= UNSPENT_HINT_MINERALS:
-		lines.append(Locale.t_fmt("result_unspent", [int(summary["minerals_left"])]))
-	return "\n".join(lines)
-
-## 이만큼 남기고 죽었으면 "더 지을 수 있었다"를 보여준다 (타워 몇 개 값)
-const UNSPENT_HINT_MINERALS := 100
-
-static func _clock(seconds: float) -> String:
-	var s := int(seconds)
-	return "%d:%02d" % [s / 60, s % 60]
-
-static func _record_line(current: String, best: String, is_new: bool) -> String:
-	if is_new:
-		return "%s   %s" % [current, Locale.t("result_new_best")]
-	return "%s   (%s)" % [current, Locale.t_fmt("result_best", [best])]
+	_hud.show_game_over(ResultText.build(summary, records))
 
 func _reset_managers() -> void:
 	GameManager.reset()

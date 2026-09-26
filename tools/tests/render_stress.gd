@@ -6,6 +6,7 @@ extends SceneTree
 ## RENDER_COUNTS=1000,2000,5000 / RENDER_SECONDS=N (기본 6) 으로 바꾼다.
 
 const SimConfig := preload("res://sim/sim_config.gd")
+const StressCommon := preload("stress_common.gd")
 
 var game
 
@@ -22,13 +23,9 @@ func _run() -> void:
 	game = current_scene
 	game.sim.waves.enabled = false
 	game.sim.minerals = 1000000
-	_build_ring()
-	var counts_env := OS.get_environment("RENDER_COUNTS")
-	var counts: Array = [1000, 2000, 5000]
-	if counts_env != "":
-		counts = Array(counts_env.split(",")).map(func(v): return int(v))
-	var seconds := int(OS.get_environment("RENDER_SECONDS")) if OS.get_environment("RENDER_SECONDS") != "" else 6
-	for n in counts:
+	StressCommon.build_ring(func(type: int, tile: Vector2i) -> bool: return game._try_place(type, tile))
+	var seconds := StressCommon.env_int("RENDER_SECONDS", 6)
+	for n in StressCommon.env_counts("RENDER_COUNTS", [1000, 2000, 5000]):
 		await _measure(int(n), seconds)
 	quit(0)
 
@@ -79,16 +76,3 @@ func _measure(target: int, seconds: int) -> void:
 		float(tick_total) / maxi(tick_n, 1) / 1000.0, game._effect_renderer.particle_count(),
 		" (HQ destroyed)" if game.sim.game_over else ""])
 
-func _build_ring() -> void:
-	var types := [
-		BuildingData.BuildingType.GUN_TOWER, BuildingData.BuildingType.CANNON_TOWER,
-		BuildingData.BuildingType.FROST_TOWER, BuildingData.BuildingType.FLAME_TOWER,
-		BuildingData.BuildingType.TESLA_TOWER, BuildingData.BuildingType.SNIPER_TOWER,
-	]
-	var k := 0
-	for r in [8, 11, 14]:
-		for a in range(0, 360, 12):
-			var x := int(round(SimConfig.HQ_CENTER.x + cos(deg_to_rad(a)) * r))
-			var y := int(round(SimConfig.HQ_CENTER.y + sin(deg_to_rad(a)) * r))
-			if game._try_place(types[k % types.size()], Vector2i(x, y)):
-				k += 1

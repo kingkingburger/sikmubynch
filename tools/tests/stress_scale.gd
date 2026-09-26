@@ -6,17 +6,14 @@ extends SceneTree
 
 const GameSimulation := preload("res://sim/game_simulation.gd")
 const SimConfig := preload("res://sim/sim_config.gd")
+const StressCommon := preload("stress_common.gd")
 
 func _initialize() -> void:
 	call_deferred("_run")
 
 func _run() -> void:
-	var counts_env := OS.get_environment("STRESS_COUNTS")
-	var counts: Array = [1000, 2000, 5000]
-	if counts_env != "":
-		counts = Array(counts_env.split(",")).map(func(v): return int(v))
-	var seconds := int(OS.get_environment("STRESS_SECONDS")) if OS.get_environment("STRESS_SECONDS") != "" else 10
-	for n in counts:
+	var seconds := StressCommon.env_int("STRESS_SECONDS", 10)
+	for n in StressCommon.env_counts("STRESS_COUNTS", [1000, 2000, 5000]):
 		_measure(int(n), seconds)
 	quit(0)
 
@@ -25,7 +22,10 @@ func _measure(target: int, seconds: int) -> void:
 	sim.start(4242)
 	sim.waves.enabled = false
 	sim.minerals = 1000000
-	_build_ring(sim)
+	var towers := StressCommon.build_ring(func(type: int, tile: Vector2i) -> bool: return sim.place_building(type, tile.x, tile.y) >= 0)
+	sim.flow.recalculate()
+	sim.buildings.rebuild_near()
+	print("  ring: %d towers" % towers)
 	var phases := sim.phase_usec.size()
 	var total := PackedInt64Array()
 	total.resize(phases)
@@ -57,20 +57,3 @@ func _measure(target: int, seconds: int) -> void:
 		target, sim.enemies_alive(), float(tick_total) / ticks / 1000.0, float(tick_worst) / 1000.0,
 		", ".join(parts), sim.combat.p_alive_count, sim.kills, " (HQ destroyed)" if sim.game_over else ""])
 
-## 본진 주변 반지름 8~14 링에 타워 6종을 섞어 둔다. 적이 방어선에 닿아 전투가 계속 일어나는 배치.
-func _build_ring(sim: GameSimulation) -> void:
-	var types := [
-		BuildingData.BuildingType.GUN_TOWER, BuildingData.BuildingType.CANNON_TOWER,
-		BuildingData.BuildingType.FROST_TOWER, BuildingData.BuildingType.FLAME_TOWER,
-		BuildingData.BuildingType.TESLA_TOWER, BuildingData.BuildingType.SNIPER_TOWER,
-	]
-	var k := 0
-	for r in [8, 11, 14]:
-		for a in range(0, 360, 12):
-			var x := int(round(SimConfig.HQ_CENTER.x + cos(deg_to_rad(a)) * r))
-			var y := int(round(SimConfig.HQ_CENTER.y + sin(deg_to_rad(a)) * r))
-			if sim.place_building(types[k % types.size()], x, y) >= 0:
-				k += 1
-	sim.flow.recalculate()
-	sim.buildings.rebuild_near()
-	print("  ring: %d towers" % k)
