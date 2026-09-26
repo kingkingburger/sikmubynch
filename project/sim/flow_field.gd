@@ -11,6 +11,7 @@ extends RefCounted
 ## 적은 계산이 끝날 때까지 이전 필드를 따라간다. 예산은 시간이 아니라 셀 수라 결정적이다.
 
 const SimConfig := preload("res://sim/sim_config.gd")
+const Buffers := preload("res://sim/buffers.gd")
 
 const SIZE := SimConfig.MAP_SIZE
 const CELLS := SimConfig.CELLS
@@ -44,26 +45,16 @@ var _row: int = 0
 var _targets: PackedInt32Array
 
 func _init() -> void:
-	cost = _int_buffer()
-	dir_x = _float_buffer()
-	dir_y = _float_buffer()
-	_b_cost = _int_buffer()
-	_b_dir_x = _float_buffer()
-	_b_dir_y = _float_buffer()
-	blocked = _int_buffer()
-	_queue = _int_buffer()
+	cost = Buffers.i32(CELLS)
+	dir_x = Buffers.f32(CELLS)
+	dir_y = Buffers.f32(CELLS)
+	_b_cost = Buffers.i32(CELLS)
+	_b_dir_x = Buffers.f32(CELLS)
+	_b_dir_y = Buffers.f32(CELLS)
+	blocked = Buffers.i32(CELLS)
+	_queue = Buffers.i32(CELLS)
 	_targets = PackedInt32Array()
 	clear_all()
-
-static func _int_buffer() -> PackedInt32Array:
-	var a := PackedInt32Array()
-	a.resize(CELLS)
-	return a
-
-static func _float_buffer() -> PackedFloat32Array:
-	var a := PackedFloat32Array()
-	a.resize(CELLS)
-	return a
 
 func clear_all() -> void:
 	cost.fill(UNREACHABLE)

@@ -5,6 +5,7 @@ extends RefCounted
 ## 시너지 배율은 없다. 피해는 _apply_damage 한곳을 거친다(재도입 시 배율을 여기에 끼운다).
 
 const SimConfig := preload("res://sim/sim_config.gd")
+const Buffers := preload("res://sim/buffers.gd")
 
 const MAX := SimConfig.MAX_PROJECTILES
 const KIND_NONE := 0
@@ -78,85 +79,46 @@ var _query: PackedInt32Array
 var _chain_visited: PackedInt32Array
 
 func _init() -> void:
-	p_alive = PackedInt32Array()
-	p_alive.resize(MAX)
-	p_kind = PackedInt32Array()
-	p_kind.resize(MAX)
-	p_x = PackedFloat32Array()
-	p_x.resize(MAX)
-	p_y = PackedFloat32Array()
-	p_y.resize(MAX)
-	p_prev_x = PackedFloat32Array()
-	p_prev_x.resize(MAX)
-	p_prev_y = PackedFloat32Array()
-	p_prev_y.resize(MAX)
-	p_tx = PackedFloat32Array()
-	p_tx.resize(MAX)
-	p_ty = PackedFloat32Array()
-	p_ty.resize(MAX)
-	p_target = PackedInt32Array()
-	p_target.resize(MAX)
-	p_target_gen = PackedInt32Array()
-	p_target_gen.resize(MAX)
-	p_damage = PackedFloat32Array()
-	p_damage.resize(MAX)
-	p_speed = PackedFloat32Array()
-	p_speed.resize(MAX)
-	p_splash = PackedFloat32Array()
-	p_splash.resize(MAX)
-	p_slow = PackedFloat32Array()
-	p_slow.resize(MAX)
-	p_slow_dur = PackedFloat32Array()
-	p_slow_dur.resize(MAX)
-	p_ttl = PackedFloat32Array()
-	p_ttl.resize(MAX)
+	p_alive = Buffers.i32(MAX)
+	p_kind = Buffers.i32(MAX)
+	p_x = Buffers.f32(MAX)
+	p_y = Buffers.f32(MAX)
+	p_prev_x = Buffers.f32(MAX)
+	p_prev_y = Buffers.f32(MAX)
+	p_tx = Buffers.f32(MAX)
+	p_ty = Buffers.f32(MAX)
+	p_target = Buffers.i32(MAX)
+	p_target_gen = Buffers.i32(MAX)
+	p_damage = Buffers.f32(MAX)
+	p_speed = Buffers.f32(MAX)
+	p_splash = Buffers.f32(MAX)
+	p_slow = Buffers.f32(MAX)
+	p_slow_dur = Buffers.f32(MAX)
+	p_ttl = Buffers.f32(MAX)
 	p_free = PackedInt32Array()
-	hit_x = PackedFloat32Array()
-	hit_x.resize(SimConfig.MAX_HIT_EVENTS)
-	hit_y = PackedFloat32Array()
-	hit_y.resize(SimConfig.MAX_HIT_EVENTS)
-	hit_kind = PackedInt32Array()
-	hit_kind.resize(SimConfig.MAX_HIT_EVENTS)
-	explosion_x = PackedFloat32Array()
-	explosion_x.resize(SimConfig.MAX_EXPLOSION_EVENTS)
-	explosion_y = PackedFloat32Array()
-	explosion_y.resize(SimConfig.MAX_EXPLOSION_EVENTS)
-	explosion_radius = PackedFloat32Array()
-	explosion_radius.resize(SimConfig.MAX_EXPLOSION_EVENTS)
-	explosion_kills = PackedInt32Array()
-	explosion_kills.resize(SimConfig.MAX_EXPLOSION_EVENTS)
-	bolt_x0 = PackedFloat32Array()
-	bolt_x0.resize(MAX_BOLTS)
-	bolt_y0 = PackedFloat32Array()
-	bolt_y0.resize(MAX_BOLTS)
-	bolt_x1 = PackedFloat32Array()
-	bolt_x1.resize(MAX_BOLTS)
-	bolt_y1 = PackedFloat32Array()
-	bolt_y1.resize(MAX_BOLTS)
-	beam_x0 = PackedFloat32Array()
-	beam_x0.resize(MAX_BEAMS)
-	beam_y0 = PackedFloat32Array()
-	beam_y0.resize(MAX_BEAMS)
-	beam_x1 = PackedFloat32Array()
-	beam_x1.resize(MAX_BEAMS)
-	beam_y1 = PackedFloat32Array()
-	beam_y1.resize(MAX_BEAMS)
-	beam_kills = PackedInt32Array()
-	beam_kills.resize(MAX_BEAMS)
-	flame_x = PackedFloat32Array()
-	flame_x.resize(MAX_FLAMES)
-	flame_y = PackedFloat32Array()
-	flame_y.resize(MAX_FLAMES)
-	flame_tx = PackedFloat32Array()
-	flame_tx.resize(MAX_FLAMES)
-	flame_ty = PackedFloat32Array()
-	flame_ty.resize(MAX_FLAMES)
-	flame_radius = PackedFloat32Array()
-	flame_radius.resize(MAX_FLAMES)
-	_query = PackedInt32Array()
-	_query.resize(QUERY_CAP)
-	_chain_visited = PackedInt32Array()
-	_chain_visited.resize(16)
+	hit_x = Buffers.f32(SimConfig.MAX_HIT_EVENTS)
+	hit_y = Buffers.f32(SimConfig.MAX_HIT_EVENTS)
+	hit_kind = Buffers.i32(SimConfig.MAX_HIT_EVENTS)
+	explosion_x = Buffers.f32(SimConfig.MAX_EXPLOSION_EVENTS)
+	explosion_y = Buffers.f32(SimConfig.MAX_EXPLOSION_EVENTS)
+	explosion_radius = Buffers.f32(SimConfig.MAX_EXPLOSION_EVENTS)
+	explosion_kills = Buffers.i32(SimConfig.MAX_EXPLOSION_EVENTS)
+	bolt_x0 = Buffers.f32(MAX_BOLTS)
+	bolt_y0 = Buffers.f32(MAX_BOLTS)
+	bolt_x1 = Buffers.f32(MAX_BOLTS)
+	bolt_y1 = Buffers.f32(MAX_BOLTS)
+	beam_x0 = Buffers.f32(MAX_BEAMS)
+	beam_y0 = Buffers.f32(MAX_BEAMS)
+	beam_x1 = Buffers.f32(MAX_BEAMS)
+	beam_y1 = Buffers.f32(MAX_BEAMS)
+	beam_kills = Buffers.i32(MAX_BEAMS)
+	flame_x = Buffers.f32(MAX_FLAMES)
+	flame_y = Buffers.f32(MAX_FLAMES)
+	flame_tx = Buffers.f32(MAX_FLAMES)
+	flame_ty = Buffers.f32(MAX_FLAMES)
+	flame_radius = Buffers.f32(MAX_FLAMES)
+	_query = Buffers.i32(QUERY_CAP)
+	_chain_visited = Buffers.i32(16)
 	clear_all()
 
 func clear_all() -> void:
@@ -248,7 +210,7 @@ func tick_towers(dt: float, buildings, enemies, grid, tick_index: int) -> void:
 				continue
 			buildings.cooldown[i] = 1.0 / buildings.t_rate[t]
 			buildings.last_fire_tick[i] = tick_index
-			_fire_area(i, cx, cy, range_val, n, buildings.t_damage[t], enemies, tick_index)
+			_fire_area(cx, cy, range_val, n, buildings.t_damage[t], enemies, tick_index)
 			continue
 		var target := -1
 		if buildings.t_prefer_hp[t] != 0:
@@ -270,9 +232,9 @@ func tick_towers(dt: float, buildings, enemies, grid, tick_index: int) -> void:
 					buildings.t_damage[t], enemies, grid, tick_index)
 			_:
 				shots_fired -= 1   # fire()가 다시 센다
-				_fire_projectile(i, t, cx, cy, target, buildings, enemies)
+				_fire_projectile(t, cx, cy, target, buildings, enemies)
 
-func _fire_projectile(i: int, t: int, cx: float, cy: float, target: int, buildings, enemies) -> void:
+func _fire_projectile(t: int, cx: float, cy: float, target: int, buildings, enemies) -> void:
 	var e_x: PackedFloat32Array = enemies.pos_x
 	var e_y: PackedFloat32Array = enemies.pos_y
 	var kind: int = buildings.t_proj_kind[t]
@@ -387,16 +349,10 @@ func _fire_beam(cx: float, cy: float, target: int, range_val: float, half_width:
 		_push_hit(e_x[e], e_y[e], KIND_BULLET)
 		if _apply_damage(e, damage, enemies, tick_index):
 			kills += 1
-	if beam_count < MAX_BEAMS:
-		beam_x0[beam_count] = cx
-		beam_y0[beam_count] = cy
-		beam_x1[beam_count] = ex
-		beam_y1[beam_count] = ey
-		beam_kills[beam_count] = kills
-	beam_count += 1
+	_push_beam(cx, cy, ex, ey, kills)
 
 ## 화염: 반경 안 전부 피해. 표현용으로 가장 가까운 적 방향을 남긴다.
-func _fire_area(i: int, cx: float, cy: float, radius: float, n: int, damage: float, enemies, tick_index: int) -> void:
+func _fire_area(cx: float, cy: float, radius: float, n: int, damage: float, enemies, tick_index: int) -> void:
 	var e_x: PackedFloat32Array = enemies.pos_x
 	var e_y: PackedFloat32Array = enemies.pos_y
 	var near := -1
@@ -416,13 +372,7 @@ func _fire_area(i: int, cx: float, cy: float, radius: float, n: int, damage: flo
 		ty = e_y[near]
 	for k in range(n):
 		_apply_damage(_query[k], damage, enemies, tick_index)
-	if flame_count < MAX_FLAMES:
-		flame_x[flame_count] = cx
-		flame_y[flame_count] = cy
-		flame_tx[flame_count] = tx
-		flame_ty[flame_count] = ty
-		flame_radius[flame_count] = radius
-	flame_count += 1
+	_push_flame(cx, cy, tx, ty, radius)
 
 func _push_bolt(x0: float, y0: float, x1: float, y1: float) -> void:
 	if bolt_count < MAX_BOLTS:
@@ -438,6 +388,32 @@ func _push_hit(x: float, y: float, kind: int) -> void:
 		hit_y[hit_count] = y
 		hit_kind[hit_count] = kind
 	hit_count += 1
+
+func _push_beam(x0: float, y0: float, x1: float, y1: float, kills: int) -> void:
+	if beam_count < MAX_BEAMS:
+		beam_x0[beam_count] = x0
+		beam_y0[beam_count] = y0
+		beam_x1[beam_count] = x1
+		beam_y1[beam_count] = y1
+		beam_kills[beam_count] = kills
+	beam_count += 1
+
+func _push_flame(x: float, y: float, tx: float, ty: float, radius: float) -> void:
+	if flame_count < MAX_FLAMES:
+		flame_x[flame_count] = x
+		flame_y[flame_count] = y
+		flame_tx[flame_count] = tx
+		flame_ty[flame_count] = ty
+		flame_radius[flame_count] = radius
+	flame_count += 1
+
+func _push_explosion(x: float, y: float, radius: float, kills: int) -> void:
+	if explosion_count < SimConfig.MAX_EXPLOSION_EVENTS:
+		explosion_x[explosion_count] = x
+		explosion_y[explosion_count] = y
+		explosion_radius[explosion_count] = radius
+		explosion_kills[explosion_count] = kills
+	explosion_count += 1
 
 ## 발사체 진행과 명중
 func tick_projectiles(dt: float, enemies, grid, tick_index: int) -> void:
@@ -497,12 +473,7 @@ func _on_hit(i: int, x: float, y: float, target: int, enemies, grid, tick_index:
 			for k in range(n):
 				if _apply_damage(_query[k], dmg, enemies, tick_index):
 					kills += 1
-			if explosion_count < SimConfig.MAX_EXPLOSION_EVENTS:
-				explosion_x[explosion_count] = x
-				explosion_y[explosion_count] = y
-				explosion_radius[explosion_count] = radius
-				explosion_kills[explosion_count] = kills
-			explosion_count += 1
+			_push_explosion(x, y, radius, kills)
 		KIND_FROST:
 			var radius := p_splash[i]
 			var n: int = grid.query_circle(x, y, radius, enemies.pos_x, enemies.pos_y, enemies.alive, _query)

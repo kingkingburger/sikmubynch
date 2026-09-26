@@ -199,7 +199,7 @@ func _apply_slot_style(i: int) -> void:
 		style = _create_panel_style(Color(0.13, 0.11, 0.07, 0.9), Color(0.55, 0.45, 0.2, 0.8), 2)
 	else:
 		style = _create_panel_style(Color(0.07, 0.06, 0.06, 0.75), Color(0.25, 0.2, 0.15, 0.4), 1)
-	_round(style, 6)
+	style.set_corner_radius_all(6)
 	btn.add_theme_stylebox_override("normal", style)
 	var cost_lbl: Label = _slot_cost_labels[i]
 	cost_lbl.add_theme_color_override("font_color", Color(0.45, 0.95, 0.55) if ok else Color(0.95, 0.35, 0.3))
@@ -279,10 +279,7 @@ func _setup_hud(building_datas: Array) -> void:
 	_mineral_label.add_theme_constant_override("outline_size", 3)
 	_mineral_label.pivot_offset = Vector2(20.0, 22.0)
 	money_vbox.add_child(_mineral_label)
-	_income_label = Label.new()
-	_income_label.text = ""
-	_income_label.add_theme_font_size_override("font_size", 13)
-	_income_label.add_theme_color_override("font_color", Color(0.5, 0.85, 0.6))
+	_income_label = _make_label("", 13, Color(0.5, 0.85, 0.6))
 	money_vbox.add_child(_income_label)
 	_popup_root = Control.new()
 	_popup_root.set_anchors_preset(Control.PRESET_TOP_LEFT)
@@ -301,15 +298,9 @@ func _setup_hud(building_datas: Array) -> void:
 	var tr_vbox := VBoxContainer.new()
 	tr_vbox.add_theme_constant_override("separation", 2)
 	tr_panel.add_child(tr_vbox)
-	_info_label = Label.new()
-	_info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_info_label.add_theme_font_size_override("font_size", 13)
-	_info_label.add_theme_color_override("font_color", Color(0.85, 0.78, 0.5))
+	_info_label = _make_label("", 13, Color(0.85, 0.78, 0.5), HORIZONTAL_ALIGNMENT_RIGHT)
 	tr_vbox.add_child(_info_label)
-	_inflow_label = Label.new()
-	_inflow_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_inflow_label.add_theme_font_size_override("font_size", 15)
-	_inflow_label.add_theme_color_override("font_color", Color(0.75, 0.65, 0.4))
+	_inflow_label = _make_label("", 15, Color(0.75, 0.65, 0.4), HORIZONTAL_ALIGNMENT_RIGHT)
 	tr_vbox.add_child(_inflow_label)
 
 	# 본진 경고 (화면 상단 중앙)
@@ -349,16 +340,8 @@ func _setup_hud(building_datas: Array) -> void:
 	port_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	port_vbox.add_theme_constant_override("separation", 2)
 	portrait.add_child(port_vbox)
-	var hp_sub := Label.new()
-	hp_sub.text = Locale.t("hq_hp")
-	hp_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hp_sub.add_theme_font_size_override("font_size", 10)
-	hp_sub.add_theme_color_override("font_color", Color(0.4, 0.5, 0.65))
-	port_vbox.add_child(hp_sub)
-	_hp_label = Label.new()
-	_hp_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hp_label.add_theme_font_size_override("font_size", 18)
-	_hp_label.add_theme_color_override("font_color", Color(0.5, 0.75, 1.0))
+	port_vbox.add_child(_make_label(Locale.t("hq_hp"), 10, Color(0.4, 0.5, 0.65), HORIZONTAL_ALIGNMENT_CENTER))
+	_hp_label = _make_label("", 18, Color(0.5, 0.75, 1.0), HORIZONTAL_ALIGNMENT_CENTER)
 	port_vbox.add_child(_hp_label)
 	_hp_bar = ProgressBar.new()
 	_hp_bar.min_value = 0.0
@@ -375,22 +358,11 @@ func _setup_hud(building_datas: Array) -> void:
 	var bar_center := CenterContainer.new()
 	bar_center.add_child(_hp_bar)
 	port_vbox.add_child(bar_center)
-	var sel_title := Label.new()
-	sel_title.text = Locale.t("selected")
-	sel_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sel_title.add_theme_font_size_override("font_size", 9)
-	sel_title.add_theme_color_override("font_color", Color(0.5, 0.45, 0.35))
-	port_vbox.add_child(sel_title)
-	_selected_name = Label.new()
-	_selected_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_selected_name.add_theme_font_size_override("font_size", 13)
-	_selected_name.add_theme_color_override("font_color", Color(0.95, 0.85, 0.4))
+	port_vbox.add_child(_make_label(Locale.t("selected"), 9, Color(0.5, 0.45, 0.35), HORIZONTAL_ALIGNMENT_CENTER))
+	_selected_name = _make_label("", 13, Color(0.95, 0.85, 0.4), HORIZONTAL_ALIGNMENT_CENTER)
 	port_vbox.add_child(_selected_name)
-	_selected_desc = Label.new()
-	_selected_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_selected_desc = _make_label("", 10, Color(0.7, 0.65, 0.5), HORIZONTAL_ALIGNMENT_CENTER)
 	_selected_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_selected_desc.add_theme_font_size_override("font_size", 10)
-	_selected_desc.add_theme_color_override("font_color", Color(0.7, 0.65, 0.5))
 	port_vbox.add_child(_selected_desc)
 
 	var center := VBoxContainer.new()
@@ -411,7 +383,7 @@ func _setup_hud(building_datas: Array) -> void:
 		btn.custom_minimum_size = Vector2(88, 76)
 		btn.focus_mode = Control.FOCUS_NONE
 		var hs := _create_panel_style(Color(0.18, 0.15, 0.08, 0.9), Color(0.9, 0.75, 0.25), 2)
-		_round(hs, 6)
+		hs.set_corner_radius_all(6)
 		btn.add_theme_stylebox_override("hover", hs)
 		btn.add_theme_stylebox_override("pressed", hs)
 		btn.pressed.connect(slot_pressed.emit.bind(i))
@@ -423,12 +395,8 @@ func _setup_hud(building_datas: Array) -> void:
 		vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		vbox.add_theme_constant_override("separation", 1)
 		btn.add_child(vbox)
-		var key_lbl := Label.new()
-		key_lbl.text = str(i + 1)
-		key_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var key_lbl := _make_label(str(i + 1), 11, Color(0.6, 0.55, 0.4), HORIZONTAL_ALIGNMENT_CENTER)
 		key_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		key_lbl.add_theme_font_size_override("font_size", 11)
-		key_lbl.add_theme_color_override("font_color", Color(0.6, 0.55, 0.4))
 		vbox.add_child(key_lbl)
 		var swatch := ColorRect.new()
 		swatch.color = bd.color
@@ -477,17 +445,9 @@ func _setup_game_over_panel() -> void:
 	vbox.add_theme_constant_override("separation", 18)
 	_game_over_panel.add_child(vbox)
 
-	var go_title := Label.new()
-	go_title.text = Locale.t("game_over")
-	go_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	go_title.add_theme_font_size_override("font_size", 40)
-	go_title.add_theme_color_override("font_color", Color(0.95, 0.75, 0.2))
-	vbox.add_child(go_title)
+	vbox.add_child(_make_label(Locale.t("game_over"), 40, Color(0.95, 0.75, 0.2), HORIZONTAL_ALIGNMENT_CENTER))
 
-	_result_label = Label.new()
-	_result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_result_label.add_theme_font_size_override("font_size", 17)
-	_result_label.add_theme_color_override("font_color", Color(0.85, 0.78, 0.55))
+	_result_label = _make_label("", 17, Color(0.85, 0.78, 0.55), HORIZONTAL_ALIGNMENT_CENTER)
 	vbox.add_child(_result_label)
 
 	var restart_btn := _make_button(Locale.t("restart"), Vector2(150, 46), 17)
@@ -525,12 +485,7 @@ func _setup_esc_menu() -> void:
 	vbox.add_theme_constant_override("separation", 14)
 	_esc_panel.add_child(vbox)
 
-	var title := Label.new()
-	title.text = Locale.t("paused")
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 30)
-	title.add_theme_color_override("font_color", Color(0.95, 0.8, 0.2))
-	vbox.add_child(title)
+	vbox.add_child(_make_label(Locale.t("paused"), 30, Color(0.95, 0.8, 0.2), HORIZONTAL_ALIGNMENT_CENTER))
 
 	for entry in [["resume", resume_requested], ["restart", restart_requested], ["title_screen", title_requested]]:
 		var btn := _make_button(Locale.t(entry[0]), Vector2(200, 40), 16)
@@ -547,11 +502,8 @@ func _setup_esc_menu() -> void:
 		var row := HBoxContainer.new()
 		row.custom_minimum_size = Vector2(260, 28)
 		row.add_theme_constant_override("separation", 8)
-		var lbl := Label.new()
-		lbl.text = slider_names[i]
+		var lbl := _make_label(slider_names[i], 13, vol_label_color)
 		lbl.custom_minimum_size = Vector2(55, 0)
-		lbl.add_theme_font_size_override("font_size", 13)
-		lbl.add_theme_color_override("font_color", vol_label_color)
 		row.add_child(lbl)
 		var slider := HSlider.new()
 		slider.min_value = 0.0
@@ -597,22 +549,22 @@ func _make_button(text: String, min_size: Vector2, font_size: int) -> Button:
 	btn.add_theme_stylebox_override("focus", style)
 	return btn
 
-func _round(style: StyleBoxFlat, r: int) -> void:
-	style.corner_radius_top_left = r
-	style.corner_radius_top_right = r
-	style.corner_radius_bottom_left = r
-	style.corner_radius_bottom_right = r
+func _make_label(text: String, font_size: int, color: Color,
+		align: HorizontalAlignment = HORIZONTAL_ALIGNMENT_LEFT) -> Label:
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.horizontal_alignment = align
+	lbl.add_theme_font_size_override("font_size", font_size)
+	lbl.add_theme_color_override("font_color", color)
+	return lbl
 
 func _create_panel_style(bg_color: Color, border_color: Color = Color.TRANSPARENT, border_width: int = 0) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.bg_color = bg_color
-	_round(style, 4)
+	style.set_corner_radius_all(4)
 	if border_color != Color.TRANSPARENT:
 		style.border_color = border_color
-		style.border_width_bottom = border_width
-		style.border_width_top = border_width
-		style.border_width_left = border_width
-		style.border_width_right = border_width
+		style.set_border_width_all(border_width)
 	style.content_margin_left = 14
 	style.content_margin_right = 14
 	style.content_margin_top = 8
