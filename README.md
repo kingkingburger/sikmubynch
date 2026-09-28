@@ -62,7 +62,7 @@ Godot 에디터에서 `project/` 폴더를 열고 F5로 실행한다.
 
 | 스크립트 | 실행 방식 | 다루는 것 |
 | --- | --- | --- |
-| `tools/tests/gameplay_regression.gd` | headless | 시작 상태, Flow Field, 배치·철거·기본 수입, 본진 도달·공격, 타워 처치·분열체, 압박이 쉬지 않음(3분 동안 5초 창마다 스폰), 디렉터가 무리를 목표 근처로 유지(스텁), 유입·목표 곡선·배율 드리프트·스폰 링, 결정론(같은 seed 같은 해시), 봉쇄 돌파, 포격 광역·감속, 화염·전격·저격, 공격자 상한·본진 재생, 500마리 틱 예산 |
+| `tools/tests/gameplay_regression.gd` | headless | 시작 상태, Flow Field, 배치·철거·기본 수입, 본진 도달·공격, 타워 처치·분열체, 압박이 쉬지 않음(3분 동안 5초 창마다 스폰), 디렉터가 무리를 목표 근처로 유지(스텁), 유입·목표 곡선·배율 드리프트·스폰 링, 결정론(같은 seed 같은 해시), 봉쇄 돌파, 포격 광역·감속, 화염·전격·저격, 동시 공격 상한 없음·본진 재생, 500마리 틱 예산 |
 | `tools/tests/play_smoke.gd` | headless / 창 모드 | 게임 씬 로드, MultiMesh 버퍼, 씬을 통한 배치·철거, 화면→타일, 일시정지·ESC·속도, 게임오버·재시작, 500마리 렌더 |
 | `tools/tests/soak_waves.gd` | headless | 스크립트 방어선으로 N분(`SOAK_MINUTES`)까지 돌리며 유입률·동시 적 수·틱 시간·본진 HP 추세 기록 |
 | `tools/tests/capture_screenshot.gd` | 창 모드 | 시작·방어선·줌아웃 800마리·줌인 스크린샷을 `build/shot-*.png`로 저장 |
@@ -98,10 +98,10 @@ project/
 ├── autoloads/          # Locale, GameManager(런 상태 미러), GameFeel, AudioManager
 ├── sim/                # Node 없는 시뮬레이션 (RefCounted + PackedArray)
 │   ├── game_simulation.gd   # 고정 30Hz 틱, 하위 Sim 호출 순서, 런 상태, 결정론 해시
-│   ├── enemy_sim.gd         # 적 배열, Flow Field 이동, 건물 접촉·공격 슬롯
+│   ├── enemy_sim.gd         # 적 배열, Flow Field 이동, 근처 건물 물기
 │   ├── combat_sim.gd        # 타워 타겟팅, 발사체, 피해, 광역·감속
 │   ├── wave_sim.gd          # 압박 스트림: 바닥 유입률 + 무리 유지 디렉터(목표 무리 수), 배율·방향 드리프트, 진입로, 스폰 링 (웨이브·급증 없음)
-│   ├── building_sim.gd      # 건물 HP·타일 점유·공격자 상한
+│   ├── building_sim.gd      # 건물 HP·타일 점유·공격자 수
 │   ├── flow_field.gd        # BFS 비용 필드 + 8방향 이동 벡터
 │   ├── spatial_grid.gd      # 근접 탐색 셀 그리드
 │   └── sim_config.gd        # 맵 크기, 틱, 상한 상수

@@ -58,7 +58,7 @@ func _run() -> void:
 	test_building_destroyed_unblocks_path()
 	test_cannon_splash_and_frost_slow()
 	test_flame_tesla_sniper()
-	test_attacker_cap_and_hq_regen()
+	test_no_attacker_cap_and_hq_regen()
 	test_enemies_bite_nearby_towers()
 	test_run_summary()
 	test_stress_500()
@@ -492,25 +492,24 @@ func test_flame_tesla_sniper() -> void:
 	check(sim3.enemies.alive[r1] == 0 and sim3.enemies.alive[r2] == 0, "beam pierces rushers standing in line")
 	check(sim3.enemies.alive[r_side] != 0 and sim3.enemies.hp[r_side] == sim3.enemies.max_hp[r_side], "beam misses the rusher off the line")
 
-func test_attacker_cap_and_hq_regen() -> void:
+func test_no_attacker_cap_and_hq_regen() -> void:
 	var sim := quiet_sim()
 	for i in range(40):
 		sim.enemies.spawn(EnemyData.EnemyType.RUSHER, 60.0 + float(i % 8), 52.0 + float(i / 8) * 0.5, 100.0, 1.0, 1.0)
 	run_ticks(sim, 30 * 8)
 	var hq := sim.buildings.hq_index
-	check(sim.buildings.attackers[hq] <= sim.buildings.attacker_cap[hq], "attackers on HQ never exceed the cap")
-	check(sim.buildings.attackers[hq] > 0, "some rushers are attacking the HQ")
-	var waiting := 0
+	var biting := 0
 	for i in range(sim.enemies.high):
-		if sim.enemies.alive[i] != 0 and sim.enemies.attack_target[i] < 0:
-			waiting += 1
-	check(waiting > 0, "excess rushers wait behind the front (%d)" % waiting)
+		if sim.enemies.alive[i] != 0 and sim.enemies.attack_target[i] == hq:
+			biting += 1
+	check(biting == sim.enemies.alive_count, "every rusher that reached the HQ bites it, no cap (%d/%d)" % [biting, sim.enemies.alive_count])
+	check(sim.buildings.attackers[hq] == biting, "HQ attacker count matches biting enemies (%d)" % sim.buildings.attackers[hq])
 	var sim2 := quiet_sim()
 	sim2.buildings.hp[sim2.buildings.hq_index] = 1000.0
 	run_ticks(sim2, 30 * 10)
 	check(sim2.hq_hp() > 1000.0 and sim2.hq_hp() < 1100.0, "HQ regenerates slowly (%.0f)" % sim2.hq_hp())
 
-## 적은 길을 막은 벽만이 아니라 경로 근처의 타워도 문다. 슬롯이 꽉 찬 건물은 지나쳐 본진으로 간다.
+## 적은 길을 막은 벽만이 아니라 경로 근처의 타워도 문다. 동시 공격 상한이 없어 지나는 무리가 전부 달라붙는다.
 func test_enemies_bite_nearby_towers() -> void:
 	var sim := quiet_sim()
 	sim.minerals = 1000
@@ -522,12 +521,14 @@ func test_enemies_bite_nearby_towers() -> void:
 	check(sim.buildings.near_building[50 * SimConfig.MAP_SIZE + 60] == -1, "cell 5 tiles away does not")
 	for i in range(40):
 		sim.enemies.spawn(EnemyData.EnemyType.RUSHER, 62.5 + float(i % 3) * 0.5, 40.0 + float(i / 3) * 0.4, 100.0, 1.0, 1.0)
-	run_ticks(sim, 30 * 8)
-	var tower_hp: float = sim.buildings.hp[tower]
-	check(tower_hp < sim.buildings.max_hp[tower], "rushers bite the tower even though it does not block the path (hp %.0f)" % tower_hp)
-	check(sim.buildings.attackers[tower] <= sim.buildings.attacker_cap[tower], "tower attackers never exceed the cap")
+	var peak_on_tower := 0
+	for t in range(30 * 8):
+		run_ticks(sim, 1)
+		if sim.buildings.alive[tower] != 0:
+			peak_on_tower = maxi(peak_on_tower, sim.buildings.attackers[tower])
+	check(sim.buildings.alive[tower] == 0 or sim.buildings.hp[tower] < sim.buildings.max_hp[tower], "rushers bite the tower even though it does not block the path")
+	check(peak_on_tower > 4, "more than the old cap of 4 bite the tower at once (peak %d)" % peak_on_tower)
 	var hq := sim.buildings.hq_index
-	check(sim.buildings.attackers[hq] > 0 or sim.hq_hp() < 2500.0, "rushers that found the tower full moved on to the HQ")
 	var on_hq_cells := 0
 	for i in range(sim.enemies.high):
 		if sim.enemies.alive[i] == 0:

@@ -8,7 +8,6 @@ const Buffers := preload("res://sim/buffers.gd")
 
 const MAX := SimConfig.MAX_BUILDINGS
 const SIZE := SimConfig.MAP_SIZE
-const ATTACKERS_PER_TILE := 4
 const HQ_REGEN_PER_SEC := 4.0
 const AGGRO_RADIUS := 2             # 적이 경로를 벗어나 물러 가는 거리 (칸, 체비셰프)
 
@@ -44,8 +43,7 @@ var size: PackedInt32Array
 var cooldown: PackedFloat32Array
 var last_hit_tick: PackedInt32Array
 var last_fire_tick: PackedInt32Array  # 총구 섬광용. 렌더러가 읽는다
-var attackers: PackedInt32Array     # 현재 이 건물을 공격 중인 적 수
-var attacker_cap: PackedInt32Array  # 동시 공격 상한 (타일당 ATTACKERS_PER_TILE)
+var attackers: PackedInt32Array     # 현재 이 건물을 공격 중인 적 수 (상한 없음)
 var grid: PackedInt32Array          # 타일 → 건물 인덱스, 없으면 -1
 var near_building: PackedInt32Array # 타일 → AGGRO_RADIUS 안에서 가장 가까운 건물, 없으면 -1
 var near_dist: PackedInt32Array     # 그 건물까지 거리(칸)
@@ -67,7 +65,6 @@ func _init() -> void:
 	last_hit_tick = Buffers.i32(MAX)
 	last_fire_tick = Buffers.i32(MAX)
 	attackers = Buffers.i32(MAX)
-	attacker_cap = Buffers.i32(MAX)
 	grid = Buffers.i32(SimConfig.CELLS)
 	near_building = Buffers.i32(SimConfig.CELLS)
 	near_dist = Buffers.i32(SimConfig.CELLS)
@@ -84,7 +81,6 @@ func clear_all() -> void:
 	last_hit_tick.fill(-100)
 	last_fire_tick.fill(-100)
 	attackers.fill(0)
-	attacker_cap.fill(0)
 	free_list = PackedInt32Array()
 	high = 0
 	alive_count = 0
@@ -175,8 +171,6 @@ func place(type: int, tx: int, ty: int) -> int:
 	last_fire_tick[idx] = -100
 	attackers[idx] = 0
 	var s := t_size[type]
-	# 둘레 타일 수 × 타일당 상한 (1×1은 4, 3×3은 8칸 둘레 → 32는 과해서 절반)
-	attacker_cap[idx] = ATTACKERS_PER_TILE * s if s == 1 else ATTACKERS_PER_TILE * s * 2
 	for dy in range(s):
 		for dx in range(s):
 			grid[(ty + dy) * SIZE + tx + dx] = idx
@@ -249,12 +243,9 @@ func center_x(idx: int) -> float:
 func center_y(idx: int) -> float:
 	return float(tile_y[idx]) + float(size[idx]) * 0.5
 
-## 공격 슬롯 확보. 상한이면 false.
-func try_attach_attacker(idx: int) -> bool:
-	if attackers[idx] >= attacker_cap[idx]:
-		return false
+## 공격자 등록. 동시 공격 수에 상한은 없다.
+func attach_attacker(idx: int) -> void:
 	attackers[idx] += 1
-	return true
 
 func detach_attacker(idx: int) -> void:
 	if idx >= 0 and idx < high and attackers[idx] > 0:

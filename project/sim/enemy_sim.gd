@@ -2,7 +2,7 @@ extends RefCounted
 
 ## Enemy Sim — 적 위치·HP·감속을 배열로 관리하고 Flow Field를 따라 이동시킨다.
 ## 근처(AGGRO_RADIUS 칸)에 건물이 있으면 무엇이든 그쪽으로 틀어 문다. 타워도 예외가 아니다.
-## 공격 슬롯이 꽉 찬 건물은 지나친다. 길을 막은 건물 앞에서는 슬롯이 날 때까지 기다린다(밀집).
+## 한 건물을 동시에 무는 수에는 상한이 없다. 근처를 지나는 적은 전부 달라붙는다.
 ## 적끼리는 충돌하지 않는다(밀도는 겹침으로 표현).
 
 const SimConfig := preload("res://sim/sim_config.gd")
@@ -223,7 +223,6 @@ func tick(dt: float, flow, buildings, tick_index: int) -> void:
 	var grid: PackedInt32Array = buildings.grid
 	var b_alive: PackedInt32Array = buildings.alive
 	var near_b: PackedInt32Array = buildings.near_building
-	var b_cap: PackedInt32Array = buildings.attacker_cap
 	var b_tx: PackedInt32Array = buildings.tile_x
 	var b_ty: PackedInt32Array = buildings.tile_y
 	var b_size: PackedInt32Array = buildings.size
@@ -267,11 +266,10 @@ func tick(dt: float, flow, buildings, tick_index: int) -> void:
 		var mx := 0.0
 		var my := 0.0
 
-		# 근처 건물: 슬롯이 남아 있으면 그쪽으로 틀고, 발자국에 닿으면 문다
+		# 근처 건물: 그쪽으로 틀고, 발자국에 닿으면 문다
 		var steer := false
 		var nb := near_b[cell]
-		# attackers는 이 루프 안에서 바뀌므로 (Packed 배열은 값 복사) 직접 읽는다
-		if nb >= 0 and b_alive[nb] != 0 and buildings.attackers[nb] < b_cap[nb]:
+		if nb >= 0 and b_alive[nb] != 0:
 			var bs := float(b_size[nb])
 			var bx0 := float(b_tx[nb])
 			var by0 := float(b_ty[nb])
@@ -281,9 +279,8 @@ func tick(dt: float, flow, buildings, tick_index: int) -> void:
 			var ddy := py - y
 			var dist := sqrt(ddx * ddx + ddy * ddy)
 			if dist <= ENGAGE_DIST:
-				_try_engage(i, nb, buildings)
-				if attack_target[i] == nb:
-					continue
+				_engage(i, nb, buildings)
+				continue
 			elif dist > 0.001:
 				mx = ddx / dist
 				my = ddy / dist
@@ -306,7 +303,7 @@ func tick(dt: float, flow, buildings, tick_index: int) -> void:
 			# 목표 셀(HQ) 위에 있음. HQ를 공격한다.
 			var b := grid[cell]
 			if b >= 0 and b_alive[b] != 0:
-				_try_engage(i, b, buildings)
+				_engage(i, b, buildings)
 			continue
 
 		var step := speed[i] * slow_mult[i] * dt
@@ -325,26 +322,26 @@ func tick(dt: float, flow, buildings, tick_index: int) -> void:
 		if ncx != cx or ncy != cy:
 			var b := grid[ncy * size + ncx]
 			if b >= 0 and b_alive[b] != 0:
-				_try_engage(i, b, buildings)
+				_engage(i, b, buildings)
 				continue
 			# 대각선으로 셀을 바꿀 때 모서리 관통 방지
 			if ncx != cx and ncy != cy:
 				var bx := grid[cy * size + ncx]
 				var by := grid[ncy * size + cx]
 				if bx >= 0 and b_alive[bx] != 0:
-					_try_engage(i, bx, buildings)
+					_engage(i, bx, buildings)
 					continue
 				if by >= 0 and b_alive[by] != 0:
-					_try_engage(i, by, buildings)
+					_engage(i, by, buildings)
 					continue
 		pos_x[i] = nx
 		pos_y[i] = ny
 
-## 건물 공격 슬롯을 얻으면 공격 상태로. 상한이면 제자리에서 기다린다(밀집 표현).
-func _try_engage(i: int, b: int, buildings) -> void:
-	if buildings.try_attach_attacker(b):
-		attack_target[i] = b
-		attack_timer[i] = 0.0
+## 건물을 무는 상태로 전환한다.
+func _engage(i: int, b: int, buildings) -> void:
+	buildings.attach_attacker(b)
+	attack_target[i] = b
+	attack_timer[i] = 0.0
 
 ## 결정론 검증용 상태 해시
 func state_hash() -> int:
