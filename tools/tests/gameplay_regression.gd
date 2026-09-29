@@ -20,11 +20,12 @@ func check(condition: bool, label: String) -> void:
 		failures.append(label)
 		print("FAIL: ", label)
 
-## 스폰을 끄고 수동 스폰만으로 검증할 때 (시작 방어물 없음)
+## 스폰을 끄고 수동 스폰만으로 검증할 때 (시작 방어물 없음, 본진 주포 끔 — 개별 동작을 따로 보기 위해)
 func quiet_sim(seed_value: int = 20260921) -> GameSimulation:
 	var sim := GameSimulation.new()
 	sim.start(seed_value, false)
 	sim.waves.enabled = false
+	sim.buildings.t_is_tower[BuildingData.BuildingType.HQ] = 0
 	return sim
 
 func run_ticks(sim: GameSimulation, n: int) -> void:
@@ -44,6 +45,7 @@ func _run() -> void:
 	test_flow_field()
 	test_placement_and_demolish()
 	test_enemy_reaches_hq()
+	test_hq_defends_itself()
 	test_kill_reward_and_split()
 	test_every_tower_deals_damage()
 	test_blocked_path_breaks_open()
@@ -106,6 +108,16 @@ func test_enemy_reaches_hq() -> void:
 	var hp0 := sim.hq_hp()
 	run_ticks(sim, 30 * 8)
 	check(sim.hq_hp() < hp0, "an enemy walks to the HQ and damages it")
+
+## 본진은 스스로 싸운다: 타워가 하나도 없어도 다가오는 무리를 처치한다 (초반에 그냥 밀리지 않게)
+func test_hq_defends_itself() -> void:
+	var sim := GameSimulation.new()
+	sim.start(20260921, false)
+	sim.waves.enabled = false
+	for i in range(10):
+		sim.enemies.spawn(EnemyData.EnemyType.RUSHER, 62.0 + float(i % 5) * 0.6, 50.0 + float(i / 5) * 0.6, 1.0, 1.0, 1.0)
+	run_ticks(sim, 30 * 6)
+	check(sim.kills >= 8, "HQ kills approaching rushers on its own (%d of 10)" % sim.kills)
 
 ## 처치: 한 번만 세고, 보상이 들어오고, 분열체는 자식을 남긴다
 func test_kill_reward_and_split() -> void:

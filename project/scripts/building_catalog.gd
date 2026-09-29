@@ -15,6 +15,15 @@ static func create() -> Array:
 	hq.size = 3
 	hq.color = Color(0.25, 0.45, 0.85)
 	hq.height = 1.6
+	# 본진 주포: 사방에서 모여드는 무리를 광역 포탄으로 날린다. 초반 무리를 혼자 버틸 만큼,
+	# 시간이 지나 적 체력이 오르면 혼자서는 못 버티도록 (방어선은 결국 플레이어가 세운다)
+	hq.damage = 30.0
+	hq.attack_rate = 1.6
+	hq.attack_range = 11.0
+	hq.splash_radius = 1.8
+	hq.attack_mode = BuildingData.AttackMode.PROJECTILE
+	hq.projectile_kind = BuildingData.ProjectileKind.SHELL
+	hq.projectile_speed = 16.0
 	list.append(hq)
 
 	var barricade := BuildingData.new()

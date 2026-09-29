@@ -246,8 +246,9 @@ func _consume_tick_events() -> void:
 		_effect_renderer.on_flames(c.flame_count, c.flame_x, c.flame_y, c.flame_tx, c.flame_ty, c.flame_radius)
 		if loud:
 			AudioManager.play_sfx_by_name("flame", -12.0)
-	if c.explosion_count > 0 and loud:
-		GameFeel.shake(1.5 + 0.4 * float(mini(max_explosion_kills, 10)))
+	# 폭발 흔들림은 여러 마리를 잡았을 때만 (본진 주포가 쉬지 않고 쏴도 화면이 계속 떨리지 않게)
+	if max_explosion_kills >= 2 and loud:
+		GameFeel.shake(1.0 + 0.4 * float(mini(max_explosion_kills, 10)))
 	# 총구 섬광: 이번 틱 발사한 타워 (상한 안에서)
 	var flashed := 0
 	for idx in range(sim.buildings.high):
@@ -265,8 +266,10 @@ func _consume_tick_events() -> void:
 			BuildingData.BuildingType.SNIPER_TOWER: radius = 9.0
 			BuildingData.BuildingType.TESLA_TOWER: radius = 8.0
 			BuildingData.BuildingType.FLAME_TOWER: radius = 0.0
+			BuildingData.BuildingType.HQ: radius = 16.0
 		if radius > 0.0:
-			_effect_renderer.on_muzzle(view.position - Vector2(0.0, Iso.height_px(bd.height) + 10.0), bd.color.lightened(0.5), radius)
+			var flash_col := Color(1.0, 0.85, 0.5) if bd.building_type == BuildingData.BuildingType.HQ else bd.color.lightened(0.5)
+			_effect_renderer.on_muzzle(view.position - Vector2(0.0, Iso.height_px(bd.height) + 10.0), flash_col, radius)
 			flashed += 1
 	if loud:
 		GameFeel.report_kills(c.tick_kills, max_explosion_kills)

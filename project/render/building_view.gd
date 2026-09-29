@@ -217,6 +217,10 @@ func _draw_sprite() -> void:
 		var radius := 6.0 + 5.0 * _fire
 		if data.building_type == BuildingData.BuildingType.CANNON_TOWER:
 			radius = 10.0 + 8.0 * _fire
+		elif data.building_type == BuildingData.BuildingType.HQ:
+			roof.y = bottom_b.y - h * 0.86   # 본진 주포 포구
+			radius = 12.0 + 12.0 * _fire
+			col = Color(1.0, 0.86, 0.55, 0.9 * _fire)   # 포탄 섬광은 따뜻한 색
 		draw_circle(roof, radius, col)
 	# HP 바 (손상됐을 때만)
 	if _hp_ratio < 0.999:
