@@ -22,6 +22,8 @@ const RIGHT_CLICK_DRAG_THRESHOLD := 6.0
 
 var sim: GameSimulation
 var run_seed: int = 0
+## 타이틀 배경용: HUD·입력·소리·흔들림 없이 방어선과 무리만 돌린다. 본진은 죽지 않는다
+var demo_mode: bool = false
 
 var _accum: float = 0.0
 var _alpha: float = 0.0
@@ -47,10 +49,12 @@ var _esc_visible: bool = false
 var _debug_visible: bool = false
 var _last_render_usec: int = 0
 var _mouse_tile: Vector2i = Vector2i(-1, -1)
+var _demo_time: float = 0.0
 
 func _ready() -> void:
-	GameManager.reset()
-	GameFeel.reset()
+	if not demo_mode:
+		GameManager.reset()
+		GameFeel.reset()
 	run_seed = _pick_seed()
 	sim = GameSimulation.new()
 	sim.start(run_seed)
@@ -92,11 +96,22 @@ func _ready() -> void:
 		if sim.buildings.alive[idx] != 0:
 			_add_building_view(idx)
 
+	if demo_mode:
+		_setup_demo()
+		return
+
 	_hud = Hud.new()
 	_hud.slot_pressed.connect(_on_slot_pressed)
 	_hud.resume_requested.connect(_on_esc_resume)
 	_hud.restart_requested.connect(_on_restart)
 	_hud.title_requested.connect(_on_esc_title)
+	_hud.pause_pressed.connect(func() -> void:
+		if not _is_world_input_blocked():
+			GameFeel.toggle_pause())
+	_hud.speed_pressed.connect(func(spd: float) -> void: GameFeel.set_game_speed(spd))
+	_hud.menu_pressed.connect(func() -> void:
+		if not sim.game_over:
+			_toggle_esc_menu())
 	_hud.setup(self, sim.building_datas)
 	_hud.update_slot_highlight(_selected_slot, sim.building_datas)
 	_hud.update_hud(sim, GameFeel.paused)
@@ -115,11 +130,45 @@ func _pick_seed() -> int:
 # 프레임
 # ---------------------------------------------------------------------------
 
+## 데모: 본진 주변에 방어선을 깔고, 카메라를 멀리 빼서 천천히 흘린다
+func _setup_demo() -> void:
+	sim.minerals = 100000
+	for r in [7, 10]:
+		for a in range(0, 360, 24 if r == 7 else 18):
+			var tx := int(round(SimConfig.HQ_CENTER.x + cos(deg_to_rad(a)) * r))
+			var ty := int(round(SimConfig.HQ_CENTER.y + sin(deg_to_rad(a)) * r))
+			var types := [BuildingData.BuildingType.GUN_TOWER, BuildingData.BuildingType.CANNON_TOWER,
+				BuildingData.BuildingType.TESLA_TOWER, BuildingData.BuildingType.FLAME_TOWER,
+				BuildingData.BuildingType.FROST_TOWER, BuildingData.BuildingType.SNIPER_TOWER]
+			var type: int = types[(a / 18 + r) % types.size()]
+			var idx := sim.place_building(type, tx, ty)
+			if idx >= 0:
+				_add_building_view(idx)
+	# 압박 스트림은 끄고 일정한 무리를 유지한다 (타이틀에 오래 머물러도 물량이 무한히 늘지 않게)
+	sim.waves.enabled = false
+	sim.debug_spawn(300, EnemyData.EnemyType.RUSHER, 16.0)
+	sim.debug_spawn(120, EnemyData.EnemyType.RUSHER, 26.0)
+	sim.debug_spawn(12, EnemyData.EnemyType.TANK, 20.0)
+	var vp := get_viewport().get_visible_rect().size
+	_camera.zoom_by(0.62 / WorldCamera.DEFAULT_ZOOM, vp * 0.5, vp)
+
 func _process(delta: float) -> void:
-	if not _is_world_input_blocked():
-		_camera.frame_tick(delta)
-	else:
-		_camera.apply_shake()
+	if demo_mode:
+		# 방어선은 무너지지 않고(타이틀에 오래 머물러도 같은 그림), 카메라는 느리게 원을 그리며 흐른다
+		var b := sim.buildings
+		for i in range(b.high):
+			if b.alive[i] != 0:
+				b.hp[i] = b.max_hp[i]
+		if sim.enemies_alive() < 380:
+			sim.debug_spawn(40, EnemyData.EnemyType.RUSHER, 26.0)
+			sim.debug_spawn(3, EnemyData.EnemyType.TANK, 28.0)
+		_demo_time += delta
+		# 본진이 화면 오른쪽 가운데에 오도록 (왼쪽은 타이틀 글자 자리)
+		_camera.center_tile = SimConfig.HQ_CENTER + Vector2(cos(_demo_time * 0.05), sin(_demo_time * 0.05)) * 3.0 + Vector2(-6.0, 6.0)
+		_camera.pan_tiles(Vector2.ZERO)
+	_camera.frame_tick(delta, not _is_world_input_blocked() and not demo_mode)
+	if _camera.is_zooming() and get_viewport().gui_get_hovered_control() == null:
+		_update_ghost_at_tile(_screen_to_tile(get_viewport().get_mouse_position()))
 
 	var sim_time := GameFeel.consume_sim_time(delta)
 	if sim.game_over:
@@ -140,9 +189,11 @@ func _process(delta: float) -> void:
 	_projectile_renderer.update_from_sim(sim.combat, _alpha)
 	_effect_renderer.update_frame(delta if not GameFeel.paused else 0.0)
 	for view in _building_views.values():
-		view.update_from_sim(sim.buildings, delta, sim.tick_index)
+		view.update_from_sim(sim.buildings, delta, sim.tick_index, _alpha)
 	_last_render_usec = Time.get_ticks_usec() - t0
 
+	if demo_mode:
+		return
 	GameManager.sync(sim)
 	if _hud:
 		_hud.update_hud(sim, GameFeel.paused)
@@ -165,7 +216,9 @@ func _debug_text() -> String:
 	]
 
 ## 틱 결과를 표현 계층으로 넘긴다. 규모에 비례하되 개별 재생하지 않는다.
+## 데모(타이틀 배경)에서는 이펙트만 그리고 소리·흔들림·HUD는 건너뛴다.
 func _consume_tick_events() -> void:
+	var loud := not demo_mode
 	var e := sim.enemies
 	var c := sim.combat
 	_effect_renderer.begin_tick()
@@ -173,7 +226,8 @@ func _consume_tick_events() -> void:
 		_effect_renderer.on_deaths(e.death_count, e.death_x, e.death_y, e.death_type, _enemy_colors)
 	if c.hit_count > 0:
 		_effect_renderer.on_hits(c.hit_count, c.hit_x, c.hit_y, c.hit_kind)
-		AudioManager.play_sfx_by_name("hit", -14.0, 1.0 + randf_range(-0.08, 0.08))
+		if loud:
+			AudioManager.play_sfx_by_name("hit", -14.0, 1.0 + randf_range(-0.08, 0.08))
 	var max_explosion_kills := 0
 	if c.explosion_count > 0:
 		_effect_renderer.on_explosions(c.explosion_count, c.explosion_x, c.explosion_y, c.explosion_radius, c.explosion_kills)
@@ -181,15 +235,18 @@ func _consume_tick_events() -> void:
 			max_explosion_kills = maxi(max_explosion_kills, c.explosion_kills[i])
 	if c.bolt_count > 0:
 		_effect_renderer.on_bolts(c.bolt_count, c.bolt_x0, c.bolt_y0, c.bolt_x1, c.bolt_y1)
-		AudioManager.play_sfx_by_name("tesla", -8.0, 1.0 + randf_range(-0.1, 0.1))
+		if loud:
+			AudioManager.play_sfx_by_name("tesla", -8.0, 1.0 + randf_range(-0.1, 0.1))
 	if c.beam_count > 0:
 		_effect_renderer.on_beams(c.beam_count, c.beam_x0, c.beam_y0, c.beam_x1, c.beam_y1, c.beam_kills)
-		AudioManager.play_sfx_by_name("sniper", -4.0, 1.0 + randf_range(-0.05, 0.05))
-		GameFeel.shake(1.2)
+		if loud:
+			AudioManager.play_sfx_by_name("sniper", -4.0, 1.0 + randf_range(-0.05, 0.05))
+			GameFeel.shake(1.2)
 	if c.flame_count > 0:
 		_effect_renderer.on_flames(c.flame_count, c.flame_x, c.flame_y, c.flame_tx, c.flame_ty, c.flame_radius)
-		AudioManager.play_sfx_by_name("flame", -12.0)
-	if c.explosion_count > 0:
+		if loud:
+			AudioManager.play_sfx_by_name("flame", -12.0)
+	if c.explosion_count > 0 and loud:
 		GameFeel.shake(1.5 + 0.4 * float(mini(max_explosion_kills, 10)))
 	# 총구 섬광: 이번 틱 발사한 타워 (상한 안에서)
 	var flashed := 0
@@ -211,10 +268,11 @@ func _consume_tick_events() -> void:
 		if radius > 0.0:
 			_effect_renderer.on_muzzle(view.position - Vector2(0.0, Iso.height_px(bd.height) + 10.0), bd.color.lightened(0.5), radius)
 			flashed += 1
-	GameFeel.report_kills(c.tick_kills, max_explosion_kills)
-	AudioManager.play_kill_layer(c.tick_kills, max_explosion_kills)
-	if sim.minerals_gained_this_tick > 0:
-		_hud.report_gain(sim.minerals_gained_this_tick)
+	if loud:
+		GameFeel.report_kills(c.tick_kills, max_explosion_kills)
+		AudioManager.play_kill_layer(c.tick_kills, max_explosion_kills)
+		if sim.minerals_gained_this_tick > 0:
+			_hud.report_gain(sim.minerals_gained_this_tick)
 
 	for idx in sim.buildings_destroyed:
 		var view: BuildingView = _building_views.get(idx)
@@ -223,11 +281,13 @@ func _consume_tick_events() -> void:
 			var cx := float(view.tile_x) + float(view.size) * 0.5
 			var cy := float(view.tile_y) + float(view.size) * 0.5
 			_effect_renderer.on_building_destroyed(cx, cy, float(view.size), bd.color)
-			GameFeel.report_building_destroyed(bd.building_type == BuildingData.BuildingType.HQ)
+			if loud:
+				GameFeel.report_building_destroyed(bd.building_type == BuildingData.BuildingType.HQ)
 			view.queue_free()
 			_building_views.erase(idx)
-		AudioManager.play_sfx_by_name("destroy", -2.0)
-	if sim.hq_hit_this_tick:
+		if loud:
+			AudioManager.play_sfx_by_name("destroy", -2.0)
+	if sim.hq_hit_this_tick and loud:
 		_hud.show_hq_warning()
 		GameFeel.shake(2.0)
 
@@ -286,6 +346,8 @@ func _try_demolish(tile: Vector2i) -> bool:
 # ---------------------------------------------------------------------------
 
 func _input(event: InputEvent) -> void:
+	if demo_mode:
+		return
 	if event is InputEventMouseButton and not event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_dragging = false
@@ -300,8 +362,13 @@ func _input(event: InputEvent) -> void:
 			_hud.set_debug_visible(_debug_visible)
 			return
 		if event.keycode == KEY_ESCAPE:
-			if not sim.game_over:
+			if sim.game_over:
+				_on_esc_title()
+			else:
 				_toggle_esc_menu()
+			return
+		if event.keycode == KEY_R and sim.game_over:
+			_on_restart()
 			return
 		if event.keycode == KEY_SPACE:
 			if not _is_world_input_blocked():
@@ -332,13 +399,10 @@ func _input(event: InputEvent) -> void:
 				_drag_last_tile = tile
 				_try_place(_slot_types[_selected_slot], tile)
 	if event is InputEventMouseButton and event.pressed:
-		var vp := get_viewport().get_visible_rect().size
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_camera.zoom_by(WorldCamera.ZOOM_STEP, event.position, vp)
-			_update_ghost_at_tile(_screen_to_tile(event.position))
+			_camera.zoom_smooth(WorldCamera.ZOOM_STEP, event.position)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_camera.zoom_by(1.0 / WorldCamera.ZOOM_STEP, event.position, vp)
-			_update_ghost_at_tile(_screen_to_tile(event.position))
+			_camera.zoom_smooth(1.0 / WorldCamera.ZOOM_STEP, event.position)
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.keycode:
 			KEY_1: _select_slot(0)
@@ -354,7 +418,7 @@ func _input(event: InputEvent) -> void:
 				_hud.set_speed_label(spd)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _is_world_input_blocked():
+	if demo_mode or _is_world_input_blocked():
 		return
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:

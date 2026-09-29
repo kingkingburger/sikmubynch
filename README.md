@@ -58,14 +58,14 @@ Godot 에디터에서 `project/` 폴더를 열고 F5로 실행한다.
 ./tools/run-gameplay-tests.ps1 -GodotPath 'D:/Godot_v4.6.1-stable_win64.exe/Godot_v4.6.1-stable_win64_console.exe'
 ```
 
-검증은 네 스크립트로 나뉜다. 실행기는 headless 회귀와 headless 스모크를 순서대로 돌린다.
+테스트는 "깨지면 게임이 망가지는" 코어 불변식만 둔다. 밸런스 수치는 테스트에 박지 않는다(튜닝할 때마다 깨지기만 한다). 실행기는 두 스위트를 약 2초에 돌린다.
 
 | 스크립트 | 실행 방식 | 다루는 것 |
 | --- | --- | --- |
-| `tools/tests/gameplay_regression.gd` | headless | 시작 상태, Flow Field, 배치·철거·기본 수입, 본진 도달·공격, 타워 처치·분열체, 압박이 쉬지 않음(3분 동안 5초 창마다 스폰), 디렉터가 무리를 목표 근처로 유지(스텁), 유입·목표 곡선·배율 드리프트·스폰 링, 결정론(같은 seed 같은 해시), 봉쇄 돌파, 포격 광역·감속, 화염·전격·저격, 동시 공격 상한 없음·본진 재생, 500마리 틱 예산 |
-| `tools/tests/play_smoke.gd` | headless / 창 모드 | 게임 씬 로드, MultiMesh 버퍼, 씬을 통한 배치·철거, 화면→타일, 일시정지·ESC·속도, 게임오버·재시작, 500마리 렌더 |
-| `tools/tests/soak_waves.gd` | headless | 스크립트 방어선으로 N분(`SOAK_MINUTES`)까지 돌리며 유입률·동시 적 수·틱 시간·본진 HP 추세 기록 |
-| `tools/tests/capture_screenshot.gd` | 창 모드 | 시작·방어선·줌아웃 800마리·줌인 스크린샷을 `build/shot-*.png`로 저장 |
+| `tools/tests/gameplay_regression.gd` | headless | 시작 상태, Flow Field(봉쇄·재개통·분산 재계산 일치), 배치·철거, 본진 도달, 처치 집계·보상·분열, 타워 6종 피해, 봉쇄 돌파, 압박이 끊기지 않음, 결정론 |
+| `tools/tests/play_smoke.gd` | headless / 창 모드 | 씬 시작 → 적 표시 → 건설·철거 → 정지 → 게임오버 → 재시작 |
+
+측정 도구(실패 판정 없음): `stress_scale.gd`(headless 틱 단계별), `render_stress.gd`(창 모드 FPS), `capture_screenshot.gd`(검수 스크린샷 `build/shot-*.png`).
 
 ```powershell
 # 창 모드 스모크·스크린샷은 Godot을 직접 실행한다
@@ -89,7 +89,7 @@ D:/Godot_v4.6.1-stable_win64.exe/Godot_v4.6.1-stable_win64_console.exe --path pr
 | F3 | 디버그 오버레이 (FPS, 적 수, 틱·렌더 시간, seed) |
 | F4 | 디버그 빌드 전용: 본진 주변에 러셔 500마리 즉시 스폰 |
 
-레벨업은 없다. 시작 시 본진 4방향에 속사 타워가 하나씩 있고 미네랄 150으로 시작한다. `SIKMUBYNCH_SEED` 환경변수로 런 seed를 고정할 수 있다.
+레벨업은 없다. 시작 시 본진 4방향에 속사 타워가 하나씩 있고 크리스탈 150으로 시작한다. `SIKMUBYNCH_SEED` 환경변수로 런 seed를 고정할 수 있다.
 
 ## 프로젝트 구조
 

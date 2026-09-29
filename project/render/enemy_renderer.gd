@@ -134,9 +134,11 @@ func update_from_sim(enemies, alpha: float, tick_index: int, buildings = null) -
 	var high: int = enemies.high
 	var half_w := Iso.HALF_W
 	var half_h := Iso.HALF_H
-	var ftick := float(tick_index)
+	# 연속 시간 (틱 단위). 정수 틱으로 계산하면 흔들림·플래시가 30Hz 계단으로 튄다.
+	# 마지막 틱에서 기록된 사건(tick_index - 1)이 alpha 0에서 나이 0이 되게 맞춘다.
+	var ftick := float(tick_index - 1) + alpha
 	var dt: float = SimConfig.TICK_DT
-	var walk_step := tick_index / WALK_TICKS_PER_FRAME
+	var walk_time := ftick / float(WALK_TICKS_PER_FRAME)
 	var b_tx: PackedInt32Array
 	var b_ty: PackedInt32Array
 	var b_size: PackedInt32Array
@@ -192,21 +194,22 @@ func update_from_sim(enemies, alpha: float, tick_index: int, buildings = null) -
 					scale_x = 1.0 + 0.18 * f
 					scale_y = 1.0 - 0.12 * f
 		else:
-			# 걷기: 프레임 교대 + 살짝 흔들림. i로 위상을 어긋나게 해 무리가 한 몸처럼 안 보이게
-			var phase := walk_step + i
+			# 걷기: 프레임 교대 + 발걸음마다 한 번 튀는 흔들림. 위상을 개체마다 어긋나게 해 무리가 한 몸처럼 안 보이게
+			var phase := walk_time + float(i) * 0.618
 			if frames >= 2:
-				frame = phase % 2
-			bob = BOB_PX * absf(sin(float(phase) * 1.7 + alpha * 0.8))
+				frame = int(phase) % 2
+			bob = BOB_PX * absf(sin(phase * PI))
 		var sx := (x - y) * half_w
 		# 스프라이트 바닥이 발 위치: 세로 중심을 위로 올린다
 		var sy := (x + y) * half_h - float(_type_px[t]) * 0.36 - bob
 		var buf: PackedFloat32Array = _buffers[t]
 		var o := n * STRIDE
 		# 피격 플래시(흰색) + 순간 확대(펀치). 저체력은 어둡게.
-		var flash := 1.0 - (ftick - float(last_hit[i])) / FLASH_TICKS
+		var flash := 1.0 - maxf(ftick - float(last_hit[i]), 0.0) / FLASH_TICKS
 		var punch := 1.0
 		if flash > 0.0:
-			punch = 1.0 + PUNCH_SCALE * flash
+			# 펀치는 튀어나왔다가 부드럽게 가라앉는다 (ease-out)
+			punch = 1.0 + PUNCH_SCALE * flash * flash
 		buf[o] = punch * scale_x
 		buf[o + 1] = 0.0
 		buf[o + 2] = 0.0

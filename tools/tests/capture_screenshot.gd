@@ -14,6 +14,18 @@ func _run() -> void:
 	OS.set_environment("SIKMUBYNCH_SEED", "20260921")
 	out_dir = ProjectSettings.globalize_path("res://").path_join("../build")
 	DirAccess.make_dir_recursive_absolute(out_dir)
+	# 실제 개인 기록을 건드리지 않는다. 타이틀 기록 줄이 보이도록 가짜 기록 한 판을 넣는다
+	var gm = root.get_node("GameManager")
+	gm.records_path = "user://shot_records.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(gm.records_path))
+	gm.submit_run({"time": 768.0, "kills": 3214, "peak": 1104})
+
+	# 장면 0: 타이틀 (데모 배경 + 로고 + 메뉴)
+	change_scene_to_file("res://scenes/main/title.tscn")
+	for i in 120:
+		await process_frame
+	await _shot("00-title")
+
 	change_scene_to_file("res://scenes/main/game.tscn")
 	await process_frame
 	await process_frame
@@ -46,9 +58,9 @@ func _run() -> void:
 	game.sim.debug_spawn(20, EnemyData.EnemyType.TANK, 20.0)
 	for i in 240:
 		await process_frame
-	game._debug_visible = true
-	game._hud.set_debug_visible(true)
-	await process_frame
+	game._select_slot(2)   # 설명 카드가 잠깐 뜬다
+	for i in 12:
+		await process_frame
 	await _shot("02-defense-300")
 
 	# 장면 3: 줌 아웃 + 500 추가 (물량 가독성)
@@ -71,7 +83,6 @@ func _run() -> void:
 	await _shot("04-zoomin")
 
 	# 장면 5: 결과 화면 (기록·뚫린 방향·손실). 실제 개인 기록은 건드리지 않는다
-	game.get_node("/root/GameManager").records_path = "user://shot_records.cfg"
 	game._debug_visible = false
 	game._hud.set_debug_visible(false)
 	var hq: int = game.sim.buildings.hq_index
@@ -79,7 +90,7 @@ func _run() -> void:
 	var e: int = game.sim.enemies.spawn(EnemyData.EnemyType.TANK, 63.5, 61.5, 1.0, 1.0, 1.0)
 	game.sim.enemies.attack_target[e] = hq
 	game.sim.enemies.attack_timer[e] = 0.0
-	for i in 30:
+	for i in 100:
 		await process_frame
 	await _shot("05-result")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://shot_records.cfg"))

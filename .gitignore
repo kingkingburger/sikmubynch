@@ -14,3 +14,6 @@ build/
 __pycache__/
 assets_src/_old/
 assets_src/_alt/
+
+# 도구 임시 출력
+.playwright-mcp/

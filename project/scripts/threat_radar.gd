@@ -12,30 +12,15 @@ var _timer: float = 0.0
 var _img: Image
 var _tex: ImageTexture
 
-func _init(parent: Control, title: String) -> void:
-	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(170, 0)
-	panel.add_theme_stylebox_override("panel", _panel_style(
-		Color(0.04, 0.05, 0.03, 0.9), Color(0.3, 0.25, 0.15, 0.4), 1))
-	parent.add_child(panel)
-
-	var vbox := VBoxContainer.new()
-	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	vbox.add_theme_constant_override("separation", 4)
-	panel.add_child(vbox)
-
-	var label := Label.new()
-	label.text = title
-	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	label.add_theme_font_size_override("font_size", 10)
-	label.add_theme_color_override("font_color", Color(0.5, 0.75, 0.65))
-	vbox.add_child(label)
-
+## parent를 가득 채우는 레이더 이미지를 만든다 (테두리·제목은 HUD가 그린다)
+func _init(parent: Control) -> void:
 	_texture_rect = TextureRect.new()
-	_texture_rect.custom_minimum_size = Vector2(124, 100)
+	_texture_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_texture_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	_texture_rect.stretch_mode = TextureRect.STRETCH_SCALE
-	vbox.add_child(_texture_rect)
+	_texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_texture_rect.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	_texture_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(_texture_rect)
 	_img = Image.create(PIXELS, PIXELS, false, Image.FORMAT_RGBA8)
 	_tex = ImageTexture.create_from_image(_img)
 	_texture_rect.texture = _tex
@@ -52,13 +37,13 @@ func tick(delta: float, sim, spawn_sides: int) -> void:
 
 func _render(sim, spawn_sides: int) -> void:
 	var map_size: int = sim.buildings.SIZE
-	_img.fill(Color(0.015, 0.02, 0.015, 1.0))
+	_img.fill(Color(0.02, 0.025, 0.035, 1.0))
 	# 마름모 배경
 	var c := PIXELS * 0.5
 	for y in range(PIXELS):
 		for x in range(PIXELS):
 			if absf(x - c) + absf(y - c) * 2.0 <= c:
-				_img.set_pixel(x, y, Color(0.05, 0.07, 0.05, 1.0))
+				_img.set_pixel(x, y, Color(0.06, 0.08, 0.1, 1.0))
 	# 두꺼운 변 경고 (붉게)
 	var warn := Color(0.95, 0.2, 0.15, 1.0)
 	for side in range(4):
@@ -69,10 +54,10 @@ func _render(sim, spawn_sides: int) -> void:
 	for i in range(b.high):
 		if b.alive[i] == 0:
 			continue
-		var col := Color(0.3, 0.7, 1.0)
+		var col := Color(0.96, 0.72, 0.24)
 		var r := 1
 		if i == b.hq_index:
-			col = Color(0.5, 1.0, 1.0)
+			col = Color(0.37, 0.89, 1.0)
 			r = 2
 		_dot(b.center_x(i), b.center_y(i), map_size, col, r)
 	# 적
@@ -126,14 +111,3 @@ func _edge(side: int, color: Color, map_size: int) -> void:
 			1: _dot(m - 0.5, t, map_size, color, 0)
 			2: _dot(t, m - 0.5, map_size, color, 0)
 			_: _dot(0.5, t, map_size, color, 0)
-
-func _panel_style(bg_color: Color, border_color: Color, border_width: int) -> StyleBoxFlat:
-	var style := StyleBoxFlat.new()
-	style.bg_color = bg_color
-	style.border_color = border_color
-	style.set_border_width_all(border_width)
-	style.content_margin_left = 8
-	style.content_margin_right = 8
-	style.content_margin_top = 6
-	style.content_margin_bottom = 6
-	return style

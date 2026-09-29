@@ -32,20 +32,28 @@ func setup(index: int, bd: BuildingData, tx: int, ty: int) -> void:
 	queue_redraw()
 
 ## 매 프레임 호출. HP 변화가 있을 때만 다시 그린다.
-func update_from_sim(buildings, delta: float, tick_index: int) -> void:
+## alpha: 틱 사이 보간 (0..1). 플래시·섬광을 30Hz 계단이 아니라 프레임 단위로 줄인다.
+func update_from_sim(buildings, delta: float, tick_index: int, alpha: float = 1.0) -> void:
 	if sim_index < 0 or buildings.alive[sim_index] == 0:
 		return
 	var hp: float = buildings.hp[sim_index]
 	var max_hp: float = buildings.max_hp[sim_index]
 	var ratio := clampf(hp / max_hp, 0.0, 1.0)
-	var hit_age: int = tick_index - buildings.last_hit_tick[sim_index]
-	var new_flash := clampf(1.0 - float(hit_age) / 4.0, 0.0, 1.0)
-	var fire_age: int = tick_index - buildings.last_fire_tick[sim_index]
-	var new_fire := clampf(1.0 - float(fire_age) / 3.0, 0.0, 1.0)
+	var now := float(tick_index - 1) + alpha
+	var hit_age := maxf(now - float(buildings.last_hit_tick[sim_index]), 0.0)
+	var new_flash := clampf(1.0 - hit_age / 5.0, 0.0, 1.0)
+	var fire_age := maxf(now - float(buildings.last_fire_tick[sim_index]), 0.0)
+	var new_fire := clampf(1.0 - fire_age / 4.0, 0.0, 1.0)
+	new_fire *= new_fire
 	var need := false
 	if hp != _last_hp:
 		_last_hp = hp
-		_hp_ratio = ratio
+		need = true
+	# HP 바는 깎인 만큼 부드럽게 따라 내려간다
+	if absf(_hp_ratio - ratio) > 0.001:
+		_hp_ratio = lerpf(_hp_ratio, ratio, 1.0 - exp(-12.0 * delta))
+		if absf(_hp_ratio - ratio) <= 0.001:
+			_hp_ratio = ratio
 		need = true
 	if absf(new_flash - _flash) > 0.01:
 		_flash = new_flash
