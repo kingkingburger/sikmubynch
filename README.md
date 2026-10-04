@@ -14,7 +14,7 @@ SIKMUBYNCH는 플레이어가 한 런 동안 본진을 지키며 자원을 모�
 
 ## 현재 상태
 
-현재 구현은 상용 출시용 완성본이 아니라 핵심 전투 감각을 검증하는 프로토타입이다. M1~M7 범위의 여러 시스템이 들어갔지만, 기준은 기능 보유 여부가 아니라 “대규모 압박이 보이는가”, “배치 판단이 전투 결과를 바꾸는가”, “한 판 더 하고 싶은가”로 재정렬한다.
+현재 구현은 상용 출시용 완성본이 아니라 핵심 전투 감각을 검증하는 프로토타입이다. M1~M7에서 넓게 만든 시스템은 2026-09-21 범위 축소와 코드 전환으로 대부분 제거했고(아래 이력은 기록이다), 기준은 기능 보유 여부가 아니라 “대규모 압박이 보이는가”, “배치 판단이 전투 결과를 바꾸는가”, “한 판 더 하고 싶은가”로 재정렬한다.
 
 구현 이력:
 
@@ -62,10 +62,12 @@ Godot 에디터에서 `project/` 폴더를 열고 F5로 실행한다.
 
 | 스크립트 | 실행 방식 | 다루는 것 |
 | --- | --- | --- |
-| `tools/tests/gameplay_regression.gd` | headless | 시작 상태, Flow Field(봉쇄·재개통·분산 재계산 일치), 배치·철거, 본진 도달, 처치 집계·보상·분열, 타워 6종 피해, 봉쇄 돌파, 압박이 끊기지 않음, 결정론 |
+| `tools/tests/gameplay_regression.gd` | headless | 시작 상태, Flow Field(봉쇄·재개통·분산 재계산 일치), 배치·철거, 본진 도달, 처치 집계·보상·분열, 타워 6종 피해, 봉쇄 돌파, 압박이 끊기지 않음, 본진 주포의 자력 방어, 재사용된 건물 슬롯을 멀리서 물지 않음, 결정론 |
 | `tools/tests/play_smoke.gd` | headless / 창 모드 | 씬 시작 → 적 표시 → 건설·철거 → 정지 → 게임오버 → 재시작 |
 
 측정 도구(실패 판정 없음): `stress_scale.gd`(headless 틱 단계별), `render_stress.gd`(창 모드 FPS), `capture_screenshot.gd`(검수 스크린샷 `build/shot-*.png`).
+
+사운드는 전부 `tools/create_sounds.py`가 절차적으로 만든 WAV다(`cd tools && uv run create_sounds.py`).
 
 ```powershell
 # 창 모드 스모크·스크린샷은 Godot을 직접 실행한다
@@ -85,8 +87,9 @@ D:/Godot_v4.6.1-stable_win64.exe/Godot_v4.6.1-stable_win64_console.exe --path pr
 | 마우스 휠 | 줌 |
 | Space | 일시정지 (건설 판단 가능, 전투·스폰 정지) |
 | F | 게임 속도 전환 (1x → 2x → 3x) |
-| ESC | 메뉴 (재개, 다시 시작, 타이틀) |
-| F3 | 디버그 오버레이 (FPS, 적 수, 틱·렌더 시간, seed) |
+| ESC | 메뉴 (재개, 다시 시작, 타이틀). 게임오버 화면에서는 타이틀로 |
+| R | 게임오버 화면에서 다시 시작 |
+| F3 | 디버그 오버레이 (FPS, 적 수, 틱·렌더 시간, 초당 유입률, seed) |
 | F4 | 디버그 빌드 전용: 본진 주변에 러셔 500마리 즉시 스폰 |
 
 레벨업은 없다. 시작 시 본진 4방향에 속사 타워가 하나씩 있고 크리스탈 150으로 시작한다. `SIKMUBYNCH_SEED` 환경변수로 런 seed를 고정할 수 있다.
@@ -101,9 +104,10 @@ project/
 │   ├── enemy_sim.gd         # 적 배열, Flow Field 이동, 근처 건물 물기
 │   ├── combat_sim.gd        # 타워 타겟팅, 발사체, 피해, 광역·감속
 │   ├── wave_sim.gd          # 압박 스트림: 바닥 유입률 + 무리 유지 디렉터(목표 무리 수), 배율·방향 드리프트, 진입로, 스폰 링 (웨이브·급증 없음)
-│   ├── building_sim.gd      # 건물 HP·타일 점유·공격자 수
+│   ├── building_sim.gd      # 건물 HP·타일 점유·슬롯 세대(generation)·본진 재생
 │   ├── flow_field.gd        # BFS 비용 필드 + 8방향 이동 벡터
 │   ├── spatial_grid.gd      # 근접 탐색 셀 그리드
+│   ├── buffers.gd           # PackedArray 할당 헬퍼
 │   └── sim_config.gd        # 맵 크기, 틱, 상한 상수
 ├── render/             # 시뮬레이션 상태를 2D 쿼터뷰로 그린다
 │   ├── enemy_renderer.gd    # 적 MultiMesh (타입별), 보간, 피격 플래시
@@ -113,7 +117,7 @@ project/
 │   └── iso.gd / sprite_factory.gd   # 2:1 투영, 스프라이트 로드(밉맵), 폴백 도형
 ├── scenes/
 │   ├── main/           # 타이틀, 메인 게임 씬(코디네이터)
-│   └── ui/             # HUD (자원·수입·획득 팝업, 본진 체력, 슬롯 구매 가능 표시, 유입률, 위협 레이더, 메뉴, 결과)
+│   └── ui/             # HUD (자원·수입·획득 팝업, 본진 체력, 슬롯 구매 가능 표시, 위협 5칸, 위협 레이더, ESC 메뉴, 결과)
 ├── scripts/            # 건물·적 카탈로그, 위협 레이더, Resource 데이터 정의(data/)
 ├── assets/audio/       # BGM, SFX
 └── assets/sprites/     # 임포트된 스프라이트 (enemies/ buildings/ ground/). 없으면 폴백 도형
@@ -121,5 +125,6 @@ project/
 assets_src/             # AI 생성 원본 이미지와 개체별 프롬프트 (README.md)
 docs/                   # 제품·설계·검증 문서와 제작 가이드
 tools/import_sprites.py # 원본 → 게임 규격 스프라이트 (배경 제거, 리사이즈, 앵커, 그림자)
+tools/create_sounds.py  # BGM 2종·SFX 11종 절차 생성 (WAV)
 tools/tests/            # headless 회귀, 씬 스모크, 소크, 스크린샷 캡처
 ```

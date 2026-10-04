@@ -1,156 +1,61 @@
-# 사운드 제작 가이드 — AI + 무료 도구
+# 사운드 제작 가이드
 
-## 필요한 사운드 목록
+## 현재 상태
 
-| # | 파일명 | 종류 | 용도 |
-|---|--------|------|------|
-| 1 | `bgm/title.ogg` | BGM | 타이틀 화면 (다크 판타지 분위기) |
-| 2 | `bgm/battle.ogg` | BGM | 전투 중 (긴장감 액션) |
-| 3 | `sfx/hit.ogg` | SFX | 타격음 |
-| 4 | `sfx/death.ogg` | SFX | 적 사망 |
-| 5 | `sfx/build.ogg` | SFX | 건물 배치 |
-| 6 | `sfx/destroy.ogg` | SFX | 건물 파괴 |
-| 7 | `sfx/wave_start.ogg` | SFX | 웨이브 시작/클리어 |
-| 11 | `sfx/ui_click.ogg` | SFX | UI 클릭 |
+모든 사운드는 `tools/create_sounds.py`가 numpy로 절차적으로 만든 모노 WAV(44.1kHz, 16bit)다. 외부 음원은 쓰지 않는다. 테마는 카툰 SF(2d-art-guide.md 참고)이고, 지금 파일은 개발용 1차 소리다.
+
+재생성은 `cd tools && uv run create_sounds.py`(전체) 또는 `uv run create_sounds.py tesla sniper`(이름 지정 SFX만)로 한다. 생성한 WAV를 덮어쓰므로 직접 교체한 파일이 있으면 이름 지정으로 돌린다.
 
 저장 위치: `project/assets/audio/`
 
-2026-09-21 범위 축소로 8~10번은 첫 프로토타입에서 쓰지 않는다. 대신 대량 전투 피드백을 위해 `sfx/explosion.ogg`(포격 폭발)와 처치 수에 따라 쌓는 `sfx/death.ogg` 레이어 변형이 우선이다. 대량 처치 시 같은 사운드를 개별 재생하지 않고 구간별 레이어로 합친다.
+## 파일 목록
 
----
+| 파일 | 종류 | 용도 | 재생 위치 |
+|------|------|------|-----------|
+| `bgm/title.wav` | BGM | 타이틀 화면 (약 30초 앰비언트) | `title.gd` |
+| `bgm/battle.wav` | BGM | 전투 중 (약 30초, 긴장감 있는 리듬) | `game.gd` |
+| `sfx/hit.wav` | SFX | 피격. 틱 안에 여러 건이면 한 번만, 음높이 ±8% 흔든다 | `game.gd` |
+| `sfx/death.wav` | SFX | 적 사망. 처치 수에 따라 음량·음높이를 바꿔 쌓는다(아래) | `AudioManager.play_kill_layer` |
+| `sfx/explosion.wav` | SFX | 포격 폭발. 한 틱 처치 10마리 이상(또는 폭발로 5마리 이상)일 때 사망음과 겹친다 | `AudioManager.play_kill_layer` |
+| `sfx/build.wav` | SFX | 건물 배치 | `game.gd`, `hud.gd` |
+| `sfx/destroy.wav` | SFX | 건물 파괴·철거 | `game.gd` |
+| `sfx/ui_click.wav` | SFX | UI 클릭 | `game.gd`, `title.gd`, `ui_kit.gd` |
+| `sfx/tesla.wav` | SFX | 전격 타워 발사 | `game.gd` |
+| `sfx/sniper.wav` | SFX | 저격 타워 발사 | `game.gd` |
+| `sfx/flame.wav` | SFX | 화염 타워 분사 | `game.gd` |
+| `sfx/wave_start.wav` | SFX | **미사용.** 웨이브 개념이 없어져 어디서도 재생하지 않는다. 재도입 대비로만 남아 있다 | — |
+| `sfx/mineral.wav` | SFX | **미사용.** 크리스탈 획득음. 현재는 획득 팝업만 쓰고 소리는 내지 않는다 | — |
 
-## 도구별 역할
+총 13개(BGM 2 + SFX 11). 속사·포격·감속 타워 발사에는 전용 소리가 없고, 피격(`hit`)과 처치 레이어(`death`/`explosion`)로만 들린다.
 
-| 도구 | 용도 | 비용 | 상업 가능 |
-|------|------|------|----------|
-| **Udio** | BGM 2곡 | 무료 (월 100곡) | TOS 확인 필요* |
-| **ElevenLabs** | 핵심 SFX 5종 | 무료 (월 제한) | O |
-| **Freesound.org** | 보조 SFX 2종 | 무료 | O (CC0만) |
-| **jsfxr** | UI SFX 2종 | 완전 무료 | O (MIT) |
+BGM은 끝나면 처음부터 다시 돈다. 생성된 `.wav`에는 루프 정보가 없고 `.import` 설정은 저장소에 남지 않으므로, `AudioManager.make_looping()`이 불러온 직후 루프를 건다(WAV는 전체 구간 Forward, OGG·MP3는 `loop = true`). 곡 끝 2초는 생성 단계에서 처음과 크로스페이드되어 이음매가 들리지 않는다.
 
-> *Udio 무료 티어 상업 라이선스를 https://www.udio.com/terms-of-service 에서 확인해주세요. 불가하면 Freesound/Pixabay에서 CC0 BGM을 검색하세요.
+## 대량 처치 사운드 규칙
 
----
+대량 처치는 개별 재생하지 않는다. `AudioManager.play_kill_layer(kill_count, explosion_kills)`가 한 틱의 처치 수에 따라 사망음 하나를 음량·음높이를 바꿔 재생하고, 많을 때만 폭발음을 겹친다.
 
-## 1단계: BGM 생성 (Udio)
+| 한 틱 처치 수 | 사망음 | 폭발음 |
+|------|------|------|
+| 1~2 | 작게(-9dB), 음높이 ±5% 랜덤 | 없음 (폭발로 5마리 이상 잡았으면 -4dB) |
+| 3~9 | -4dB, 음높이 0.95 | 같은 조건 |
+| 10~29 | -3dB, 음높이 0.85 | -3dB, 음높이 0.95 |
+| 30 이상 | 0dB, 음높이 0.7 (낮고 묵직하게) | +2dB, 음높이 0.8 |
 
-### 설정
-1. https://udio.com 가입 (Google/Discord)
-2. "Create" 클릭
+그 밖의 공통 보호 장치(`audio_manager.gd`): 같은 이름의 사운드는 0.04초 안에 다시 재생하지 않고, 같은 스트림은 동시에 3개까지만 재생하며, SFX 풀은 12개다. 사운드를 바꿀 때는 겹쳐 재생돼도 거슬리지 않는지(특히 `death`, `hit`)를 대량 처치 장면에서 확인한다.
 
-### 타이틀 BGM 프롬프트
-```
-dark fantasy orchestral ambient, slow tempo, ominous choir,
-deep strings, military drums undertone, haunted castle atmosphere,
-game menu music, loop-friendly ending
-```
+## 사운드 교체하기
 
-### 전투 BGM 프롬프트
-```
-intense dark fantasy battle music, fast tempo, epic orchestral,
-heavy percussion, brass fanfare, urgent strings, military march influence,
-action game combat music, loop-friendly
-```
+코드 수정 없이 같은 이름의 파일로 바꾸면 된다.
 
-### 후처리
-1. 마음에 드는 곡 선택 → WAV/MP3 다운로드
-2. Audacity (무료) 설치: https://www.audacityteam.org/
-3. 파일 열기 → File > Export > OGG Vorbis (품질 6)
-4. `title.ogg`, `battle.ogg`로 저장
-5. `project/assets/audio/bgm/`에 복사
+- `AudioManager`는 `.ogg` → `.wav` → `.mp3` 순으로 찾는다. 같은 이름의 `.ogg`를 넣으면 `.wav`보다 먼저 쓰인다. 같은 이름의 `.wav`로 덮어써도 된다.
+- 새 사운드를 추가하려면 `game.gd` 등에서 `AudioManager.play_sfx_by_name("이름", 볼륨오프셋_db, 음높이)`를 호출하고 `sfx/이름.*`를 둔다. BGM은 `play_bgm_by_name`이다.
+- 외부 음원(AI 생성·무료 라이브러리 등)으로 교체할 때는 출처와 상업 사용 조건을 기록하고, 상용 사용 권리가 불확실한 음원은 채택하지 않는다.
+- 후처리 기준: 앞뒤 무음 제거, 음량 정규화(-1dB 근처), SFX는 짧게. 대량 처치에서 겹치는 `death`·`hit`·`flame`은 꼬리를 짧게 둔다.
+- BGM은 전투 중 SFX가 묻히지 않도록 중저역을 비우고 음량을 낮게 둔다.
 
-### Godot 루프 설정
-- Godot 에디터에서 .ogg 파일 클릭
-- Import 탭 → Loop 체크 → Reimport
+## 검수
 
----
-
-## 2단계: 핵심 SFX (ElevenLabs)
-
-### 설정
-1. https://elevenlabs.io 가입
-2. Sound Effects 메뉴 선택
-
-### 프롬프트
-
-| SFX | 프롬프트 |
-|-----|---------|
-| hit.ogg | `heavy sword impact on armor, metallic clang with bass thud, dark fantasy combat` |
-| death.ogg | `monster death groan with body collapse, dark creature dying sound, short` |
-| build.ogg | `stone blocks placing down, construction thud, medieval building placement` |
-| destroy.ogg | `stone structure crumbling and collapsing, debris falling, short explosion` |
-| wave_start.ogg | `deep war horn blast, ominous warning signal, dark fantasy battle horn` |
-
-### 후처리
-1. WAV로 다운로드
-2. Audacity에서 트리밍 (앞뒤 무음 제거)
-3. Effect > Normalize (-1 dB)
-4. OGG로 내보내기
-5. `project/assets/audio/sfx/`에 복사
-
----
-
-## 3단계: 보조 SFX (Freesound CC0)
-
-### 검색 방법
-1. https://freesound.org 가입
-2. 검색 시 **License 필터 → "Creative Commons 0"** 선택 (필수!)
-
-### 검색어
-
-| SFX | 검색어 |
-|-----|--------|
-
-### 후처리
-- Audacity에서 트리밍 → OGG 변환 → `project/assets/audio/sfx/`에 복사
-
----
-
-## 4단계: UI SFX (jsfxr)
-
-### 사용법
-1. https://sfxr.me 접속 (웹 브라우저에서 바로 사용)
-
-### UI 클릭 SFX
-1. "Blip/Select" 버튼 클릭
-2. 마음에 들 때까지 반복
-3. "Export WAV" → `ui_click.wav`
-
-### 후처리
-- Audacity에서 OGG 변환 → `project/assets/audio/sfx/`에 복사
-
----
-
-## 최종 파일 구조
-
-```
-project/assets/audio/
-├── bgm/
-│   ├── title.ogg        ← Udio (루프 설정)
-│   └── battle.ogg       ← Udio (루프 설정)
-└── sfx/
-    ├── hit.ogg          ← ElevenLabs
-    ├── death.ogg        ← ElevenLabs
-    ├── build.ogg        ← ElevenLabs
-    ├── destroy.ogg      ← ElevenLabs
-    ├── wave_start.ogg   ← ElevenLabs
-    └── ui_click.ogg     ← jsfxr
-```
-
-**코드 수정 필요 없음** — AudioManager와 game.gd/title.gd에 이미 사운드 재생 코드가 적용되어 있습니다. 파일을 위 경로에 넣으면 자동으로 재생됩니다.
-
----
-
-## 대안: Udio 상업 불가 시
-
-BGM을 Freesound/Pixabay CC0에서 검색:
-
-| 사이트 | 검색어 |
-|--------|--------|
-| freesound.org | `dark fantasy orchestral loop` (CC0 필터) |
-| pixabay.com/music | `dark fantasy game` |
-| opengameart.org | `dark ambient battle` (CC0 필터) |
-
-또는 로컬 AI 도구 **YuE** (Apache 2.0, 상업 가능):
-- https://github.com/multimodal-art-projection/YuE
-- GPU 8GB+ 필요
+- 100마리 이상 동시 처치 장면에서 소리가 소음이 아니라 "쿵" 하는 한 덩어리로 들리는가?
+- 타워 종류(전격·저격·화염)가 소리만으로 구분되는가?
+- 배치·파괴·UI 클릭이 전투 소리에 묻히지 않는가?
+- BGM이 30초 뒤에도 끊기지 않고 이어지는가?
