@@ -180,6 +180,9 @@ func _process(delta: float) -> void:
 		_consume_tick_events()
 		_accum -= SimConfig.TICK_DT
 		ticks += 1
+		# 끝난 틱은 이벤트를 비우지 않으므로 더 돌면 마지막 폭발·사망·수입이 겹쳐 재생된다
+		if sim.game_over:
+			break
 	if ticks >= MAX_TICKS_PER_FRAME and _accum > SimConfig.TICK_DT:
 		_accum = 0.0   # 따라잡지 못하면 버린다 (죽음의 나선 방지)
 	_alpha = clampf(_accum / SimConfig.TICK_DT, 0.0, 1.0)
@@ -187,7 +190,8 @@ func _process(delta: float) -> void:
 	var t0 := Time.get_ticks_usec()
 	_enemy_renderer.update_from_sim(sim.enemies, _alpha, sim.tick_index, sim.buildings)
 	_projectile_renderer.update_from_sim(sim.combat, _alpha)
-	_effect_renderer.update_frame(delta if not GameFeel.paused else 0.0)
+	# 게임오버 정지 중에도 본진 붕괴 파편은 끝까지 흩어진다 (흔들림도 실제 시간으로 잦아든다)
+	_effect_renderer.update_frame(delta if not GameFeel.paused or sim.game_over else 0.0)
 	for view in _building_views.values():
 		view.update_from_sim(sim.buildings, delta, sim.tick_index, _alpha)
 	_last_render_usec = Time.get_ticks_usec() - t0
