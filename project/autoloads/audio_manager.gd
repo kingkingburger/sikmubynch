@@ -34,6 +34,10 @@ const FADE_DURATION := 1.0
 var _sfx_last_play: Dictionary = {}
 const SFX_MIN_INTERVAL := 0.04
 
+## headless(테스트·측정 도구)에서는 소리를 내지 않는다. 더미 드라이버는 믹싱을 돌리지 않아
+## 한 번 재생된 스트림이 정지 후에도 풀리지 않고 종료 시 누수로 남는다.
+var _silent: bool = DisplayServer.get_name() == "headless"
+
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_bgm_player = AudioStreamPlayer.new()
@@ -66,7 +70,7 @@ func _process(delta: float) -> void:
 		_bgm_fade_player.stop()
 
 func play_bgm(stream: AudioStream) -> void:
-	if not stream:
+	if not stream or _silent:
 		return
 	if _bgm_player.playing and _bgm_player.stream == stream:
 		return
@@ -89,18 +93,8 @@ func stop_bgm() -> void:
 	_bgm_fade_player.stop()
 	_fading = false
 
-## 모든 재생 정지. 종료 직전(헤드리스 테스트 등)에 재생 중인 스트림이 누수로 잡히지 않게 한다.
-func stop_all() -> void:
-	stop_bgm()
-	_bgm_player.stream = null
-	_bgm_fade_player.stream = null
-	for p in _sfx_players:
-		p.stop()
-		p.stream = null
-	_sfx_cache.clear()
-
 func play_sfx(stream: AudioStream, volume_offset_db: float = 0.0, pitch: float = 1.0) -> void:
-	if not stream:
+	if not stream or _silent:
 		return
 	var same := 0
 	for p in _sfx_players:

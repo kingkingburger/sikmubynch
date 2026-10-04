@@ -63,6 +63,7 @@ func _run() -> void:
 	game.sim.buildings.hp[game.sim.buildings.hq_index] = 1.0
 	var e: int = game.sim.enemies.spawn(EnemyData.EnemyType.TANK, 63.5, 61.5, 1.0, 1.0, 1.0)
 	game.sim.enemies.attack_target[e] = game.sim.buildings.hq_index
+	game.sim.enemies.attack_gen[e] = game.sim.buildings.generation[game.sim.buildings.hq_index]
 	game.sim.enemies.attack_timer[e] = 0.0
 	await _frames(30)
 	check(game.sim.game_over and game._hud.is_game_over_visible(), "HQ destroyed shows the result screen")
@@ -75,8 +76,6 @@ func _run() -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(gm.records_path))
 
 	print("RESULT: %d checks, %d failures" % [checks, failures.size()])
-	# 씬을 먼저 내리고 오디오를 멈춰야 종료 시 누수 경고가 없다
-	root.get_node("AudioManager").stop_all()
 	game.queue_free()
 	await _frames(2)
 	quit(0 if failures.is_empty() else 1)
