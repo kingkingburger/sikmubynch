@@ -10,17 +10,12 @@ signal game_over_triggered()
 
 var minerals: int = SimConfig.START_MINERALS
 var kill_count: int = 0
-var game_time: float = 0.0
 var peak_enemies: int = 0
 var is_game_over: bool = false
 
 ## 개인 최고 기록 (런을 넘어 남는다). 테스트는 경로를 바꿔 실제 기록을 건드리지 않는다
 var records_path: String = "user://records.cfg"
 const RECORD_KEYS: Array[String] = ["time", "kills", "peak"]
-
-func _process(delta: float) -> void:
-	if not is_game_over and not GameFeel.paused:
-		game_time += delta
 
 func sync(sim) -> void:
 	if minerals != sim.minerals:
@@ -62,6 +57,5 @@ func submit_run(summary: Dictionary) -> Dictionary:
 func reset() -> void:
 	minerals = SimConfig.START_MINERALS
 	kill_count = 0
-	game_time = 0.0
 	peak_enemies = 0
 	is_game_over = false

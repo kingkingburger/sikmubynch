@@ -181,7 +181,8 @@ func _remove_building(idx: int) -> void:
 
 func _schedule_flow_recalc() -> void:
 	if flow_recalc_timer < 0:
-		flow_recalc_timer = SimConfig.FLOW_RECALC_DELAY_TICKS
+		# 다음 틱부터 매 틱 1씩 줄고 -1이 되는 틱에 시작하므로, 1을 빼야 정확히 DELAY 틱 뒤에 시작한다
+		flow_recalc_timer = SimConfig.FLOW_RECALC_DELAY_TICKS - 1
 
 # ---------------------------------------------------------------------------
 # 틱
