@@ -160,5 +160,20 @@ func play_bgm_by_name(bgm_name: String) -> void:
 	for ext in [".ogg", ".wav", ".mp3"]:
 		var path: String = base + ext
 		if ResourceLoader.exists(path):
-			play_bgm(load(path))
+			play_bgm(make_looping(load(path)))
 			return
+
+## BGM은 끝나면 처음부터 다시 돈다. 생성된 WAV에는 루프 정보가 없고 .import 설정은 저장소에 남지 않으므로
+## 불러온 뒤 직접 건다. 곡 끝은 생성 단계에서 처음과 크로스페이드되어 있다.
+static func make_looping(stream: AudioStream) -> AudioStream:
+	if stream is AudioStreamWAV:
+		var wav := stream as AudioStreamWAV
+		if wav.loop_mode == AudioStreamWAV.LOOP_DISABLED:
+			wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+			wav.loop_begin = 0
+			wav.loop_end = int(wav.get_length() * float(wav.mix_rate))
+	elif stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+	elif stream is AudioStreamMP3:
+		(stream as AudioStreamMP3).loop = true
+	return stream
