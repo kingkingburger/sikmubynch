@@ -227,8 +227,6 @@ func tick() -> void:
 	if not game_over:
 		combat.tick_towers(dt, buildings, enemies, grid, tick_index)
 		combat.tick_projectiles(dt, enemies, grid, tick_index)
-		for b in enemies.pending_detach:
-			buildings.detach_attacker(b)
 		buildings.regen_hq(dt)
 
 	mark = _end_phase(Phase.COMBAT, mark)

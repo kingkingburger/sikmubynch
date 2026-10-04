@@ -36,6 +36,7 @@ var slow_timer: PackedFloat32Array
 var slow_mult: PackedFloat32Array
 var attack_timer: PackedFloat32Array
 var attack_target: PackedInt32Array   # 건물 인덱스, 없으면 -1
+var attack_gen: PackedInt32Array      # 물기 시작할 때 건물 generation. 같은 슬롯에 새 건물이 들어오면 달라진다
 var last_hit_tick: PackedInt32Array
 var generation: PackedInt32Array      # 인덱스 재사용 구분용. spawn마다 1 증가
 var free_list: PackedInt32Array
@@ -53,7 +54,6 @@ var death_y: PackedFloat32Array
 var death_type: PackedInt32Array
 var reward_pending: int = 0
 var building_hits: PackedInt32Array       # 이번 틱 공격받은 건물 인덱스 (중복 가능)
-var pending_detach: PackedInt32Array      # 죽은 공격자가 놓아야 할 건물 슬롯
 
 func _init() -> void:
 	alive = Buffers.i32(MAX)
@@ -70,6 +70,7 @@ func _init() -> void:
 	slow_mult = Buffers.f32(MAX)
 	attack_timer = Buffers.f32(MAX)
 	attack_target = Buffers.i32(MAX)
+	attack_gen = Buffers.i32(MAX)
 	last_hit_tick = Buffers.i32(MAX)
 	generation = Buffers.i32(MAX)
 	free_list = PackedInt32Array()
@@ -78,7 +79,6 @@ func _init() -> void:
 	death_type = Buffers.i32(SimConfig.MAX_DEATH_EVENTS)
 	split_requests = PackedFloat32Array()
 	building_hits = PackedInt32Array()
-	pending_detach = PackedInt32Array()
 	clear_all()
 
 func clear_all() -> void:
@@ -98,7 +98,6 @@ func clear_all() -> void:
 func clear_tick_results() -> void:
 	split_requests = PackedFloat32Array()
 	building_hits = PackedInt32Array()
-	pending_detach = PackedInt32Array()
 	death_count = 0
 	reward_pending = 0
 
@@ -190,9 +189,7 @@ func kill(idx: int) -> void:
 	alive[idx] = 0
 	alive_count -= 1
 	free_list.append(idx)
-	if attack_target[idx] >= 0:
-		pending_detach.append(attack_target[idx])
-		attack_target[idx] = -1
+	attack_target[idx] = -1
 	var t := type_id[idx]
 	reward_pending += t_reward[t]
 	if death_count < SimConfig.MAX_DEATH_EVENTS:
@@ -222,6 +219,7 @@ func tick(dt: float, flow, buildings, tick_index: int) -> void:
 	var hq_y: float = SimConfig.HQ_CENTER.y
 	var grid: PackedInt32Array = buildings.grid
 	var b_alive: PackedInt32Array = buildings.alive
+	var b_gen: PackedInt32Array = buildings.generation
 	var near_b: PackedInt32Array = buildings.near_building
 	var b_tx: PackedInt32Array = buildings.tile_x
 	var b_ty: PackedInt32Array = buildings.tile_y
@@ -248,7 +246,7 @@ func tick(dt: float, flow, buildings, tick_index: int) -> void:
 		# 공격 중
 		var target := attack_target[i]
 		if target >= 0:
-			if b_alive[target] == 0:
+			if b_alive[target] == 0 or b_gen[target] != attack_gen[i]:
 				attack_target[i] = -1
 			else:
 				attack_timer[i] -= dt
@@ -339,8 +337,8 @@ func tick(dt: float, flow, buildings, tick_index: int) -> void:
 
 ## 건물을 무는 상태로 전환한다.
 func _engage(i: int, b: int, buildings) -> void:
-	buildings.attach_attacker(b)
 	attack_target[i] = b
+	attack_gen[i] = buildings.generation[b]
 	attack_timer[i] = 0.0
 
 ## 결정론 검증용 상태 해시

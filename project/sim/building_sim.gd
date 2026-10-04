@@ -43,7 +43,7 @@ var size: PackedInt32Array
 var cooldown: PackedFloat32Array
 var last_hit_tick: PackedInt32Array
 var last_fire_tick: PackedInt32Array  # 총구 섬광용. 렌더러가 읽는다
-var attackers: PackedInt32Array     # 현재 이 건물을 공격 중인 적 수 (상한 없음)
+var generation: PackedInt32Array    # 인덱스 재사용 구분용. place마다 1 증가
 var grid: PackedInt32Array          # 타일 → 건물 인덱스, 없으면 -1
 var near_building: PackedInt32Array # 타일 → AGGRO_RADIUS 안에서 가장 가까운 건물, 없으면 -1
 var near_dist: PackedInt32Array     # 그 건물까지 거리(칸)
@@ -64,7 +64,7 @@ func _init() -> void:
 	cooldown = Buffers.f32(MAX)
 	last_hit_tick = Buffers.i32(MAX)
 	last_fire_tick = Buffers.i32(MAX)
-	attackers = Buffers.i32(MAX)
+	generation = Buffers.i32(MAX)
 	grid = Buffers.i32(SimConfig.CELLS)
 	near_building = Buffers.i32(SimConfig.CELLS)
 	near_dist = Buffers.i32(SimConfig.CELLS)
@@ -80,7 +80,7 @@ func clear_all() -> void:
 	cooldown.fill(0.0)
 	last_hit_tick.fill(-100)
 	last_fire_tick.fill(-100)
-	attackers.fill(0)
+	generation.fill(0)
 	free_list = PackedInt32Array()
 	high = 0
 	alive_count = 0
@@ -169,7 +169,7 @@ func place(type: int, tx: int, ty: int) -> int:
 	cooldown[idx] = 0.0
 	last_hit_tick[idx] = -100
 	last_fire_tick[idx] = -100
-	attackers[idx] = 0
+	generation[idx] += 1
 	var s := t_size[type]
 	for dy in range(s):
 		for dx in range(s):
@@ -242,14 +242,6 @@ func center_x(idx: int) -> float:
 
 func center_y(idx: int) -> float:
 	return float(tile_y[idx]) + float(size[idx]) * 0.5
-
-## 공격자 등록. 동시 공격 수에 상한은 없다.
-func attach_attacker(idx: int) -> void:
-	attackers[idx] += 1
-
-func detach_attacker(idx: int) -> void:
-	if idx >= 0 and idx < high and attackers[idx] > 0:
-		attackers[idx] -= 1
 
 func regen_hq(dt: float) -> void:
 	if hq_index < 0:

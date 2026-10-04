@@ -49,6 +49,7 @@ func _run() -> void:
 	test_kill_reward_and_split()
 	test_every_tower_deals_damage()
 	test_blocked_path_breaks_open()
+	test_reused_building_slot_is_not_bitten()
 	test_stream_never_stops()
 	test_determinism()
 	print("RESULT: %d checks, %d failures" % [checks, failures.size()])
@@ -173,6 +174,24 @@ func test_blocked_path_breaks_open() -> void:
 	check(sim.buildings.alive_count < before, "enemies break through a sealed wall")
 	settle_flow(sim)
 	check(sim.flow.is_reachable(63, 40), "a broken wall reopens the path")
+
+## 물던 건물이 사라진 직후 같은 슬롯에 새 건물이 들어와도, 적이 멀리서 새 건물을 물지 않는다
+func test_reused_building_slot_is_not_bitten() -> void:
+	var sim := quiet_sim()
+	sim.minerals = 5000
+	var barricade := BuildingData.BuildingType.BARRICADE
+	var b := sim.place_building(barricade, 63, 55)
+	var e := sim.enemies.spawn(EnemyData.EnemyType.TANK, 63.5, 53.5, 50.0, 1.0, 1.0)
+	var ticks := 0
+	while sim.enemies.attack_target[e] != b and ticks < 30 * 10:
+		sim.tick()
+		ticks += 1
+	check(sim.enemies.attack_target[e] == b, "enemy bites a nearby barricade")
+	sim.demolish_at(63, 55)
+	var far := sim.place_building(barricade, 10, 10)
+	check(far == b, "new building reuses the freed slot")
+	run_ticks(sim, 30 * 3)
+	check(sim.buildings.hp[far] == sim.buildings.max_hp[far], "far building in a reused slot takes no remote bites")
 
 ## 압박은 끊기지 않는다: 5분 동안 10초 창마다 스폰이 있다. WaveSim만 가짜 적 배열로 돌린다.
 class FakeEnemies extends RefCounted:
