@@ -44,6 +44,7 @@ func _run() -> void:
 	test_start_state()
 	test_flow_field()
 	test_placement_and_demolish()
+	test_building_footprint_lifecycle()
 	test_enemy_reaches_hq()
 	test_hq_defends_itself()
 	test_kill_reward_and_split()
@@ -62,6 +63,16 @@ func test_start_state() -> void:
 	check(sim.flow.is_reachable(0, 0), "map corner can reach the HQ")
 	sim.tick()
 	check(sim.enemies_alive() > 0, "a horde appears on the first tick")
+	sim.start(20260921)
+	var defense_synced := true
+	for entry in GameSimulation.STARTING_DEFENSE:
+		var tx := int(entry[1])
+		var ty := int(entry[2])
+		defense_synced = defense_synced and sim.buildings.building_at(tx, ty) >= 0 and sim.flow.blocked[SimConfig.tile_index(tx, ty)] == 1
+	check(defense_synced, "starting defenses occupy and block their tiles exactly once")
+	check(sim.minerals == SimConfig.START_MINERALS and sim.minerals_spent == 0 and sim.buildings_built == 0, "starting defenses do not charge minerals or count as player builds")
+	check(not sim.flow.dirty and not sim.flow.is_busy(), "starting defenses have a completed flow field")
+	check(not sim.flow.is_blocked(SimConfig.HQ_MIN_TILE, SimConfig.HQ_MIN_TILE), "HQ remains a flow target rather than an obstacle")
 
 func test_flow_field() -> void:
 	var f := quiet_sim().flow
@@ -102,6 +113,50 @@ func test_placement_and_demolish() -> void:
 	check(sim.place_building(BuildingData.BuildingType.BARRICADE, 10, 10) == -1, "cannot build without minerals")
 	check(sim.demolish_at(60, 63) > 0 and not sim.flow.is_blocked(60, 63), "demolish refunds and unblocks")
 	check(sim.demolish_at(63, 63) == -1, "HQ cannot be demolished")
+	var blocked_before := sim.flow.blocked.duplicate()
+	var built_before := sim.buildings_built
+	var spent_before := sim.minerals_spent
+	var alive_before := sim.buildings.alive_count
+	check(sim.place_building(gun, 10, 10) == -1, "unaffordable placement is rejected")
+	sim.minerals = 5000
+	check(sim.place_building(gun, SimConfig.MAP_SIZE, 10) == -1, "out-of-bounds placement is rejected")
+	check(sim.place_building(gun, 63, 63) == -1, "overlapping HQ placement is rejected")
+	check(sim.flow.blocked == blocked_before and sim.buildings.alive_count == alive_before and sim.buildings_built == built_before and sim.minerals_spent == spent_before and sim.minerals == 5000, "failed placements leave occupancy, paths and build accounting unchanged")
+
+## 여러 타일 건물도 점유와 경로가 일치하고, 철거·파괴 후 모든 타일을 재사용할 수 있다.
+func test_building_footprint_lifecycle() -> void:
+	var sim := quiet_sim()
+	sim.minerals = 5000
+	var type := BuildingData.BuildingType.BARRICADE
+	# 카탈로그 밸런스를 바꾸지 않고 여러 타일을 다루는 계약을 검증한다.
+	sim.buildings.t_size[type] = 2
+	var idx := sim.place_building(type, 20, 20)
+	check(idx >= 0, "multi-tile building can be placed")
+	if idx < 0:
+		return
+	for ty in range(20, 22):
+		for tx in range(20, 22):
+			check(sim.buildings.building_at(tx, ty) == idx and sim.flow.blocked[SimConfig.tile_index(tx, ty)] == 1, "footprint tile (%d, %d) is occupied and blocked exactly once" % [tx, ty])
+	check(not sim.flow.is_blocked(22, 20) and not sim.flow.is_blocked(20, 22), "adjacent tiles remain open")
+	check(sim.demolish_at(21, 21) > 0, "demolishing from any footprint tile finds the building")
+	for ty in range(20, 22):
+		for tx in range(20, 22):
+			check(sim.buildings.building_at(tx, ty) == -1 and not sim.flow.is_blocked(tx, ty), "demolition frees footprint tile (%d, %d)" % [tx, ty])
+	var replacement := sim.place_building(type, 20, 20)
+	check(replacement == idx, "demolished footprint and building slot can be reused")
+	if replacement < 0:
+		return
+	sim.buildings.hp[replacement] = 0.1
+	for i in range(2):
+		sim.enemies.spawn(EnemyData.EnemyType.TANK, 20.5 + float(i), 19.5, 1.0, 1.0, 1.0)
+	var ticks := 0
+	while sim.buildings.alive[replacement] != 0 and ticks < 30:
+		sim.tick()
+		ticks += 1
+	check(sim.buildings.alive[replacement] == 0 and sim.buildings_lost == 1 and sim.buildings_destroyed.count(replacement) == 1, "enemy attacks destroy and count the building exactly once")
+	for ty in range(20, 22):
+		for tx in range(20, 22):
+			check(sim.buildings.building_at(tx, ty) == -1 and not sim.flow.is_blocked(tx, ty), "destruction frees footprint tile (%d, %d)" % [tx, ty])
 
 func test_enemy_reaches_hq() -> void:
 	var sim := quiet_sim()

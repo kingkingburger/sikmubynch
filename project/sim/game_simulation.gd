@@ -109,20 +109,26 @@ func start(seed: int, starting_defense: bool = true) -> void:
 	flow.set_targets(targets)
 	if starting_defense:
 		for entry in STARTING_DEFENSE:
-			_place_free(int(entry[0]), int(entry[1]), int(entry[2]))
+			_place_building(int(entry[0]), int(entry[1]), int(entry[2]))
 	flow.recalculate()
 	buildings.rebuild_near()
 
-## 비용 없이 배치 (시작 방어물). Flow Field는 호출자가 재계산한다.
-func _place_free(type: int, tx: int, ty: int) -> int:
+## 건물 배치와 경로 차단을 함께 처리한다. 비용·통계·재계산 시점은 호출자가 결정한다.
+func _place_building(type: int, tx: int, ty: int) -> int:
 	var idx := buildings.place(type, tx, ty)
 	if idx < 0:
 		return -1
-	var s := buildings.t_size[type]
+	_set_building_blocked(idx, true)
+	return idx
+
+## 실제 배치된 건물의 발자국을 기준으로 등록·해제한다 (HQ는 경로 목표라 등록하지 않는다).
+func _set_building_blocked(idx: int, blocked: bool) -> void:
+	var s := buildings.size[idx]
+	var tx := buildings.tile_x[idx]
+	var ty := buildings.tile_y[idx]
 	for dy in range(s):
 		for dx in range(s):
-			flow.set_blocked(tx + dx, ty + dy, true)
-	return idx
+			flow.set_blocked(tx + dx, ty + dy, blocked)
 
 # ---------------------------------------------------------------------------
 # 플레이어 명령 (표현 계층이 호출)
@@ -144,16 +150,12 @@ func place_building(type: int, tx: int, ty: int) -> int:
 		return -1
 	if not can_afford(type):
 		return -1
-	var idx := buildings.place(type, tx, ty)
+	var idx := _place_building(type, tx, ty)
 	if idx < 0:
 		return -1
 	minerals -= buildings.t_cost[type]
 	minerals_spent += buildings.t_cost[type]
 	buildings_built += 1
-	var s := buildings.t_size[type]
-	for dy in range(s):
-		for dx in range(s):
-			flow.set_blocked(tx + dx, ty + dy, true)
 	_schedule_flow_recalc()
 	return idx
 
@@ -170,13 +172,8 @@ func demolish_at(tx: int, ty: int) -> int:
 	return refund
 
 func _remove_building(idx: int) -> void:
-	var s := buildings.size[idx]
-	var tx := buildings.tile_x[idx]
-	var ty := buildings.tile_y[idx]
+	_set_building_blocked(idx, false)
 	buildings.remove(idx)
-	for dy in range(s):
-		for dx in range(s):
-			flow.set_blocked(tx + dx, ty + dy, false)
 	_schedule_flow_recalc()
 
 func _schedule_flow_recalc() -> void:
