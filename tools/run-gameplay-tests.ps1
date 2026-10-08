@@ -13,6 +13,7 @@ New-Item -ItemType Directory -Force -Path $logDirectory | Out-Null
 # headless simulation regression + headless scene smoke
 $suites = @(
     @{ Name = 'regression'; Script = 'tests/gameplay_regression.gd' },
+    @{ Name = 'auto-player'; Script = 'tests/auto_player_regression.gd' },
     @{ Name = 'smoke'; Script = 'tests/play_smoke.gd' }
 )
 foreach ($suite in $suites) {

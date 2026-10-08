@@ -307,7 +307,7 @@ func _open_how_to_play() -> void:
 	var rows := [
 		["1 ~ 8", "ctl_select"], [Locale.t("key_lmb"), "ctl_build"], [Locale.t("key_rmb"), "ctl_demolish"],
 		[Locale.t("key_move"), "ctl_move"], [Locale.t("key_wheel"), "ctl_zoom"],
-		["Space", "ctl_pause"], ["F", "ctl_speed"], ["Esc", "ctl_menu"]]
+		["Space", "ctl_pause"], ["F", "ctl_speed"], ["B", "ctl_auto_play"], ["Esc", "ctl_menu"]]
 	for r in rows:
 		var key := UiKit.label(r[0], 14, UiKit.AMBER_HI, UiKit.FONT_BOLD)
 		key.custom_minimum_size = Vector2(170, 0)

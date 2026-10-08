@@ -58,12 +58,13 @@ Godot 에디터에서 `project/` 폴더를 열고 F5로 실행한다.
 ./tools/run-gameplay-tests.ps1 -GodotPath 'D:/Godot_v4.6.1-stable_win64.exe/Godot_v4.6.1-stable_win64_console.exe'
 ```
 
-테스트는 "깨지면 게임이 망가지는" 코어 불변식만 둔다. 밸런스 수치는 테스트에 박지 않는다(튜닝할 때마다 깨지기만 한다). 실행기는 두 스위트를 약 2초에 돌린다.
+테스트는 "깨지면 게임이 망가지는" 코어 불변식을 검증한다. 밸런스 수치는 테스트에 박지 않는다(튜닝할 때마다 깨지기만 한다). 실행기는 코어 회귀, 자동 플레이 회귀, 씬 스모크 세 스위트를 돌린다. 자동 플레이 스위트는 3분 시뮬레이션을 반복해 재현성을 확인하고 무조작 플레이와의 비교 결과도 출력한다.
 
 | 스크립트 | 실행 방식 | 다루는 것 |
 | --- | --- | --- |
 | `tools/tests/gameplay_regression.gd` | headless | 시작 상태, Flow Field(봉쇄·재개통·분산 재계산 일치), 배치·철거, 본진 도달, 처치 집계·보상·분열, 타워 6종 피해, 봉쇄 돌파, 압박이 끊기지 않음, 본진 주포의 자력 방어, 재사용된 건물 슬롯을 멀리서 물지 않음, 결정론 |
-| `tools/tests/play_smoke.gd` | headless / 창 모드 | 씬 시작 → 적 표시 → 건설·철거 → 정지 → 게임오버 → 재시작 |
+| `tools/tests/auto_player_regression.gd` | headless | 정상 비용, 적 방향 보강, 파괴된 자리 재건, 자원 부족·게임오버 정지, 같은 seed 재현성 |
+| `tools/tests/play_smoke.gd` | headless / 창 모드 | 씬 시작 → 적 표시 → 건설·철거 → 정지 → 자동 플레이 버튼·단축키 → 게임오버 → 재시작 |
 
 측정 도구(실패 판정 없음): `stress_scale.gd`(headless 틱 단계별), `render_stress.gd`(창 모드 FPS), `capture_screenshot.gd`(검수 스크린샷 `build/shot-*.png`).
 
@@ -87,12 +88,15 @@ D:/Godot_v4.6.1-stable_win64.exe/Godot_v4.6.1-stable_win64_console.exe --path pr
 | 마우스 휠 | 줌 |
 | Space | 일시정지 (건설 판단 가능, 전투·스폰 정지) |
 | F | 게임 속도 전환 (1x → 2x → 3x) |
+| B | 자동 플레이 켜기·끄기 (오른쪽 위 자동 ON/OFF 버튼으로도 전환) |
 | ESC | 메뉴 (재개, 다시 시작, 타이틀). 게임오버 화면에서는 타이틀로 |
 | R | 게임오버 화면에서 다시 시작 |
 | F3 | 디버그 오버레이 (FPS, 적 수, 틱·렌더 시간, 초당 유입률, seed) |
 | F4 | 디버그 빌드 전용: 본진 주변에 러셔 500마리 즉시 스폰 |
 
 레벨업은 없다. 시작 시 본진 4방향에 속사 타워가 하나씩 있고 크리스탈 150으로 시작한다. `SIKMUBYNCH_SEED` 환경변수로 런 seed를 고정할 수 있다.
+
+자동 플레이는 기본 OFF다. 켜면 반 초마다 주변 적과 남은 방어력을 확인해 약한 방향에 타워를 짓고, 파괴된 자리도 다시 채운다. 크리스탈 비용과 배치 제한은 수동 플레이와 같고, 일시정지 중에는 자동 건설도 멈춘다. 켠 상태에서도 직접 건설·철거할 수 있다. 현재 봇은 규칙 기반이며 학습하거나 생존을 보장하지 않는다.
 
 ## 프로젝트 구조
 
@@ -101,6 +105,7 @@ project/
 ├── autoloads/          # Locale, GameManager(런 상태 미러), GameFeel, AudioManager
 ├── sim/                # Node 없는 시뮬레이션 (RefCounted + PackedArray)
 │   ├── game_simulation.gd   # 고정 30Hz 틱, 하위 Sim 호출 순서, 런 상태, 결정론 해시
+│   ├── auto_player.gd       # 적 압박·남은 방어력에 따른 자동 건설 판단
 │   ├── enemy_sim.gd         # 적 배열, Flow Field 이동, 근처 건물 물기
 │   ├── combat_sim.gd        # 타워 타겟팅, 발사체, 피해, 광역·감속
 │   ├── wave_sim.gd          # 압박 스트림: 바닥 유입률 + 무리 유지 디렉터(목표 무리 수), 배율·방향 드리프트, 진입로, 스폰 링 (웨이브·급증 없음)

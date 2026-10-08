@@ -5,6 +5,7 @@ extends Node2D
 
 const SimConfig := preload("res://sim/sim_config.gd")
 const GameSimulation := preload("res://sim/game_simulation.gd")
+const AutoPlayer := preload("res://sim/auto_player.gd")
 const Iso := preload("res://render/iso.gd")
 const GroundRenderer := preload("res://render/ground_renderer.gd")
 const EnemyRenderer := preload("res://render/enemy_renderer.gd")
@@ -22,6 +23,8 @@ const RIGHT_CLICK_DRAG_THRESHOLD := 6.0
 
 var sim: GameSimulation
 var run_seed: int = 0
+var auto_play_enabled: bool = false
+var _auto_player := AutoPlayer.new()
 ## 타이틀 배경용: HUD·입력·소리·흔들림 없이 방어선과 무리만 돌린다. 본진은 죽지 않는다
 var demo_mode: bool = false
 
@@ -109,6 +112,7 @@ func _ready() -> void:
 		if not _is_world_input_blocked():
 			GameFeel.toggle_pause())
 	_hud.speed_pressed.connect(func(spd: float) -> void: GameFeel.set_game_speed(spd))
+	_hud.auto_play_pressed.connect(_toggle_auto_play)
 	_hud.menu_pressed.connect(func() -> void:
 		if not sim.game_over:
 			_toggle_esc_menu())
@@ -178,6 +182,10 @@ func _process(delta: float) -> void:
 	while _accum >= SimConfig.TICK_DT and ticks < MAX_TICKS_PER_FRAME:
 		sim.tick()
 		_consume_tick_events()
+		if auto_play_enabled:
+			var command := _auto_player.next_command(sim)
+			if not command.is_empty():
+				_try_place(command.type, command.tile)
 		_accum -= SimConfig.TICK_DT
 		ticks += 1
 		# 끝난 틱은 이벤트를 비우지 않으므로 더 돌면 마지막 폭발·사망·수입이 겹쳐 재생된다
@@ -352,6 +360,13 @@ func _try_demolish(tile: Vector2i) -> bool:
 # 입력
 # ---------------------------------------------------------------------------
 
+func _toggle_auto_play() -> void:
+	if demo_mode or _is_world_input_blocked():
+		return
+	auto_play_enabled = not auto_play_enabled
+	_hud.set_auto_play(auto_play_enabled)
+	_cancel_world_drag()
+
 func _input(event: InputEvent) -> void:
 	if demo_mode:
 		return
@@ -423,6 +438,8 @@ func _input(event: InputEvent) -> void:
 			KEY_F:
 				var spd := GameFeel.cycle_speed()
 				_hud.set_speed_label(spd)
+			KEY_B:
+				_toggle_auto_play()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if demo_mode or _is_world_input_blocked():

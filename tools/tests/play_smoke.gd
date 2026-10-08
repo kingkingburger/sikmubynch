@@ -59,6 +59,27 @@ func _run() -> void:
 	await _frames(20)
 	check(game.sim.tick_index > t0, "resume continues")
 
+	# 자동 플레이: HUD 버튼 → 정상 비용 건설·뷰 생성 → 정지 → 단축키로 끄기.
+	check(not game.auto_play_enabled, "auto play starts disabled")
+	game._hud._btn_auto.pressed.emit()
+	views = game._building_views.size()
+	var built_before: int = game.sim.buildings_built
+	await _frames(70)
+	check(game.auto_play_enabled and game.sim.buildings_built > built_before and game._building_views.size() > views, "HUD enables auto play and renders its buildings")
+	feel.toggle_pause()
+	built_before = game.sim.buildings_built
+	await _frames(40)
+	check(game.sim.buildings_built == built_before, "pause also stops auto construction")
+	feel.toggle_pause()
+	var key := InputEventKey.new()
+	key.keycode = KEY_B
+	key.pressed = true
+	game._input(key)
+	check(not game.auto_play_enabled and not game._hud._btn_auto.active, "B disables auto play and updates its indicator")
+	built_before = game.sim.buildings_built
+	await _frames(40)
+	check(game.sim.buildings_built == built_before, "disabled bot issues no more construction")
+
 	# 게임오버
 	game.sim.buildings.hp[game.sim.buildings.hq_index] = 1.0
 	var e: int = game.sim.enemies.spawn(EnemyData.EnemyType.TANK, 63.5, 61.5, 1.0, 1.0, 1.0)
@@ -67,12 +88,15 @@ func _run() -> void:
 	game.sim.enemies.attack_timer[e] = 0.0
 	await _frames(30)
 	check(game.sim.game_over and game._hud.is_game_over_visible(), "HQ destroyed shows the result screen")
+	game._toggle_auto_play()
+	check(not game.auto_play_enabled, "cannot enable auto play after game over")
 
 	# 재시작
 	game._on_restart()
 	await _frames(2)
 	game = current_scene
 	check(not game.sim.game_over and game.sim.minerals == SimConfig.START_MINERALS, "restart resets the run")
+	check(not game.auto_play_enabled, "restart resets auto play to disabled")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(gm.records_path))
 
 	print("RESULT: %d checks, %d failures" % [checks, failures.size()])

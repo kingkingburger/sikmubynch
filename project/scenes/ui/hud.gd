@@ -20,6 +20,7 @@ signal title_requested()
 signal pause_pressed()
 signal speed_pressed(speed: float)
 signal menu_pressed()
+signal auto_play_pressed()
 
 const INCOME_WINDOW := 2.0        # 초당 수입 표시 창
 const GAIN_POPUP_INTERVAL := 0.35 # 획득 팝업 합산 간격
@@ -98,6 +99,7 @@ var _threat_shown: float = 0.0
 var _btn_pause: CtrlButton
 var _btn_speeds: Array = []
 var _btn_menu: CtrlButton
+var _btn_auto: CtrlButton
 
 # 본진
 var _orb
@@ -375,6 +377,10 @@ func _chip(caption_text: String, value_color: Color, x: float, left: bool) -> La
 	h.add_child(val)
 	return val
 
+func set_auto_play(enabled: bool) -> void:
+	_btn_auto.active = enabled
+	_btn_auto.text = Locale.t("auto_play_on" if enabled else "auto_play_off")
+
 func _build_controls() -> void:
 	var p := PanelContainer.new()
 	p.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -387,6 +393,11 @@ func _build_controls() -> void:
 	var h := HBoxContainer.new()
 	h.add_theme_constant_override("separation", 0)
 	p.add_child(h)
+	_btn_auto = CtrlButton.new("", Locale.t("auto_play_off"))
+	_btn_auto.custom_minimum_size.x = 110
+	_btn_auto.tooltip_text = Locale.t("ctl_auto_play") + " (B)"
+	_btn_auto.pressed.connect(auto_play_pressed.emit)
+	h.add_child(_btn_auto)
 	_btn_pause = CtrlButton.new("pause", "")
 	_btn_pause.pressed.connect(pause_pressed.emit)
 	h.add_child(_btn_pause)
